@@ -1,0 +1,518 @@
+use crate::dts::ast::{
+    AnyDirective, Cell, DtsFile, Node, NodePayload, Path, Primary, Property, PropertyValue,
+    Reference, ReferencedNode, WithToken,
+};
+use crate::dts::data::{HasSpan, Span};
+use crate::dts::diagnostics::DiagnosticKind;
+use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Something that can be labeled.
+/// Used when analyzing a device-tree
+enum Labeled {
+    Node(Arc<Node>),
+    Property(Arc<Property>),
+}
+
+/// Struct containing all important information when analyzing a device-tree
+pub struct Analysis {
+    labels: HashMap<String, Labeled>,
+    flat_nodes: HashMap<Path, Arc<Node>>,
+    unresolved_references: Vec<(Reference, Span)>,
+    file_type: FileType,
+}
+
+impl Analysis {
+    pub fn new(file_type: FileType) -> Analysis {
+        Analysis {
+            labels: Default::default(),
+            flat_nodes: Default::default(),
+            unresolved_references: Default::default(),
+            file_type,
+        }
+    }
+}
+
+pub struct AnalysisContext {
+    labels: HashMap<String, Labeled>,
+    flat_nodes: HashMap<Path, Arc<Node>>,
+}
+
+impl AnalysisContext {
+    pub fn get_node_by_label(&self, label: &str) -> Option<&Arc<Node>> {
+        match self.labels.get(label) {
+            Some(Labeled::Node(node)) => Some(node),
+            _ => None,
+        }
+    }
+
+    pub fn get_node_by_path(&self, path: &Path) -> Option<&Arc<Node>> {
+        self.flat_nodes.get(path)
+    }
+
+    pub fn get_referenced(&self, reference: &Reference) -> Option<&Arc<Node>> {
+        match reference {
+            Reference::Label(label) => self.get_node_by_label(label),
+            Reference::Path(path) => self.get_node_by_path(path),
+        }
+    }
+}
+
+impl Analysis {
+    pub fn into_context(self) -> AnalysisContext {
+        AnalysisContext {
+            flat_nodes: self.flat_nodes,
+            labels: self.labels,
+        }
+    }
+}
+
+impl Analysis {
+    pub fn analyze_file(&mut self, diagnostics: &mut Vec<Diagnostic>, file: &DtsFile) {
+        let mut first_non_include = false;
+        let mut dts_header_seen = false;
+        for primary in &file.elements {
+            match primary {
+                Primary::Directive(directive) => match directive {
+                    AnyDirective::DtsHeader(tok) => {
+                        if dts_header_seen {
+                            diagnostics.push(Diagnostic::new(
+                                tok.span(),
+                                DiagnosticKind::DuplicateDirective(
+                                    CompilerDirective::DTSVersionHeader,
+                                ),
+                            ))
+                        } else if first_non_include {
+                            diagnostics.push(Diagnostic::new(
+                                tok.span(),
+                                DiagnosticKind::MisplacedDtsHeader,
+                            ))
+                        }
+                        dts_header_seen = true;
+                    }
+                    AnyDirective::Memreserve(_) => first_non_include = true,
+                    AnyDirective::Include(..) => {}
+                    AnyDirective::Plugin(_) => first_non_include = true,
+                },
+                Primary::Root(root_node) => {
+                    self.analyze_node(diagnostics, root_node.clone(), Path::empty());
+                    first_non_include = true
+                }
+                Primary::ReferencedNode(referenced_node) => {
+                    self.analyze_referenced_node(diagnostics, referenced_node);
+                    first_non_include = true
+                }
+                Primary::CStyleInclude(_) => {}
+            }
+        }
+        if !dts_header_seen && self.file_type == FileType::DtSource {
+            diagnostics.push(Diagnostic::new(
+                Position::zero().as_span(),
+                DiagnosticKind::NonDtsV1,
+            ))
+        }
+        self.resolve_references(diagnostics)
+    }
+
+    pub fn analyze_directive(&mut self, _diagnsotics: &mut [Diagnostic], directive: &AnyDirective) {
+        match directive {
+            AnyDirective::DtsHeader(_) => {}
+            AnyDirective::Memreserve(_) => {}
+            AnyDirective::Include(..) => {}
+            AnyDirective::Plugin(_) => {}
+        }
+    }
+
+    fn resolve_reference(
+        &mut self,
+        diagnostics: &mut Vec<Diagnostic>,
+        reference: &WithToken<Reference>,
+    ) -> Path {
+        match reference.item() {
+            Reference::Label(label) => {
+                let path = self
+                    .flat_nodes
+                    .iter()
+                    .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label));
+                match path {
+                    None => {
+                        diagnostics.push(Diagnostic::new(
+                            reference.span(),
+                            DiagnosticKind::UnresolvedReference,
+                        ));
+                        Path::empty()
+                    }
+                    Some((path, _)) => path.clone(),
+                }
+            }
+            Reference::Path(path) => {
+                if !self.flat_nodes.contains_key(path) {
+                    diagnostics.push(Diagnostic::new(
+                        reference.span(),
+                        DiagnosticKind::UnresolvedReference,
+                    ))
+                };
+                path.clone()
+            }
+        }
+    }
+
+    pub fn analyze_referenced_node(
+        &mut self,
+        diagnostics: &mut Vec<Diagnostic>,
+        node: &ReferencedNode,
+    ) {
+        let path = if self.file_type == FileType::DtSource {
+            self.resolve_reference(diagnostics, &node.reference)
+        } else {
+            // This is an include; simply assume the 'root' path
+            Path::empty()
+        };
+        self.analyze_node_payload(diagnostics, &node.payload, path);
+    }
+
+    pub fn resolve_references(&mut self, diagnostics: &mut Vec<Diagnostic>) {
+        for reference in &self.unresolved_references {
+            let span = reference.1;
+            match &reference.0 {
+                Reference::Label(label) => match self.labels.get(label) {
+                    Some(_) => {}
+                    None => {
+                        diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference))
+                    }
+                },
+                Reference::Path(path) => match self.flat_nodes.get(path) {
+                    None => {
+                        diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference))
+                    }
+                    Some(_) => {}
+                },
+            }
+        }
+    }
+
+    pub fn analyze_node(&mut self, diagnostics: &mut Vec<Diagnostic>, node: Arc<Node>, path: Path) {
+        if let Some(label) = &node.label {
+            self.labels
+                .insert(label.item().clone(), Labeled::Node(node.clone()));
+        }
+        self.flat_nodes.insert(path.clone(), node.clone());
+        self.analyze_node_payload(diagnostics, &node.payload, path)
+    }
+
+    fn analyze_node_payload(
+        &mut self,
+        diagnostics: &mut Vec<Diagnostic>,
+        payload: &NodePayload,
+        path: Path,
+    ) {
+        for prop in payload.properties.clone() {
+            self.analyze_property(diagnostics, prop);
+        }
+        for node in &payload.child_nodes {
+            self.analyze_node(
+                diagnostics,
+                node.clone(),
+                path.with_child(node.name.item().clone()),
+            )
+        }
+    }
+
+    fn check_is_string_list(
+        &mut self,
+        diagnostics: &mut Vec<Diagnostic>,
+        values: &Vec<PropertyValue>,
+    ) {
+        for value in values {
+            if !matches!(value, PropertyValue::String(_)) {
+                diagnostics.push(Diagnostic::new(
+                    value.span(),
+                    DiagnosticKind::NonStringInCompatible,
+                ))
+            }
+        }
+    }
+
+    fn check_is_single_string(
+        &mut self,
+        _diagnostics: &mut [Diagnostic],
+        values: &Vec<PropertyValue>,
+    ) {
+        if values.len() != 1 {}
+    }
+
+    fn check_is_single_u32(
+        &mut self,
+        _diagnostics: &mut [Diagnostic],
+        values: &Vec<PropertyValue>,
+    ) {
+        if values.len() != 1 {}
+    }
+
+    pub fn analyze_property(&mut self, diagnostics: &mut Vec<Diagnostic>, property: Arc<Property>) {
+        if let Some(label) = &property.label {
+            self.labels
+                .insert(label.item().clone(), Labeled::Property(property.clone()));
+        }
+        for value in &property.values {
+            self.analyze_property_value(diagnostics, value)
+        }
+
+        match property.name.as_str() {
+            "compatible" => self.check_is_string_list(diagnostics, &property.values),
+            "model" => self.check_is_single_string(diagnostics, &property.values),
+            "phandle" => self.check_is_single_u32(diagnostics, &property.values),
+            _ => {}
+        }
+    }
+
+    pub fn analyze_property_value(
+        &mut self,
+        diagnostics: &mut [Diagnostic],
+        value: &PropertyValue,
+    ) {
+        match value {
+            PropertyValue::String(_) => {}
+            PropertyValue::ByteStrings(..) => {}
+            PropertyValue::Cells(_, cells, _) => {
+                for cell in cells {
+                    self.analyze_cell(diagnostics, cell)
+                }
+            }
+            PropertyValue::Reference(reference) => {
+                self.analyze_reference(diagnostics, reference, reference.span())
+            }
+        }
+    }
+
+    pub fn analyze_cell(&mut self, diagnostics: &mut [Diagnostic], value: &Cell) {
+        match value {
+            Cell::Number(_) => {}
+            Cell::Reference(reference) => {
+                self.analyze_reference(diagnostics, reference, reference.span())
+            }
+            Cell::Expression => {}
+        }
+    }
+
+    pub fn analyze_reference(
+        &mut self,
+        _diagnostics: &mut [Diagnostic],
+        reference: &Reference,
+        span: Span,
+    ) {
+        self.unresolved_references.push((reference.clone(), span))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::dts::ast::Path;
+    use crate::dts::data::{HasSpan, Position};
+    use crate::dts::diagnostics::{DiagnosticKind, NameContext};
+    use crate::dts::test::Code;
+    use crate::dts::Diagnostic;
+    use assert_unordered::assert_eq_unordered;
+
+    #[test]
+    pub fn test_illegal_char_in_label() {
+        let code = Code::new(
+            "\
+/dts-v1/;
+
+/{ 
+    my_l?abel: some_node {}; 
+    my_label_that_has_more_than_31_characters: other_node {};
+    some_other_node {
+        another_ill#gal_label: sub_node {};
+    };
+    illegal_node_name#s {};
+};",
+        );
+        let (diagnostics, _) = code.get_analyzed_file();
+        assert_eq_unordered!(
+            diagnostics,
+            vec![
+                Diagnostic::new(
+                    Position::new(8, 21).as_char_span(),
+                    DiagnosticKind::IllegalChar('#', NameContext::NodeName),
+                ),
+                Diagnostic::new(
+                    Position::new(3, 8).as_char_span(),
+                    DiagnosticKind::IllegalChar('?', NameContext::Label),
+                ),
+                Diagnostic::new(
+                    Position::new(4, 4).char_to(46),
+                    DiagnosticKind::NameTooLong(41, NameContext::Label),
+                ),
+                Diagnostic::new(
+                    Position::new(6, 19).as_char_span(),
+                    DiagnosticKind::IllegalChar('#', NameContext::Label),
+                ),
+            ]
+        )
+    }
+
+    #[test]
+    pub fn test_resolve_node_names() {
+        let code = Code::new(
+            "\
+/dts-v1/;
+
+/{ 
+    node1: some_node {
+        ref-to-node2 = &node2;
+        ref-to-node3 = <&node3>;
+    };
+    node2: some_other_node {
+        ref-to-node1 = &node1;
+        ref-to-node1-path = &{/some_node};
+        ref-to-node4-path = &{/some_other_node/some_node};
+        ref-to-node3-path = &{/node3};
+        node4: some_node {
+            self-reference = &node4;
+        };
+    };
+};",
+        );
+        let (diagnostics, context) = code.get_analyzed_file();
+        assert_eq_unordered!(
+            diagnostics,
+            vec![
+                Diagnostic::new(
+                    code.s1("&node3").span(),
+                    DiagnosticKind::UnresolvedReference,
+                ),
+                Diagnostic::new(
+                    code.s1("&{/node3}").span(),
+                    DiagnosticKind::UnresolvedReference,
+                ),
+            ]
+        );
+        assert_eq!(
+            context
+                .get_node_by_label("node1")
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("some_node").span()
+        );
+        assert_eq!(
+            context
+                .get_node_by_label("node2")
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("some_other_node").span(),
+        );
+        assert_eq!(
+            context
+                .get_node_by_label("node4")
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("node4: some_node").s1("some_node").span()
+        );
+        assert!(context.get_node_by_label("node3").is_none())
+    }
+
+    #[test]
+    pub fn test_resolve_node_paths() {
+        let code = Code::new(
+            "\
+/dts-v1/;
+
+/{ 
+    node1: some_node {
+        ref-to-node2 = &node2;
+    };
+    node2: some_other_node {
+        ref-to-node1 = &node1;
+        node4: some_node {
+            self-reference = &node4;
+        };
+    };
+};",
+        );
+        let (diag, context) = code.get_analyzed_file();
+        assert!(diag.is_empty());
+        assert_eq!(
+            context
+                .get_node_by_path(&Path::new(vec!["some_node".into()]))
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("some_node").span(),
+        );
+        assert_eq!(
+            context
+                .get_node_by_path(&Path::new(vec!["some_other_node".into()]))
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("some_other_node").span(),
+        );
+        assert_eq!(
+            context
+                .get_node_by_path(&Path::new(vec![
+                    "some_other_node".into(),
+                    "some_node".into(),
+                ]))
+                .expect("Reference should be set")
+                .name
+                .span(),
+            code.s1("node4: some_node").s1("some_node").span()
+        );
+        assert!(context.get_node_by_label("node3").is_none())
+    }
+
+    #[test]
+    pub fn test_does_not_accept_non_dtsv1_sources() {
+        let code = Code::new("/ {};");
+        let (diagnostics, _) = code.get_analyzed_file();
+        assert_eq!(
+            diagnostics,
+            vec![Diagnostic::new(
+                Position::zero().as_span(),
+                DiagnosticKind::NonDtsV1,
+            )]
+        )
+    }
+
+    #[test]
+    pub fn referenced_node_in_same_file() {
+        let code = Code::new(
+            "\
+/dts-v1/;
+
+/ {
+    some_node: node {};
+};
+
+&some_node {};
+
+&some_other_node {};
+
+&{/node} {};
+
+&{/some_other_node} {};
+
+",
+        );
+        let (diagnostics, _) = code.get_analyzed_file();
+        assert_eq_unordered!(
+            diagnostics,
+            vec![
+                Diagnostic::new(
+                    code.s1("&some_other_node").span(),
+                    DiagnosticKind::UnresolvedReference,
+                ),
+                Diagnostic::new(
+                    code.s1("&{/some_other_node}").span(),
+                    DiagnosticKind::UnresolvedReference,
+                )
+            ]
+        )
+    }
+}

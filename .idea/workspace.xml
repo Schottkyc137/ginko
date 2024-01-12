@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e362c86b-4f8d-4f3b-9960-532ebf10beec" name="Changes" comment="Parse C-style includes">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Rust File" />
+      </list>
+    </option>
+  </component>
+  <component name="FormatOnSaveOptions">
+    <option name="myRunOnSave" value="true" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="kt91kq6v" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="2bELd3NxQOqq7fMwORxa6Gmc8yu" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Install LS.executor": "Run",
+    "Cargo.Install ginko.executor": "Run",
+    "Cargo.Reformat.executor": "Run",
+    "Cargo.Run clippy.executor": "Run",
+    "Cargo.Test analysis::test.executor": "Run",
+    "Cargo.Test dts::analysis::test::referenced_node_in_same_file.executor": "Run",
+    "Cargo.Test dts::analysis::test::test_illegal_char_in_label.executor": "Run",
+    "Cargo.Test dts::analysis::test::test_resolve_node_names.executor": "Run",
+    "Cargo.Test dts::analysis::test::test_resolve_node_paths.executor": "Run",
+    "Cargo.Test dts::parser::test::byte_strings.executor": "Run",
+    "Cargo.Test dts::parser::test::c_style_includes.executor": "Run",
+    "Cargo.Test dts::parser::test::cell_properties.executor": "Run",
+    "Cargo.Test dts::parser::test::error_position.executor": "Run",
+    "Cargo.Test dts::parser::test::error_tolerant_parsing.executor": "Run",
+    "Cargo.Test dts::parser::test::expressions.executor": "Run",
+    "Cargo.Test dts::parser::test::file_with_dts_header.executor": "Run",
+    "Cargo.Test dts::parser::test::file_with_node.executor": "Run",
+    "Cargo.Test dts::parser::test::file_with_single_simple_sub_node.executor": "Run",
+    "Cargo.Test dts::parser::test::labels.executor": "Run",
+    "Cargo.Test dts::parser::test::parses_memreserve.executor": "Run",
+    "Cargo.Test dts::parser::test::properties_must_be_placed_before_nodes.executor": "Run",
+    "Cargo.Test dts::parser::test::simple_file.executor": "Run",
+    "Cargo.Test dts::parser::test::string_properties.executor": "Run",
+    "Cargo.Test ginko.executor": "Run",
+    "Cargo.Test parser::test.executor": "Run",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "master",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "rearrange.code.on.save": "true",
+    "settings.editor.selected.configurable": "language.rust.rustfmt",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/ginko" />
+    </key>
+  </component>
+  <component name="RsExternalLinterProjectSettings">
+    <option name="runOnTheFly" value="true" />
+  </component>
+  <component name="RunManager" selected="Cargo.Install LS">
+    <configuration name="Install LS" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="install --path ginko_ls" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Install ginko" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="install --path ginko" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Reformat" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="fmt" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run clippy" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="clippy --tests" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run ginko" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package ginko --bin ginko" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test analysis::test" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package ginko --lib dts::analysis::test" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test dts::analysis::test::referenced_node_in_same_file" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package ginko --lib dts::analysis::test::referenced_node_in_same_file -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test dts::analysis::test::test_resolve_node_names" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package ginko --lib dts::analysis::test::test_resolve_node_names -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test dts::parser::test::c_style_includes" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package ginko --lib dts::parser::test::c_style_includes -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test dts::parser::test::error_position" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package ginko --lib dts::parser::test::error_position -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test ginko" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="test --workspace" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Cargo.Install LS" />
+      <item itemvalue="Cargo.Install ginko" />
+      <item itemvalue="Cargo.Reformat" />
+      <item itemvalue="Cargo.Run clippy" />
+      <item itemvalue="Cargo.Run ginko" />
+      <item itemvalue="Cargo.Test ginko" />
+      <item itemvalue="Cargo.Test dts::parser::test::c_style_includes" />
+      <item itemvalue="Cargo.Test analysis::test" />
+      <item itemvalue="Cargo.Test dts::analysis::test::referenced_node_in_same_file" />
+      <item itemvalue="Cargo.Test dts::analysis::test::test_resolve_node_names" />
+      <item itemvalue="Cargo.Test dts::parser::test::error_position" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Cargo.Test dts::parser::test::c_style_includes" />
+        <item itemvalue="Cargo.Test dts::analysis::test::referenced_node_in_same_file" />
+        <item itemvalue="Cargo.Test dts::parser::test::error_position" />
+        <item itemvalue="Cargo.Test analysis::test" />
+        <item itemvalue="Cargo.Test dts::analysis::test::test_resolve_node_names" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="RustfmtProjectSettings">
+    <option name="runRustfmtOnSave" value="true" />
+    <option name="useRustfmt" value="true" />
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e362c86b-4f8d-4f3b-9960-532ebf10beec" name="Changes" comment="" />
+      <created>1705775376188</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1705775376188</updated>
+      <workItem from="1705775377374" duration="9645000" />
+      <workItem from="1705834976693" duration="23248000" />
+      <workItem from="1705946954783" duration="6000" />
+      <workItem from="1706435951225" duration="6563000" />
+      <workItem from="1707148034552" duration="26762000" />
+      <workItem from="1707419455487" duration="2462000" />
+    </task>
+    <task id="LOCAL-00001" summary="Refactor into language server and tool">
+      <option name="closed" value="true" />
+      <created>1705777507922</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1705777507922</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Refactor into language server and tool">
+      <option name="closed" value="true" />
+      <created>1705777518037</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1705777518037</updated>
+    </task>
+    <task id="LOCAL-00003" summary="refactoring into ast module">
+      <option name="closed" value="true" />
+      <created>1705781665020</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1705781665020</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Refactor lexer">
+      <option name="closed" value="true" />
+      <created>1705836013721</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1705836013721</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Improved semicolon diagnostics">
+      <option name="closed" value="true" />
+      <created>1705841157141</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1705841157141</updated>
+    </task>
+    <task id="LOCAL-00006" summary="More name checking">
+      <option name="closed" value="true" />
+      <created>1705850686026</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1705850686026</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Add more checks">
+      <option name="closed" value="true" />
+      <created>1705852214837</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1705852214837</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Add span information to byte strings">
+      <option name="closed" value="true" />
+      <created>1705852452800</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1705852452800</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Parse memreserve">
+      <option name="closed" value="true" />
+      <created>1705853617315</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1705853617315</updated>
+    </task>
+    <task id="LOCAL-00010" summary="Remove unused diagnostics">
+      <option name="closed" value="true" />
+      <created>1705855215247</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1705855215247</updated>
+    </task>
+    <task id="LOCAL-00011" summary="Add default severity level">
+      <option name="closed" value="true" />
+      <created>1705856320656</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1705856320656</updated>
+    </task>
+    <task id="LOCAL-00012" summary="Skip optional labels; don't add them to the AST for now">
+      <option name="closed" value="true" />
+      <created>1705856765413</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1705856765413</updated>
+    </task>
+    <task id="LOCAL-00013" summary="Skip expressions">
+      <option name="closed" value="true" />
+      <created>1705857760339</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1705857760339</updated>
+    </task>
+    <task id="LOCAL-00014" summary="Add unbalanced parentheses diagnostic">
+      <option name="closed" value="true" />
+      <created>1705858700106</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1705858700106</updated>
+    </task>
+    <task id="LOCAL-00015" summary="Add referenced node">
+      <option name="closed" value="true" />
+      <created>1705862179590</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1705862179590</updated>
+    </task>
+    <task id="LOCAL-00016" summary="Enable multiple primaries in root">
+      <option name="closed" value="true" />
+      <created>1706438484493</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1706438484493</updated>
+    </task>
+    <task id="LOCAL-00017" summary="Enable different device-tree source file types">
+      <option name="closed" value="true" />
+      <created>1706439766911</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1706439766911</updated>
+    </task>
+    <task id="LOCAL-00018" summary="Fix include implementation">
+      <option name="closed" value="true" />
+      <created>1706441825107</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1706441825107</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Smaller fixes">
+      <option name="closed" value="true" />
+      <created>1707148564250</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1707148564250</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Parse includes and goto definition">
+      <option name="closed" value="true" />
+      <created>1707236723569</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1707236723569</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Modernize Tests">
+      <option name="closed" value="true" />
+      <created>1707339021472</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1707339021472</updated>
+    </task>
+    <task id="LOCAL-00022" summary="Make clippy happy">
+      <option name="closed" value="true" />
+      <created>1707339294013</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1707339294013</updated>
+    </task>
+    <task id="LOCAL-00023" summary="Update some crates; refactor file type finding method">
+      <option name="closed" value="true" />
+      <created>1707378502204</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1707378502204</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Add plugin">
+      <option name="closed" value="true" />
+      <created>1707406816371</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1707406816371</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Add README.md">
+      <option name="closed" value="true" />
+      <created>1707408204434</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1707408204434</updated>
+    </task>
+    <task id="LOCAL-00026" summary="Refactor with new Code object">
+      <option name="closed" value="true" />
+      <created>1707411125319</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1707411125319</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Fix position of error on properties">
+      <option name="closed" value="true" />
+      <created>1707413343361</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1707413343361</updated>
+    </task>
+    <task id="LOCAL-00028" summary="Refactor complex type">
+      <option name="closed" value="true" />
+      <created>1707413637259</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1707413637259</updated>
+    </task>
+    <task id="LOCAL-00029" summary="Actually show every diagnostic">
+      <option name="closed" value="true" />
+      <created>1707419044115</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1707419044115</updated>
+    </task>
+    <task id="LOCAL-00030" summary="Parse C-style includes">
+      <option name="closed" value="true" />
+      <created>1707421630854</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1707421630854</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="More name checking" />
+    <MESSAGE value="Add more checks" />
+    <MESSAGE value="Add span information to byte strings" />
+    <MESSAGE value="Parse memreserve" />
+    <MESSAGE value="Remove unused diagnostics" />
+    <MESSAGE value="Add default severity level" />
+    <MESSAGE value="Skip optional labels; don't add them to the AST for now" />
+    <MESSAGE value="Skip expressions" />
+    <MESSAGE value="Add unbalanced parentheses diagnostic" />
+    <MESSAGE value="Add referenced node" />
+    <MESSAGE value="Enable multiple primaries in root" />
+    <MESSAGE value="Enable different device-tree source file types" />
+    <MESSAGE value="Fix include implementation" />
+    <MESSAGE value="Smaller fixes" />
+    <MESSAGE value="Parse includes and goto definition" />
+    <MESSAGE value="Modernize Tests" />
+    <MESSAGE value="Make clippy happy" />
+    <MESSAGE value="Update some crates; refactor file type finding method" />
+    <MESSAGE value="Add plugin" />
+    <MESSAGE value="Add README.md" />
+    <MESSAGE value="Refactor with new Code object" />
+    <MESSAGE value="Fix position of error on properties" />
+    <MESSAGE value="Refactor complex type" />
+    <MESSAGE value="Actually show every diagnostic" />
+    <MESSAGE value="Parse C-style includes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Parse C-style includes" />
+  </component>
+  <component name="XDebuggerManager">
+    <watches-manager>
+      <configuration name="CargoCommandRunConfiguration">
+        <watch expression="tok" />
+        <watch expression="tok" />
+      </configuration>
+    </watches-manager>
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>
