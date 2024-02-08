@@ -1,6 +1,6 @@
 [package]
 name = "ginko_ls"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 license = "MIT"
 description = "A language server for device-trees"
