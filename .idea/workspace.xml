@@ -8,7 +8,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e362c86b-4f8d-4f3b-9960-532ebf10beec" name="Changes" comment="Parse C-style includes">
-      <change afterPath="$PROJECT_DIR$/LICENSE.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ginko/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/ginko/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ginko_ls/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/ginko_ls/Cargo.toml" afterDir="false" />
@@ -327,7 +326,7 @@
       <workItem from="1705946954783" duration="6000" />
       <workItem from="1706435951225" duration="6563000" />
       <workItem from="1707148034552" duration="26762000" />
-      <workItem from="1707419455487" duration="4381000" />
+      <workItem from="1707419455487" duration="4785000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor into language server and tool">
       <option name="closed" value="true" />
