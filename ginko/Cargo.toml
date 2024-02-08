@@ -2,6 +2,10 @@
 name = "ginko"
 version = "0.0.1"
 edition = "2021"
+license = "MIT"
+description = "A device-tree source parser and analyzer"
+repository = "https://github.com/kraigher/rust_hdl"
+authors = ["Lukas Scheller <lukasscheller@icloud.com>"]
 
 [dependencies]
 assert_unordered = "0.3.5"

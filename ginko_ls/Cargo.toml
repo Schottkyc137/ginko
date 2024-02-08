@@ -2,6 +2,10 @@
 name = "ginko_ls"
 version = "0.0.1"
 edition = "2021"
+license = "MIT"
+description = "A language server for device-trees"
+repository = "https://github.com/kraigher/rust_hdl"
+authors = ["Lukas Scheller <lukasscheller@icloud.com>"]
 
 [dependencies]
 itertools = "0.12.1"

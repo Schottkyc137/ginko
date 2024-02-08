@@ -8,7 +8,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e362c86b-4f8d-4f3b-9960-532ebf10beec" name="Changes" comment="Parse C-style includes">
+      <change afterPath="$PROJECT_DIR$/LICENSE.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ginko/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/ginko/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ginko_ls/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/ginko_ls/Cargo.toml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,6 +83,7 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "rearrange.code.on.save": "true",
     "settings.editor.selected.configurable": "language.rust.rustfmt",
     "vue.rearranger.settings.migration": "true"
@@ -93,7 +97,7 @@
   <component name="RsExternalLinterProjectSettings">
     <option name="runOnTheFly" value="true" />
   </component>
-  <component name="RunManager" selected="Cargo.Install LS">
+  <component name="RunManager" selected="Cargo.Run clippy">
     <configuration name="Install LS" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="install --path ginko_ls" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -146,7 +150,7 @@
       </method>
     </configuration>
     <configuration name="Run clippy" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="command" value="clippy --tests" />
+      <option name="command" value="clippy --all-targets --all-features -- -D warnings" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -308,7 +312,6 @@
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
   </component>
   <component name="RustfmtProjectSettings">
-    <option name="runRustfmtOnSave" value="true" />
     <option name="useRustfmt" value="true" />
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
@@ -324,7 +327,7 @@
       <workItem from="1705946954783" duration="6000" />
       <workItem from="1706435951225" duration="6563000" />
       <workItem from="1707148034552" duration="26762000" />
-      <workItem from="1707419455487" duration="2462000" />
+      <workItem from="1707419455487" duration="4381000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor into language server and tool">
       <option name="closed" value="true" />
