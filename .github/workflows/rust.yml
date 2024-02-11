@@ -24,6 +24,8 @@ jobs:
         run: cargo fmt -- --check
 
   build-targets:
+    needs:
+      - check
     strategy:
       matrix:
         crate:
@@ -44,7 +46,7 @@ jobs:
             os: windows-latest
             ext: .exe
           - target: aarch64-apple-darwin
-            os: flyci-macos-large-latest-m1
+            os: macos-latest
             ext: ""
 
     runs-on: ${{ matrix.os }}
@@ -60,6 +62,7 @@ jobs:
         run: cargo build --manifest-path ${{ matrix.crate }}/Cargo.toml --release --target ${{ matrix.target }}
 
       - name: Test
+        if: matrix.os != 'macos-latest' # There are no free runners for Apple Silicon available at the moment
         run: cargo test --verbose --manifest-path ${{ matrix.crate }}/Cargo.toml --target ${{ matrix.target }}
 
       - name: Assemble
