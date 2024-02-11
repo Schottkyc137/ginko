@@ -10,18 +10,70 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  check:
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-    - name: Format
-      run: cargo fmt -- --check
-          
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --verbose
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Format
+        run: cargo fmt -- --check
+
+  build-targets:
+    needs:
+      - check
+    strategy:
+      matrix:
+        crate:
+          - ginko
+          - ginko_ls
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - aarch64-apple-darwin
+        rust:
+          - stable
+
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            ext: ""
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            ext: .exe
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            ext: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup toolchain
+        if: matrix.os == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin
+
+      - name: Build
+        run: cargo build --manifest-path ${{ matrix.crate }}/Cargo.toml --release --target ${{ matrix.target }}
+
+      - name: Test
+        if: matrix.os != 'macos-latest' # There are no free runners for Apple Silicon available at the moment
+        run: cargo test --verbose --manifest-path ${{ matrix.crate }}/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Assemble
+        if: matrix.rust == 'stable'
+        run: |
+          mkdir ${{ matrix.crate }}-${{ matrix.target }}
+          mkdir ${{ matrix.crate }}-${{ matrix.target }}/bin
+          cp target/${{ matrix.target }}/release/${{ matrix.crate }}${{ matrix.ext }} ${{ matrix.crate }}-${{ matrix.target }}/bin
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.crate }}-${{ matrix.target }}
+          path: ${{ matrix.crate }}-${{ matrix.target }}
