@@ -44,7 +44,7 @@ jobs:
             os: windows-latest
             ext: .exe
           - target: aarch64-apple-darwin
-            os: macos-latest-xlarge
+            os: flyci-macos-large-latest-m1
             ext: ""
 
     runs-on: ${{ matrix.os }}
