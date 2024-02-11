@@ -44,7 +44,7 @@ jobs:
             os: windows-latest
             ext: .exe
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-latest-xlarge
             ext: ""
 
     runs-on: ${{ matrix.os }}
@@ -58,7 +58,7 @@ jobs:
 
       - name: Build
         run: cargo build --manifest-path ${{ matrix.crate }}/Cargo.toml --release --target ${{ matrix.target }}
-        
+
       - name: Test
         run: cargo test --verbose --manifest-path ${{ matrix.crate }}/Cargo.toml --target ${{ matrix.target }}
 
