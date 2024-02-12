@@ -1,6 +1,6 @@
 [package]
 name = "ginko_ls"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "MIT"
 description = "A language server for device-trees"
@@ -16,6 +16,6 @@ parking_lot = "0.12.1"
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "macros", "io-std"] }
 tower-lsp = "0.20.0"
 tracing-subscriber = "0.3.18"
-ginko = { version = "^0.0.2", path = "../ginko" }
+ginko = { version = "^0.0.3", path = "../ginko" }
 url = "2.5.0"
 clap = { version = "4.4.18", features = ["derive"] }
