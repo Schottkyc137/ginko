@@ -91,7 +91,7 @@ jobs:
       - name: Get version
         id: v
         run: |
-          echo "v=${GITHUB_REF/refs\/tags\/v/}" >> GITHUB_ENV
+          echo "v=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
           echo "Version is v${GITHUB_REF/refs\/tags\/v/}"
       - uses: actions/checkout@v4
       - name: Get ginko Linux
