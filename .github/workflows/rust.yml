@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose
       - name: Run clippy
@@ -52,7 +52,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup toolchain
         if: matrix.os == 'macos-latest'
@@ -77,3 +77,10 @@ jobs:
         with:
           name: ${{ matrix.crate }}-${{ matrix.target }}
           path: ${{ matrix.crate }}-${{ matrix.target }}
+
+      - name: Do release
+        uses: ncipollo/release-action@v1
+        with:
+          draft: false
+          artifacts: "*.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
