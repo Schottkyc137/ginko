@@ -135,5 +135,5 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           draft: false
-          artifacts: "*.zip"
+          artifacts: "~/temp/*.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
