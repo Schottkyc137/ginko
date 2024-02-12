@@ -1,5 +1,5 @@
-use tower_lsp::{LspService, Server};
 use clap::Parser;
+use tower_lsp::{LspService, Server};
 
 mod server;
 
