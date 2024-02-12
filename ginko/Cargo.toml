@@ -7,6 +7,8 @@ description = "A device-tree source parser and analyzer"
 repository = "https://github.com/Schottkyc137/ginko"
 authors = ["Lukas Scheller <lukasscheller@icloud.com>"]
 readme = "../README.md"
+keywords = ["dts", "device-tree"]
+categories = ["parser-implementations"]
 
 [dependencies]
 assert_unordered = "0.3.5"

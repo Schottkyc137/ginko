@@ -7,6 +7,8 @@ description = "A language server for device-trees"
 repository = "https://github.com/Schottkyc137/ginko"
 authors = ["Lukas Scheller <lukasscheller@icloud.com>"]
 readme = "../README.md"
+keywords = ["dts", "device-tree", "language-server", "lsp"]
+categories = ["development-tools"]
 
 [dependencies]
 itertools = "0.12.1"
