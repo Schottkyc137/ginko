@@ -32,9 +32,29 @@ whereas `ginko` produces the following output:
   |      ^ Expected ';'
 ```
 
+At the moment, the command-line tool `ginko` only checks the device-tree source. 
+It curently does not generate device-tree binary files nor can it output reformatted device-tree source files.
+
 # Projects
 
 ## ginko
+
+### Installation and Usage
+To install ginko with the rust toolchain, simply call
+```shell
+cargo install ginko
+```
+
+Additionally, [pre-built binaries](https://github.com/Schottkyc137/ginko/releases/latest) exist for x86 Linux and x86 Windows.
+Simply downloading them and adding the executables to a directory that is on the path should suffice to run the tool.
+Pre-built binaries also exist for macOS running on Apple Silicon, however these are not signed and notarized with apple so installation is more tedious.
+See [this](https://support.apple.com/guide/mac-help/apple-cant-check-app-for-malicious-software-mchleab3a043/mac) for more information.
+
+Run
+```shell
+ginko <path/to/file.dts>
+```
+to run ginko on a device-tree source file and check the contents.
 
 ### Goals:
 
