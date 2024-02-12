@@ -102,7 +102,7 @@ jobs:
         run: |
           chmod u+x ~/temp/ginko-x86_64-unknown-linux-gnu/bin/ginko
           version_string=$(~/temp/ginko-x86_64-unknown-linux-gnu/bin/ginko --version)
-          if [ "$version_string" != "ginko ${{ steps.v.outputs.v }}" ]
+          if [ "$version_string" != "ginko $STATE_v" ]
           then
             echo "Version string mismatch (\"$version_string\" != \"ginko ${{ steps.v.outputs.v }}\""
             exit 1
@@ -113,7 +113,7 @@ jobs:
         run: |
           chmod u+x ~/temp/ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls
           version_string=$(~/temp/ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls --version)
-          if [ "$version_string" != "ginko_ls ${{ steps.v.outputs.v }}" ]
+          if [ "$version_string" != "ginko_ls $STATE_v" ]
           then
             echo "Version string mismatch (\"$version_string\" != \"ginko ${{ steps.v.outputs.v }}\""
             exit 1
