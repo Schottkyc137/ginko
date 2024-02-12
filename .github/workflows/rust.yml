@@ -90,16 +90,17 @@ jobs:
       - name: Get version
         id: v
         run: |
-          echo ::set-output name=v::${GITHUB_REF/refs\/tags\/v/}
+          echo "v=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_STATE
           echo "Version is v${GITHUB_REF/refs\/tags\/v/}"
       - uses: actions/checkout@v4
       - name: Get ginko Linux
         uses: actions/download-artifact@v4
         with:
-          name: ginko-x86_64-unknown-linux-gnu
+          pattern: ginko*
+          path: ${{ GITHUB_WORKSPACE }}
       - name: Check ginko version
         run: |
-          chmod u+x ginko-x86_64-unknown-linux-gnu/bin/ginko
+          chmod u+x ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu/bin/ginko
           version_string=$(ginko-x86_64-unknown-linux-gnu/bin/ginko --version)
           if [ "$version_string" != "ginko ${{ steps.v.outputs.v }}" ]
           then
@@ -108,13 +109,9 @@ jobs:
           else
             echo "Version string matched"
           fi
-      - name: Get ginko_ls Linux
-        uses: actions/download-artifact@v4
-        with:
-          name: ginko-x86_64-unknown-linux-gnu
       - name: Check ginko_ls version
         run: |
-          chmod u+x ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls
+          chmod u+x ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls
           version_string=$(ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls --version)
           if [ "$version_string" != "ginko_ls ${{ steps.v.outputs.v }}" ]
           then
@@ -123,30 +120,14 @@ jobs:
           else
             echo "Version string matched"
           fi
-      - name: Get ginko windows
-        uses: actions/download-artifact@v4
-        with:
-          name: ginko-x86_64-pc-windows-msvc
-      - name: Get ginko_ls windows
-        uses: actions/download-artifact@v4
-        with:
-          name: ginko_ls-x86_64-pc-windows-msvc
-      - name: Get ginko macOS
-        uses: actions/download-artifact@v4
-        with:
-          name: ginko-aarch64-apple-darwin
-      - name: Get ginko_ls macos
-        uses: actions/download-artifact@v4
-        with:
-          name: ginko_ls-aarch64-apple-darwin
       - name: Zip artifacts
         run: |
-          zip -r ginko-x86_64-unknown-linux-gnu.zip ginko-x86_64-unknown-linux-gnu
-          zip -r ginko_ls-x86_64-unknown-linux-gnu.zip ginko_ls-x86_64-unknown-linux-gnu
-          zip -r ginko-x86_64-pc-windows-msvc.zip ginko-x86_64-pc-windows-msvc
-          zip -r ginko_ls-x86_64-pc-windows-msvc.zip ginko_ls-x86_64-pc-windows-msvc
-          zip -r ginko-aarch64-apple-darwin.zip ginko-aarch64-apple-darwin
-          zip -r ginko_ls-aarch64-apple-darwin.zip ginko_ls-aarch64-apple-darwin
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-pc-windows-msvc
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-pc-windows-msvc
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko-aarch64-apple-darwin
+          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-aarch64-apple-darwin
       - name: Do release
         uses: ncipollo/release-action@v1
         with:
