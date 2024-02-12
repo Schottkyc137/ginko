@@ -97,10 +97,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: ginko*
-          path: ${{ GITHUB_WORKSPACE }}
+          path: $GITHUB_WORKSPACE
       - name: Check ginko version
         run: |
-          chmod u+x ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu/bin/ginko
+          chmod u+x $GITHUB_WORKSPACE/ginko-x86_64-unknown-linux-gnu/bin/ginko
           version_string=$(ginko-x86_64-unknown-linux-gnu/bin/ginko --version)
           if [ "$version_string" != "ginko ${{ steps.v.outputs.v }}" ]
           then
@@ -111,7 +111,7 @@ jobs:
           fi
       - name: Check ginko_ls version
         run: |
-          chmod u+x ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls
+          chmod u+x $GITHUB_WORKSPACE/ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls
           version_string=$(ginko_ls-x86_64-unknown-linux-gnu/bin/ginko_ls --version)
           if [ "$version_string" != "ginko_ls ${{ steps.v.outputs.v }}" ]
           then
@@ -122,12 +122,12 @@ jobs:
           fi
       - name: Zip artifacts
         run: |
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-pc-windows-msvc
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-pc-windows-msvc
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko-aarch64-apple-darwin
-          zip -r ${{ GITHUB_WORKSPACE }}/ginko_ls-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-aarch64-apple-darwin
+          zip -r $GITHUB_WORKSPACE/ginko-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-unknown-linux-gnu
+          zip -r $GITHUB_WORKSPACE/ginko_ls-x86_64-unknown-linux-gnu.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-unknown-linux-gnu
+          zip -r $GITHUB_WORKSPACE/ginko-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko-x86_64-pc-windows-msvc
+          zip -r $GITHUB_WORKSPACE/ginko_ls-x86_64-pc-windows-msvc.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-x86_64-pc-windows-msvc
+          zip -r $GITHUB_WORKSPACE/ginko-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko-aarch64-apple-darwin
+          zip -r $GITHUB_WORKSPACE/ginko_ls-aarch64-apple-darwin.zip ${{ GITHUB_WORKSPACE }}/ginko_ls-aarch64-apple-darwin
       - name: Do release
         uses: ncipollo/release-action@v1
         with:
