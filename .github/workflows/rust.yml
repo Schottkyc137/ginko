@@ -125,12 +125,12 @@ jobs:
       - name: Zip artifacts
         run: |
           cd ~/temp
-          zip ginko-x86_64-unknown-linux-gnu.zip ginko-x86_64-unknown-linux-gnu
-          zip ginko_ls-x86_64-unknown-linux-gnu.zip ginko_ls-x86_64-unknown-linux-gnu
-          zip ginko-x86_64-pc-windows-msvc.zip ginko-x86_64-pc-windows-msvc
-          zip ginko_ls-x86_64-pc-windows-msvc.zip ginko_ls-x86_64-pc-windows-msvc
-          zip ginko-aarch64-apple-darwin.zip ginko-aarch64-apple-darwin
-          zip ginko_ls-aarch64-apple-darwin.zip ginko_ls-aarch64-apple-darwin
+          zip -r ginko-x86_64-unknown-linux-gnu.zip ginko-x86_64-unknown-linux-gnu
+          zip -r ginko_ls-x86_64-unknown-linux-gnu.zip ginko_ls-x86_64-unknown-linux-gnu
+          zip -r ginko-x86_64-pc-windows-msvc.zip ginko-x86_64-pc-windows-msvc
+          zip -r ginko_ls-x86_64-pc-windows-msvc.zip ginko_ls-x86_64-pc-windows-msvc
+          zip -r ginko-aarch64-apple-darwin.zip ginko-aarch64-apple-darwin
+          zip -r ginko_ls-aarch64-apple-darwin.zip ginko_ls-aarch64-apple-darwin
       - name: Do release
         uses: ncipollo/release-action@v1
         with:
