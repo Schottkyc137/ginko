@@ -250,11 +250,7 @@ impl Analysis {
         if values.len() != 1 {}
     }
 
-    fn check_is_single_u32(
-        &mut self,
-        _diagnostics: &mut [Diagnostic],
-        values: &[PropertyValue],
-    ) {
+    fn check_is_single_u32(&mut self, _diagnostics: &mut [Diagnostic], values: &[PropertyValue]) {
         if values.len() != 1 {}
     }
 
