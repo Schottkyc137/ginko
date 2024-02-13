@@ -275,6 +275,7 @@ impl<'a> Display for DiagnosticPrinter<'a> {
         for diagnostic in self.diagnostics.iter() {
             self.fmt_diagnostic(f, diagnostic)?;
             writeln!(f)?;
+            writeln!(f)?;
         }
         Ok(())
     }

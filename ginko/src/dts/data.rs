@@ -1,14 +1,46 @@
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+/// Device-tree source file types. Known types are:
+///
+/// * `FileType::DtSource`: Plain device-tree source files. Usually ends with `.dts`
+/// * `FileType::DtSourceInclude`: Device-tree source include files.
+///     Usually included by device-tree files and ends with `.dtsi`
+/// * `FileType::DtSourceOverlay`: Device-tree source overlay files.
+///     Usually built as standalone and uses references to define where an overlay should be applied.
+///     Usually, these files end with `.dtso`
+/// * `FileType::Unknown`: Unknown file type.
+#[derive(Clone, Copy, Eq, PartialEq, Default, Debug)]
 pub enum FileType {
     DtSource,
     DtSourceInclude,
     DtSourceOverlay,
+    #[default]
     Unknown,
 }
 
 impl FileType {
+    /// Guesses the file type from the ending of a file, excluding the dot.
+    ///
+    /// # Example usage:
+    /// ```
+    /// use ginko::dts::FileType;
+    ///
+    /// let file_name = "some_tree.dts";
+    /// let ending = file_name
+    ///     .split(".")
+    ///     .last()
+    ///     .map(FileType::from_file_ending)
+    ///     .unwrap_or_default();
+    /// assert_eq!(ending, FileType::DtSource);
+    ///
+    /// let other_file = "some_file.txt";
+    /// let ending = other_file
+    ///     .split(".")
+    ///     .last()
+    ///     .map(FileType::from_file_ending)
+    ///     .unwrap_or_default();
+    /// assert_eq!(ending, FileType::Unknown);
+    /// ```
     pub fn from_file_ending(ending: &str) -> FileType {
         match ending {
             "dts" => FileType::DtSource,
@@ -60,6 +92,13 @@ impl Position {
         }
     }
 
+    /// Returns a `Span` that is formed by going from this position to another position.
+    ///
+    /// # Exceptions
+    /// The given position may not be greater than this position.
+    /// If this is the case in debug builds, this function will panic. However, since most
+    /// applications can gracefully handle this condition, this function will not panic
+    /// in production builds.
     pub fn to(&self, other: Position) -> Span {
         debug_assert!(other > *self, "Position {other} is past position {self}");
         Span::new(*self, other)

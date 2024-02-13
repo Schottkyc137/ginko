@@ -21,6 +21,7 @@ pub struct Analysis {
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<(Reference, Span)>,
     file_type: FileType,
+    is_plugin: bool,
 }
 
 impl Analysis {
@@ -30,6 +31,7 @@ impl Analysis {
             flat_nodes: Default::default(),
             unresolved_references: Default::default(),
             file_type,
+            is_plugin: false,
         }
     }
 }
@@ -93,7 +95,10 @@ impl Analysis {
                     }
                     AnyDirective::Memreserve(_) => first_non_include = true,
                     AnyDirective::Include(..) => {}
-                    AnyDirective::Plugin(_) => first_non_include = true,
+                    AnyDirective::Plugin(_) => {
+                        first_non_include = true;
+                        self.is_plugin = true
+                    }
                 },
                 Primary::Root(root_node) => {
                     self.analyze_node(diagnostics, root_node.clone(), Path::empty());
@@ -113,6 +118,15 @@ impl Analysis {
             ))
         }
         self.resolve_references(diagnostics)
+    }
+
+    fn unresolved_reference_error(&self, span: Span, diagnostics: &mut Vec<Diagnostic>) {
+        // Do not emit unresolved reference errors when we are not a plugin.
+        // This will emit false positives as references can only be resolved with the full
+        // device-tree information.
+        if self.file_type == FileType::DtSource && !self.is_plugin {
+            diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference));
+        }
     }
 
     pub fn analyze_directive(&mut self, _diagnsotics: &mut [Diagnostic], directive: &AnyDirective) {
@@ -137,10 +151,7 @@ impl Analysis {
                     .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label));
                 match path {
                     None => {
-                        diagnostics.push(Diagnostic::new(
-                            reference.span(),
-                            DiagnosticKind::UnresolvedReference,
-                        ));
+                        self.unresolved_reference_error(reference.span(), diagnostics);
                         Path::empty()
                     }
                     Some((path, _)) => path.clone(),
@@ -148,10 +159,7 @@ impl Analysis {
             }
             Reference::Path(path) => {
                 if !self.flat_nodes.contains_key(path) {
-                    diagnostics.push(Diagnostic::new(
-                        reference.span(),
-                        DiagnosticKind::UnresolvedReference,
-                    ))
+                    self.unresolved_reference_error(reference.span(), diagnostics);
                 };
                 path.clone()
             }
@@ -179,12 +187,12 @@ impl Analysis {
                 Reference::Label(label) => match self.labels.get(label) {
                     Some(_) => {}
                     None => {
-                        diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference))
+                        self.unresolved_reference_error(span, diagnostics);
                     }
                 },
                 Reference::Path(path) => match self.flat_nodes.get(path) {
                     None => {
-                        diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference))
+                        self.unresolved_reference_error(span, diagnostics);
                     }
                     Some(_) => {}
                 },
@@ -237,7 +245,7 @@ impl Analysis {
     fn check_is_single_string(
         &mut self,
         _diagnostics: &mut [Diagnostic],
-        values: &Vec<PropertyValue>,
+        values: &[PropertyValue],
     ) {
         if values.len() != 1 {}
     }
@@ -245,7 +253,7 @@ impl Analysis {
     fn check_is_single_u32(
         &mut self,
         _diagnostics: &mut [Diagnostic],
-        values: &Vec<PropertyValue>,
+        values: &[PropertyValue],
     ) {
         if values.len() != 1 {}
     }
