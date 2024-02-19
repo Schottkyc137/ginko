@@ -499,7 +499,7 @@ where
         let tok = self.lexer.peek();
         let Some(tok) = tok else {
             self.diagnostics.push(Diagnostic::new(
-                self.lexer.pos().as_span(),
+                self.lexer.last_pos().as_span(),
                 Expected(vec![TokenKind::Semicolon]),
             ));
             return Ok(None);
@@ -1159,5 +1159,27 @@ mod test {
                 DiagnosticKind::Expected(vec![Semicolon, Equal, OpenBrace])
             ))
         )
+    }
+
+    #[test]
+    fn eof_error_position() {
+        let code = Code::new(
+            "\
+        /dts-v1/;
+
+        / {
+        }
+
+        ",
+        );
+        let (_, diag) = code.parse_ok(Parser::file);
+
+        assert_eq!(
+            diag,
+            vec![Diagnostic::new(
+                code.s1("}").end().as_span(),
+                DiagnosticKind::Expected(vec![Semicolon])
+            )]
+        );
     }
 }

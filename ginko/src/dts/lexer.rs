@@ -444,10 +444,6 @@ where
         self.peek().map(|tok| &tok.kind)
     }
 
-    pub fn pos(&self) -> Position {
-        self.lexer.pos()
-    }
-
     pub fn peek_expect(&mut self) -> Result<&Token, Diagnostic> {
         // something something cannot borrow as immutable something something
         // Therefore this is defined here as opposed to the `None` branch
