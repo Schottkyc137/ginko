@@ -321,7 +321,7 @@ mod tests {
         let formatter_err = "\
 error --> fname:1:5
   |
-1 | / {{}}
+1 | / {}
   |     ^ Expected ';'
 
 "
