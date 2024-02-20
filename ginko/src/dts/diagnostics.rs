@@ -44,6 +44,17 @@ pub enum SeverityLevel {
     Hint,
 }
 
+impl Display for SeverityLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use SeverityLevel::*;
+        match self {
+            Error => write!(f, "error"),
+            Warning => write!(f, "warning"),
+            Hint => write!(f, "hint"),
+        }
+    }
+}
+
 impl DiagnosticKind {
     pub fn default_severity_level(&self) -> SeverityLevel {
         match self {
@@ -246,7 +257,8 @@ impl<'a> DiagnosticPrinter<'a> {
         let prefix_empty = " ".repeat(prefix.len());
         writeln!(
             f,
-            " --> {}:{}:{}",
+            "{} --> {}:{}:{}",
+            diagnostic.default_severity(),
             self.file_name,
             start.line() + 1,
             start.character() + 1
@@ -278,5 +290,73 @@ impl<'a> Display for DiagnosticPrinter<'a> {
             writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dts::data::HasSpan;
+    use crate::dts::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticPrinter};
+    use crate::dts::lexer::TokenKind;
+    use crate::dts::parser::Parser;
+    use crate::dts::test::Code;
+    use itertools::Itertools;
+
+    #[test]
+    fn display_missing_semicolon() {
+        let code = Code::new("/ {}");
+        let (_, diag) = code.parse(Parser::file);
+        assert_eq!(
+            diag,
+            vec![Diagnostic::new(
+                code.s1("}").end().as_span(),
+                DiagnosticKind::Expected(vec![TokenKind::Semicolon])
+            )]
+        );
+        let printer = DiagnosticPrinter {
+            diagnostics: &diag,
+            file_name: "fname".into(),
+            code: vec!["/ {}".into()],
+        };
+        let formatter_err = "\
+error --> fname:1:5
+  |
+1 | / {{}}
+  |     ^ Expected ';'
+
+"
+        .to_string();
+        assert_eq!(formatter_err, format!("{printer}"));
+    }
+
+    #[test]
+    fn display_warning_message() {
+        let code = Code::new(
+            "\
+        /dts-v1/;
+
+        / {
+            very-long-company,very-long-name;    
+        };",
+        );
+        let (_, diag) = code.parse(Parser::file);
+        let printer = DiagnosticPrinter {
+            diagnostics: &diag,
+            file_name: "fname".into(),
+            code: code
+                .source()
+                .lines()
+                .map(|line| line.to_string())
+                .collect_vec(),
+        };
+        let formatter_err = "\
+warning --> fname:4:13
+  |
+4 |             very-long-company,very-long-name;    
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ property should only have 31 characters but has 32 characters
+
+".to_string();
+        println!("{printer}");
+        assert_eq!(formatter_err, format!("{printer}"));
     }
 }

@@ -55,6 +55,10 @@ impl Code {
         }
     }
 
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
     pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)
     where
         F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,

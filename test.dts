@@ -1,0 +1,6 @@
+/dts-v1/;
+
+/ {
+    very-long-company,very-long-name;    
+};",
+

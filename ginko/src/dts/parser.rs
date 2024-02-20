@@ -466,7 +466,7 @@ where
                 }
                 TokenKind::Semicolon => {
                     self.skip_tok();
-                    self.check_is_property_name(cloned_tok.span(), &ident);
+                    self.check_is_property_name(ident.span(), &ident);
                     let prop = Property::empty(ident, label, cloned_tok);
                     if node_discovered {
                         self.diagnostics.push(Diagnostic::new(
