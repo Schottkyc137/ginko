@@ -22,15 +22,8 @@ static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
     pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
-        let (diagnostics, file, context) = analyze_text(text.clone(), path.clone(), file_type);
-        self.files.insert(
-            path,
-            ProjectFile {
-                diagnostics,
-                file,
-                context,
-            },
-        );
+        let file = analyze_text(text, path.clone(), file_type);
+        self.files.insert(path, file);
     }
 
     pub fn remove_file(&mut self, path: &PathBuf) {
@@ -86,18 +79,14 @@ impl Project {
     pub fn get_root(&self, path: &PathBuf) -> Option<&DtsFile> {
         match self.files.get(path) {
             Some(ProjectFile {
-                file: Some(file), ..
-            }) => Some(file),
+                     file: Some(file), ..
+                 }) => Some(file),
             _ => None,
         }
     }
 }
 
-fn analyze_text(
-    text: String,
-    file_name: PathBuf,
-    file_type: FileType,
-) -> (Vec<Diagnostic>, Option<DtsFile>, Option<AnalysisContext>) {
+fn analyze_text(text: String, file_name: PathBuf, file_type: FileType) -> ProjectFile {
     let reader = ByteReader::from_string(text);
     let lexer = Lexer::new(reader, file_name.into());
     let mut parser = Parser::new(lexer);
@@ -105,12 +94,16 @@ fn analyze_text(
         Ok(file) => {
             let mut analysis = Analysis::new(file_type);
             analysis.analyze_file(&mut parser.diagnostics, &file);
-            (
-                parser.diagnostics,
-                Some(file),
-                Some(analysis.into_context()),
-            )
+            ProjectFile {
+                diagnostics: parser.diagnostics,
+                file: Some(file),
+                context: Some(analysis.into_context()),
+            }
         }
-        Err(err) => (vec![err], None, None),
+        Err(err) => ProjectFile {
+            diagnostics: vec![err],
+            file: None,
+            context: None,
+        },
     }
 }
