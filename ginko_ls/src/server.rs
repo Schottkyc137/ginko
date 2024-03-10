@@ -50,14 +50,6 @@ fn lsp_pos_from_pos(pos: ginko::dts::Position) -> Position {
     Position::new(pos.line(), pos.character())
 }
 
-fn guess_file_type(url: impl AsRef<Path>) -> FileType {
-    url.as_ref()
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(FileType::from_file_ending)
-        .unwrap_or(FileType::Unknown)
-}
-
 impl Backend {
     async fn url_to_file_path(&self, url: Url) -> Option<PathBuf> {
         match url.to_file_path() {
@@ -102,7 +94,7 @@ impl LanguageServer for Backend {
         let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
             return;
         };
-        let file_type = guess_file_type(&file_path);
+        let file_type = FileType::from(file_path.as_path());
         if file_type == FileType::Unknown {
             self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
             return;
@@ -126,7 +118,7 @@ impl LanguageServer for Backend {
         let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
             return;
         };
-        let file_type = guess_file_type(&file_path);
+        let file_type = FileType::from(file_path.as_path());
         self.project.write().add_file(
             file_path.clone(),
             params.content_changes.into_iter().next().unwrap().text,

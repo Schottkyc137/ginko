@@ -53,6 +53,16 @@ impl FileType {
     }
 }
 
+impl From<&Path> for FileType {
+    fn from(value: &Path) -> Self {
+        value
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(FileType::from_file_ending)
+            .unwrap_or_default()
+    }
+}
+
 /// A source position, defined by its zero-based line offset and zero-based character offset.
 /// This is intentionally equivalent to the position defined by the LSP standard
 /// to make conversions easier.
