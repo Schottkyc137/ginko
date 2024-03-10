@@ -341,7 +341,7 @@ error --> fname:1:5
   |     ^ Expected ';'
 
 "
-            .to_string();
+        .to_string();
         assert_eq!(formatter_err, format!("{printer}"));
     }
 
