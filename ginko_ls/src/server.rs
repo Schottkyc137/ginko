@@ -4,7 +4,7 @@ use ginko::dts::{
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -50,12 +50,24 @@ fn lsp_pos_from_pos(pos: ginko::dts::Position) -> Position {
     Position::new(pos.line(), pos.character())
 }
 
-fn guess_file_type(url: &Url) -> FileType {
-    url.path()
-        .split('.')
-        .last()
+fn guess_file_type(url: impl AsRef<Path>) -> FileType {
+    url.as_ref()
+        .extension()
+        .and_then(|ext| ext.to_str())
         .map(FileType::from_file_ending)
         .unwrap_or(FileType::Unknown)
+}
+
+impl Backend {
+    async fn url_to_file_path(&self, url: Url) -> Option<PathBuf> {
+        match url.to_file_path() {
+            Ok(path) => Some(path),
+            Err(_) => {
+                self.client.show_message(MessageType::ERROR, format!("Url {url} is not a valid file path")).await;
+                None
+            }
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -82,68 +94,77 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
-        let file_type = guess_file_type(&uri);
+        let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
+            return;
+        };
+        let file_type = guess_file_type(&file_path);
         if file_type == FileType::Unknown {
-            self.client.show_message(MessageType::WARNING, format!("File {uri} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'")).await;
+            self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
             return;
         }
         self.project
             .write()
-            .add_file(uri.clone(), params.text_document.text, file_type);
+            .add_file(file_path.clone(), params.text_document.text, file_type);
         let diagnostics = self
             .project
             .read()
-            .get_diagnostics(&uri)
+            .get_diagnostics(&file_path)
             .iter()
             .map(lsp_diag_from_diag)
             .collect_vec();
         self.client
-            .publish_diagnostics(uri, diagnostics, None)
+            .publish_diagnostics(Url::from_file_path(file_path).unwrap(), diagnostics, None)
             .await
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri.clone();
-        let file_type = guess_file_type(&uri);
+        let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
+            return;
+        };
+        let file_type = guess_file_type(&file_path);
         self.project.write().add_file(
-            params.text_document.uri,
+            file_path.clone(),
             params.content_changes.into_iter().next().unwrap().text,
             file_type,
         );
         let diagnostics = self
             .project
             .read()
-            .get_diagnostics(&uri)
+            .get_diagnostics(&file_path)
             .iter()
             .map(lsp_diag_from_diag)
             .collect_vec();
         self.client
-            .publish_diagnostics(uri, diagnostics, None)
+            .publish_diagnostics(Url::from_file_path(&file_path).unwrap(), diagnostics, None)
             .await
     }
 
     async fn did_save(&self, _: DidSaveTextDocumentParams) {}
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        self.project.write().remove_file(&params.text_document.uri);
+        let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
+            return;
+        };
+        self.project.write().remove_file(&file_path);
     }
 
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        let uri = params.text_document_position_params.text_document.uri;
+        let Some(file_path) = self.url_to_file_path(params.text_document_position_params.text_document.uri).await else {
+            return Ok(None);
+        };
         let pos = position_to_ginko_position(params.text_document_position_params.position);
         let project = self.project.read();
-        let Some(item) = project.find_at_pos(&uri, &pos) else {
+        let Some(item) = project.find_at_pos(&file_path, &pos) else {
             return Ok(None);
         };
         match item {
             ItemAtCursor::Reference(reference) => {
-                match project.get_node_position(&uri, reference) {
+                match project.get_node_position(&file_path, reference) {
                     Some(span) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
-                        uri.clone(),
+                        Url::from_file_path(file_path).unwrap(),
                         ginko_span_to_range(span),
                     )))),
                     None => Ok(None),
@@ -163,14 +184,16 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let uri = params.text_document_position_params.text_document.uri;
+        let Some(file_path) = self.url_to_file_path(params.text_document_position_params.text_document.uri).await else {
+            return Ok(None);
+        };
         let pos = position_to_ginko_position(params.text_document_position_params.position);
         let project = self.project.read();
-        let Some(item) = project.find_at_pos(&uri, &pos) else {
+        let Some(item) = project.find_at_pos(&file_path, &pos) else {
             return Ok(None);
         };
         let str = match item {
-            ItemAtCursor::Reference(reference) => match project.document_reference(&uri, reference)
+            ItemAtCursor::Reference(reference) => match project.document_reference(&file_path, reference)
             {
                 Some(str) => str,
                 None => return Ok(None),
@@ -190,9 +213,11 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        let uri = params.text_document.uri;
+        let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
+            return Ok(None);
+        };
         let project = self.project.read();
-        let Some(root) = project.get_root(&uri) else {
+        let Some(root) = project.get_root(&file_path) else {
             return Ok(None);
         };
         #[allow(deprecated)]
@@ -229,7 +254,7 @@ impl LanguageServer for Backend {
             }
         }
         #[allow(deprecated)]
-        let nodes = root
+            let nodes = root
             .elements
             .iter()
             .filter_map(|el| match el {

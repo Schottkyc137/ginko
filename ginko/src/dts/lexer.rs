@@ -4,6 +4,7 @@ use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::reader::ByteReader;
 use crate::dts::reader::Reader;
 use crate::dts::{Diagnostic, HasSpan};
+use std::path::Path;
 use std::sync::Arc;
 
 enum LexerState {
@@ -16,13 +17,13 @@ where
     R: Reader + Sized,
 {
     reader: R,
-    source: Arc<str>,
+    source: Arc<std::path::Path>,
     state: LexerState,
     last_pos: Position,
 }
 
 impl Lexer<ByteReader> {
-    pub fn from_text(text: impl Into<String>, source: Arc<str>) -> Lexer<ByteReader> {
+    pub fn from_text(text: impl Into<String>, source: Arc<Path>) -> Lexer<ByteReader> {
         Lexer::new(ByteReader::from_string(text.into()), source)
     }
 }
@@ -31,7 +32,7 @@ impl<R> Lexer<R>
 where
     R: Reader + Sized,
 {
-    pub fn new(reader: R, source: Arc<str>) -> Lexer<R> {
+    pub fn new(reader: R, source: Arc<Path>) -> Lexer<R> {
         Lexer {
             reader,
             source,
@@ -94,7 +95,7 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
-    pub source: Arc<str>,
+    pub source: Arc<Path>,
 }
 
 impl HasSpan for Token {
@@ -104,7 +105,16 @@ impl HasSpan for Token {
 }
 
 impl HasSource for Token {
-    fn source(&self) -> Arc<str> {
+    fn source(&self) -> Arc<Path> {
+        self.source.clone()
+    }
+}
+
+impl<R> HasSource for Lexer<R>
+where
+    R: Reader + Sized,
+{
+    fn source(&self) -> Arc<std::path::Path> {
         self.source.clone()
     }
 }
@@ -135,10 +145,6 @@ where
 
     pub fn pos(&self) -> Position {
         self.reader.pos()
-    }
-
-    pub fn source(&self) -> Arc<str> {
-        self.source.clone()
     }
 
     // precondition: cursor is past '&' token
@@ -461,7 +467,7 @@ impl<R> HasSource for PeekingLexer<R>
 where
     R: Reader + Sized,
 {
-    fn source(&self) -> Arc<str> {
+    fn source(&self) -> Arc<Path> {
         self.lexer.source()
     }
 }
@@ -586,15 +592,20 @@ mod test {
     use crate::dts::data::Position;
     use crate::dts::lexer::TokenKind::*;
     use crate::dts::lexer::{CompilerDirective, Lexer, Reference, Token};
+    use crate::dts::reader::ByteReader;
     use itertools::Itertools;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    fn tokenize_fully(string: impl Into<std::string::String>) -> (Vec<Token>, Arc<str>) {
-        let source: Arc<str> = "inline_source".into();
-        (
-            Lexer::from_text(string.into(), source.clone()).collect(),
-            source,
-        )
+    fn tokenize_fully(string: impl Into<std::string::String>) -> (Vec<Token>, Arc<Path>) {
+        let (source, lexer) = new_lexer(string.into().as_str());
+        (lexer.collect(), source)
+    }
+
+    fn new_lexer(text: &str) -> (Arc<Path>, Lexer<ByteReader>) {
+        let source: Arc<Path> = PathBuf::from("inline source").into();
+        let lexer = Lexer::from_text(text, source.clone());
+        (source, lexer)
     }
 
     #[test]
@@ -639,8 +650,7 @@ mod test {
 
     #[test]
     pub fn tokenize_reference() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&ref", source.clone());
+        let (source, mut lexer) = new_lexer("&ref");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -649,8 +659,7 @@ mod test {
                 source: source.clone(),
             }
         );
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&ref0_from_4", source.clone());
+        let (source, mut lexer) = new_lexer("&ref0_from_4");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -663,8 +672,7 @@ mod test {
 
     #[test]
     pub fn tokenize_node_name() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("node@addr", source.clone());
+        let (source, mut lexer) = new_lexer("node@addr");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -673,8 +681,7 @@ mod test {
                 source: source.clone(),
             }
         );
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("node@addr@", source.clone());
+        let (source, mut lexer) = new_lexer("node@addr@");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -695,8 +702,7 @@ mod test {
 
     #[test]
     pub fn error_on_wrong_reference() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&0ref", source.clone());
+        let (source, mut lexer) = new_lexer("&0ref");
         assert_eq!(
             lexer.next(),
             Some(Token {
@@ -706,8 +712,7 @@ mod test {
             })
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("& ref", source.clone());
+        let (source, mut lexer) = new_lexer("& ref");
         assert_eq!(
             lexer.next(),
             Some(Token {
@@ -720,8 +725,7 @@ mod test {
 
     #[test]
     pub fn tokenize_path_reference() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&{}", source.clone());
+        let (source, mut lexer) = new_lexer("&{}");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -731,8 +735,7 @@ mod test {
             }
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&{ref}", source.clone());
+        let (source, mut lexer) = new_lexer("&{ref}");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -742,8 +745,7 @@ mod test {
             }
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&{/}", source.clone());
+        let (source, mut lexer) = new_lexer("&{/}");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -753,8 +755,7 @@ mod test {
             }
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("&{/path/to/node}", source.clone());
+        let (source, mut lexer) = new_lexer("&{/path/to/node}");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -767,8 +768,7 @@ mod test {
 
     #[test]
     pub fn tokenize_property_name() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("fsbl,my_node#s", source.clone());
+        let (source, mut lexer) = new_lexer("fsbl,my_node#s");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -781,8 +781,7 @@ mod test {
 
     #[test]
     pub fn tokenize_labels() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("my_label:", source.clone());
+        let (source, mut lexer) = new_lexer("my_label:");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -792,8 +791,7 @@ mod test {
             }
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("my_label#:", source.clone());
+        let (source, mut lexer) = new_lexer("my_label#:");
         assert_eq!(
             lexer.next_expect(),
             Token {
@@ -806,11 +804,9 @@ mod test {
 
     #[test]
     pub fn tokenize_comment() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text(
+        let (source, mut lexer) = new_lexer(
             "something // &hshg chars
 next_token",
-            source.clone(),
         );
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
@@ -840,8 +836,7 @@ next_token",
 
     #[test]
     pub fn tokenize_multiline_comment() {
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text("token /* some comment */ token", source.clone());
+        let (source, mut lexer) = new_lexer("token /* some comment */ token");
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
             tokens.push(lexer.consume().expect("Unexpected EOF"))
@@ -867,14 +862,12 @@ next_token",
             ]
         );
 
-        let source: Arc<str> = "inline source".into();
-        let mut lexer = Lexer::from_text(
+        let (source, mut lexer) = new_lexer(
             "/* first line
 second line
 third line
 */
 token",
-            source.clone(),
         );
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
@@ -905,9 +898,9 @@ third line
 
     #[test]
     fn compiler_directive() {
-        let source: Arc<str> = "inline source".into();
+        let (source, mut lexer) = new_lexer("/dts-v1/");
         assert_eq!(
-            Lexer::from_text("/dts-v1/", source.clone()).next_expect(),
+            lexer.next_expect(),
             Token {
                 span: Position::zero().char_to(8),
                 kind: Directive(CompilerDirective::DTSVersionHeader),
@@ -915,9 +908,9 @@ third line
             }
         );
 
-        let source: Arc<str> = "inline source".into();
+        let (source, mut lexer) = new_lexer("/undefined/");
         assert_eq!(
-            Lexer::from_text("/undefined/", source.clone()).next_expect(),
+            lexer.next_expect(),
             Token {
                 span: Position::zero().char_to(11),
                 kind: Directive(CompilerDirective::Other("undefined".into())),
@@ -938,9 +931,9 @@ third line
         ];
 
         for (raw_str, expected) in strings {
-            let source: Arc<str> = "inline source".into();
+            let (source, mut lexer) = new_lexer(raw_str);
             assert_eq!(
-                Lexer::from_text(raw_str, source.clone()).next_expect(),
+                lexer.next_expect(),
                 Token {
                     span: Position::zero().char_to(raw_str.len() as u32),
                     kind: String(expected.into()),
@@ -952,11 +945,8 @@ third line
 
     #[test]
     pub fn conflicting_node_names() {
-        let source: Arc<str> = "inline source".into();
-        let str1 = "some_node { ,property-name = <1>,<2>; };";
-        let tokens = Lexer::from_text(str1, source.clone())
-            .map(|tok| tok.kind)
-            .collect_vec();
+        let (_, lexer) = new_lexer("some_node { ,property-name = <1>,<2>; };");
+        let tokens = lexer.map(|tok| tok.kind).collect_vec();
         assert_eq!(
             tokens,
             vec![

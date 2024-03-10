@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
+use std::path::Path;
 use std::sync::Arc;
 
 /// Device-tree source file types. Known types are:
@@ -208,5 +209,5 @@ impl HasSpan for Span {
 }
 
 pub trait HasSource {
-    fn source(&self) -> Arc<str>;
+    fn source(&self) -> Arc<Path>;
 }

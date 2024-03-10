@@ -6,6 +6,7 @@ use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
+use std::path::Path as StdPath;
 use std::sync::Arc;
 
 /// Something that can be labeled.
@@ -124,7 +125,7 @@ impl Analysis {
     fn unresolved_reference_error(
         &self,
         span: Span,
-        source: Arc<str>,
+        source: Arc<StdPath>,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Do not emit unresolved reference errors when we are not a plugin.
@@ -328,7 +329,7 @@ impl Analysis {
 #[cfg(test)]
 mod test {
     use crate::dts::ast::Path;
-    use crate::dts::data::{HasSpan, Position};
+    use crate::dts::data::{HasSource, HasSpan, Position};
     use crate::dts::diagnostics::{DiagnosticKind, NameContext};
     use crate::dts::test::Code;
     use crate::dts::Diagnostic;

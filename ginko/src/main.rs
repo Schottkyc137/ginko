@@ -3,6 +3,7 @@ use ginko::dts::{Analysis, Diagnostic, DiagnosticPrinter};
 use ginko::dts::{FileType, Parser as DtsParser};
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 use std::process::exit;
 
 #[derive(clap::Parser, Debug)]
@@ -13,11 +14,11 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let file_name = args.file;
+    let file_name = PathBuf::from(args.file);
     let content = fs::read_to_string(file_name.clone())?;
     let file_ending = file_name
-        .split('.')
-        .last()
+        .extension()
+        .and_then(|extension| extension.to_str())
         .map(FileType::from_file_ending)
         .unwrap_or_default();
     let mut diagnostics: Vec<Diagnostic> = vec![];

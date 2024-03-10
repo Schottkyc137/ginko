@@ -5,6 +5,7 @@ use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::num::ParseIntError;
+use std::path::Path;
 use std::sync::Arc;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -205,11 +206,11 @@ impl From<ParseIntError> for DiagnosticKind {
 pub struct Diagnostic {
     kind: DiagnosticKind,
     span: Span,
-    source: Arc<str>,
+    source: Arc<Path>,
 }
 
 impl Diagnostic {
-    pub fn new(span: Span, source: Arc<str>, kind: impl Into<DiagnosticKind>) -> Diagnostic {
+    pub fn new(span: Span, source: Arc<Path>, kind: impl Into<DiagnosticKind>) -> Diagnostic {
         Diagnostic {
             kind: kind.into(),
             source,
@@ -220,7 +221,7 @@ impl Diagnostic {
     pub fn from_token(token: Token, kind: impl Into<DiagnosticKind>) -> Diagnostic {
         Diagnostic {
             kind: kind.into(),
-            source: token.source,
+            source: token.source(),
             span: token.span,
         }
     }
@@ -241,7 +242,7 @@ impl HasSpan for Diagnostic {
 }
 
 impl HasSource for Diagnostic {
-    fn source(&self) -> Arc<str> {
+    fn source(&self) -> Arc<Path> {
         self.source.clone()
     }
 }
@@ -275,7 +276,7 @@ impl<'a> DiagnosticPrinter<'a> {
             f,
             "{} --> {}:{}:{}",
             diagnostic.default_severity(),
-            diagnostic.source,
+            diagnostic.source.to_string_lossy(),
             start.line() + 1,
             start.character() + 1
         )?;
@@ -311,7 +312,7 @@ impl<'a> Display for DiagnosticPrinter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::data::HasSpan;
+    use crate::dts::data::{HasSource, HasSpan};
     use crate::dts::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticPrinter};
     use crate::dts::lexer::TokenKind;
     use crate::dts::parser::Parser;

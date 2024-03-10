@@ -4,6 +4,7 @@ use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter, LowerHex};
 use std::ops::Deref;
+use std::path::Path as StdPath;
 use std::sync::Arc;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -19,7 +20,7 @@ impl<T> HasSpan for WithToken<T> {
 }
 
 impl<T> HasSource for WithToken<T> {
-    fn source(&self) -> Arc<str> {
+    fn source(&self) -> Arc<StdPath> {
         self.token.source()
     }
 }
@@ -224,8 +225,8 @@ impl HasSpan for PropertyValue {
     }
 }
 
-impl PropertyValue {
-    pub fn source(&self) -> Arc<str> {
+impl HasSource for PropertyValue {
+    fn source(&self) -> Arc<StdPath> {
         match self {
             PropertyValue::String(str) => str.token.source(),
             PropertyValue::Cells(start, ..) => start.source.clone(),
@@ -407,11 +408,11 @@ impl Display for Memreserve {
 #[derive(Eq, PartialEq, Debug)]
 pub struct DtsFile {
     pub elements: Vec<Primary>,
-    pub source: Arc<str>,
+    pub source: Arc<StdPath>,
 }
 
 impl HasSource for DtsFile {
-    fn source(&self) -> Arc<str> {
+    fn source(&self) -> Arc<StdPath> {
         self.source.clone()
     }
 }

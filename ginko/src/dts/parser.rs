@@ -10,6 +10,7 @@ use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{CompilerDirective, HasSpan};
 use itertools::Itertools;
 use std::fs;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 pub struct Parser<R>
@@ -35,7 +36,7 @@ where
 }
 
 impl Parser<ByteReader> {
-    pub fn from_text(text: impl Into<String>, source: Arc<str>) -> Parser<ByteReader> {
+    pub fn from_text(text: impl Into<String>, source: Arc<StdPath>) -> Parser<ByteReader> {
         let lexer = Lexer::from_text(text, source);
         Parser {
             lexer: lexer.into(),
@@ -570,7 +571,7 @@ where
         match fs::read_to_string(path) {
             Ok(contents) => {
                 let reader = ByteReader::from_string(contents);
-                let lexer = Lexer::new(reader, path.into());
+                let lexer = Lexer::new(reader, PathBuf::from(path).into());
                 let mut subparser = Parser::new(lexer);
                 match subparser.file() {
                     Ok(file) => Some(file),
@@ -688,6 +689,7 @@ mod test {
         Cell, DtsFile, Memreserve, Node, NodeName, NodePayload, Path, Property, PropertyValue,
         Reference, WithToken,
     };
+    use crate::dts::data::HasSource;
     use crate::dts::diagnostics::{Diagnostic, DiagnosticKind};
     use crate::dts::lexer::TokenKind::{Equal, OpenBrace, Semicolon};
     use crate::dts::parser::Parser;
@@ -1081,7 +1083,7 @@ mod test {
                 Diagnostic::new(
                     code.s1("bar;").span(),
                     code.source(),
-                    DiagnosticKind::PropertyAfterNode
+                    DiagnosticKind::PropertyAfterNode,
                 ),
                 Diagnostic::new(
                     code.s1("some_prop = <0x1>;").span(),

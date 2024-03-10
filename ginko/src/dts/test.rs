@@ -1,14 +1,16 @@
 use crate::dts::analysis::AnalysisContext;
+use crate::dts::data::HasSource;
 use crate::dts::lexer::{Lexer, Token};
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, Span};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Code {
     pos: Span,
     code: String,
-    source: Arc<str>,
+    source: Arc<Path>,
 }
 
 impl HasSpan for Code {
@@ -43,6 +45,12 @@ fn substr_range(source: &str, range: Span, substr: &str, occurrence: usize) -> S
     panic!("Could not find occurrence {occurrence} of substring {substr:?}");
 }
 
+impl HasSource for Code {
+    fn source(&self) -> Arc<Path> {
+        self.source.clone()
+    }
+}
+
 impl Code {
     pub fn new(code: &str) -> Code {
         Code::with_file_name(code, "inline source")
@@ -58,16 +66,12 @@ impl Code {
         Code {
             pos: Span::new(Position::zero(), last_pos),
             code: code.into(),
-            source: Arc::from(file_name),
+            source: Arc::from(PathBuf::from(file_name)),
         }
     }
 
     pub fn code(&self) -> &str {
         &self.code
-    }
-
-    pub fn source(&self) -> Arc<str> {
-        self.source.clone()
     }
 
     pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)
