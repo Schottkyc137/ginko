@@ -63,7 +63,12 @@ impl Backend {
         match url.to_file_path() {
             Ok(path) => Some(path),
             Err(_) => {
-                self.client.show_message(MessageType::ERROR, format!("Url {url} is not a valid file path")).await;
+                self.client
+                    .show_message(
+                        MessageType::ERROR,
+                        format!("Url {url} is not a valid file path"),
+                    )
+                    .await;
                 None
             }
         }
@@ -152,7 +157,10 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        let Some(file_path) = self.url_to_file_path(params.text_document_position_params.text_document.uri).await else {
+        let Some(file_path) = self
+            .url_to_file_path(params.text_document_position_params.text_document.uri)
+            .await
+        else {
             return Ok(None);
         };
         let pos = position_to_ginko_position(params.text_document_position_params.position);
@@ -184,7 +192,10 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let Some(file_path) = self.url_to_file_path(params.text_document_position_params.text_document.uri).await else {
+        let Some(file_path) = self
+            .url_to_file_path(params.text_document_position_params.text_document.uri)
+            .await
+        else {
             return Ok(None);
         };
         let pos = position_to_ginko_position(params.text_document_position_params.position);
@@ -193,11 +204,12 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         let str = match item {
-            ItemAtCursor::Reference(reference) => match project.document_reference(&file_path, reference)
-            {
-                Some(str) => str,
-                None => return Ok(None),
-            },
+            ItemAtCursor::Reference(reference) => {
+                match project.document_reference(&file_path, reference) {
+                    Some(str) => str,
+                    None => return Ok(None),
+                }
+            }
             ItemAtCursor::Label(name) => name.item().clone(),
             ItemAtCursor::Include(include) => include.file_name.item().clone(),
             _ => return Ok(None),
@@ -254,7 +266,7 @@ impl LanguageServer for Backend {
             }
         }
         #[allow(deprecated)]
-            let nodes = root
+        let nodes = root
             .elements
             .iter()
             .filter_map(|el| match el {
