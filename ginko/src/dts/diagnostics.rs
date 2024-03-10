@@ -1,10 +1,11 @@
 use crate::dts::ast::CompilerDirective;
-use crate::dts::data::{HasSpan, Span};
-use crate::dts::lexer::TokenKind;
+use crate::dts::data::{HasSource, HasSpan, Span};
+use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::num::ParseIntError;
+use std::sync::Arc;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum NameContext {
@@ -204,13 +205,23 @@ impl From<ParseIntError> for DiagnosticKind {
 pub struct Diagnostic {
     kind: DiagnosticKind,
     span: Span,
+    source: Arc<str>,
 }
 
 impl Diagnostic {
-    pub fn new(span: Span, kind: impl Into<DiagnosticKind>) -> Diagnostic {
+    pub fn new(span: Span, source: Arc<str>, kind: impl Into<DiagnosticKind>) -> Diagnostic {
         Diagnostic {
             kind: kind.into(),
+            source,
             span,
+        }
+    }
+
+    pub fn from_token(token: Token, kind: impl Into<DiagnosticKind>) -> Diagnostic {
+        Diagnostic {
+            kind: kind.into(),
+            source: token.source,
+            span: token.span,
         }
     }
 
@@ -226,6 +237,12 @@ impl Diagnostic {
 impl HasSpan for Diagnostic {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl HasSource for Diagnostic {
+    fn source(&self) -> Arc<str> {
+        self.source.clone()
     }
 }
 
@@ -310,6 +327,7 @@ mod tests {
             diag,
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
+                code.source(),
                 DiagnosticKind::Expected(vec![TokenKind::Semicolon]),
             )]
         );
@@ -344,7 +362,7 @@ error --> fname:1:5
             diagnostics: &diag,
             file_name: "fname".into(),
             code: code
-                .source()
+                .code()
                 .lines()
                 .map(|line| line.to_string())
                 .collect_vec(),

@@ -1,3 +1,4 @@
+use crate::dts::data::HasSource;
 use crate::dts::lexer::Token;
 use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
@@ -14,6 +15,12 @@ pub struct WithToken<T> {
 impl<T> HasSpan for WithToken<T> {
     fn span(&self) -> Span {
         self.token.span
+    }
+}
+
+impl<T> HasSource for WithToken<T> {
+    fn source(&self) -> Arc<str> {
+        self.token.source()
     }
 }
 
@@ -217,6 +224,17 @@ impl HasSpan for PropertyValue {
     }
 }
 
+impl PropertyValue {
+    pub fn source(&self) -> Arc<str> {
+        match self {
+            PropertyValue::String(str) => str.token.source(),
+            PropertyValue::Cells(start, ..) => start.source.clone(),
+            PropertyValue::Reference(reference) => reference.token.source.clone(),
+            PropertyValue::ByteStrings(start, ..) => start.source.clone(),
+        }
+    }
+}
+
 impl Display for PropertyValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
@@ -389,6 +407,13 @@ impl Display for Memreserve {
 #[derive(Eq, PartialEq, Debug)]
 pub struct DtsFile {
     pub elements: Vec<Primary>,
+    pub source: Arc<str>,
+}
+
+impl HasSource for DtsFile {
+    fn source(&self) -> Arc<str> {
+        self.source.clone()
+    }
 }
 
 impl Display for DtsFile {

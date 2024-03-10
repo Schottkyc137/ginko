@@ -2,7 +2,7 @@ use crate::dts::ast::{
     AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeName, NodePayload, Path, Primary,
     Property, PropertyValue, ReferencedNode, WithToken,
 };
-use crate::dts::data::Span;
+use crate::dts::data::{HasSource, Span};
 use crate::dts::diagnostics::DiagnosticKind::Expected;
 use crate::dts::diagnostics::{Diagnostic, DiagnosticKind, NameContext};
 use crate::dts::lexer::{Lexer, PeekingLexer, Reference, Token, TokenKind};
@@ -70,21 +70,25 @@ where
         if let Some((pos, ch)) = str.chars().enumerate().find(|(_, ch)| !predicate(*ch)) {
             self.diagnostics.push(Diagnostic::new(
                 span.start().offset_by_char(pos as i32).as_char_span(),
+                self.lexer.source(),
                 DiagnosticKind::IllegalChar(ch, name_context),
             ));
         } else if str.len() > 31 {
             self.diagnostics.push(Diagnostic::new(
                 span,
+                self.lexer.source(),
                 DiagnosticKind::NameTooLong(str.len(), name_context),
             ))
         } else if str.is_empty() {
             self.diagnostics.push(Diagnostic::new(
                 span,
+                self.lexer.source(),
                 DiagnosticKind::ExpectedName(name_context),
             ))
         } else if !str.starts_with(starting_chars) {
             self.diagnostics.push(Diagnostic::new(
                 span,
+                self.lexer.source(),
                 DiagnosticKind::IllegalStart(str.chars().next().unwrap(), name_context),
             ))
         }
@@ -144,8 +148,8 @@ where
             }
             Reference::Path(path) => {
                 if path.is_empty() {
-                    self.diagnostics.push(Diagnostic::new(
-                        token.span(),
+                    self.diagnostics.push(Diagnostic::from_token(
+                        token.clone(),
                         DiagnosticKind::PathCannotBeEmpty,
                     ));
                 }
@@ -177,7 +181,8 @@ where
                 match num {
                     Ok(num) => Ok(Cell::Number(WithToken::new(num, tok))),
                     Err(err) => {
-                        self.diagnostics.push(Diagnostic::new(tok.span, err));
+                        self.diagnostics
+                            .push(Diagnostic::from_token(tok.clone(), err));
                         Ok(Cell::Number(WithToken::new(0, tok)))
                     }
                 }
@@ -185,15 +190,15 @@ where
             TokenKind::OpenParen => {
                 self.skip_expression_starting_with_paren();
                 if self.lexer.peek().is_none() {
-                    self.diagnostics.push(Diagnostic::new(
-                        tok.span(),
+                    self.diagnostics.push(Diagnostic::from_token(
+                        tok,
                         DiagnosticKind::UnbalancedParentheses,
                     ));
                 }
                 Ok(Cell::Expression)
             }
-            _ => Err(Diagnostic::new(
-                tok.span,
+            _ => Err(Diagnostic::from_token(
+                tok,
                 Expected(vec![
                     TokenKind::UnparsedNumber("".to_string()),
                     TokenKind::Ref(Reference::Simple("".to_string())),
@@ -219,13 +224,15 @@ where
                 match num {
                     Ok(num) => Ok(WithToken::new(num, tok)),
                     Err(err) => {
-                        self.diagnostics.push(Diagnostic::new(tok.span, err));
+                        self.diagnostics
+                            .push(Diagnostic::from_token(tok.clone(), err));
                         Ok(WithToken::new(0, tok))
                     }
                 }
             }
             _ => Err(Diagnostic::new(
                 self.lexer.last_pos().offset_by_char(1).as_span(),
+                self.lexer.source(),
                 Expected(vec![TokenKind::UnparsedNumber("".to_string())]),
             )),
         }
@@ -236,8 +243,8 @@ where
         match &tok.kind {
             TokenKind::UnparsedNumber(raw_str) | TokenKind::Ident(raw_str) => {
                 if raw_str.len() % 2 != 0 {
-                    self.diagnostics.push(Diagnostic::new(
-                        tok.span,
+                    self.diagnostics.push(Diagnostic::from_token(
+                        tok.clone(),
                         DiagnosticKind::OddNumberOfBytestringElements,
                     ));
                     return Ok(WithToken::new(vec![], tok));
@@ -247,8 +254,10 @@ where
                     match u8::from_str_radix(std::str::from_utf8(&[first, second]).unwrap(), 16) {
                         Ok(byte) => bytes.push(byte),
                         Err(err) => {
-                            self.diagnostics
-                                .push(Diagnostic::new(tok.span, DiagnosticKind::from(err)));
+                            self.diagnostics.push(Diagnostic::from_token(
+                                tok.clone(),
+                                DiagnosticKind::from(err),
+                            ));
                             return Ok(WithToken::new(vec![], tok));
                         }
                     }
@@ -256,8 +265,8 @@ where
                 Ok(WithToken::new(bytes, tok))
             }
             _ => {
-                self.diagnostics.push(Diagnostic::new(
-                    tok.span,
+                self.diagnostics.push(Diagnostic::from_token(
+                    tok.clone(),
                     Expected(vec![
                         TokenKind::UnparsedNumber("".to_string()),
                         TokenKind::Ident("".to_string()),
@@ -312,8 +321,8 @@ where
             self.skip_tok();
             let width = self.lexer.expect_next()?;
             if !matches!(width.kind, TokenKind::UnparsedNumber(_)) {
-                self.diagnostics.push(Diagnostic::new(
-                    width.span(),
+                self.diagnostics.push(Diagnostic::from_token(
+                    width,
                     Expected(vec![TokenKind::UnparsedNumber("".to_string())]),
                 ))
             }
@@ -358,8 +367,8 @@ where
                 }
                 Ok(PropertyValue::ByteStrings(tok, byte_strings, end))
             }
-            _ => Err(Diagnostic::new(
-                tok.span,
+            _ => Err(Diagnostic::from_token(
+                tok,
                 Expected(vec![
                     TokenKind::String("".to_string()),
                     TokenKind::ChevronLeft,
@@ -422,8 +431,8 @@ where
                     break;
                 }
                 _ => {
-                    return Err(Diagnostic::new(
-                        tok.span,
+                    return Err(Diagnostic::from_token(
+                        tok,
                         Expected(vec![
                             TokenKind::Ident("".to_string()),
                             TokenKind::CloseBrace,
@@ -459,6 +468,7 @@ where
                     if node_discovered {
                         self.diagnostics.push(Diagnostic::new(
                             prop.span(),
+                            self.lexer.source(),
                             DiagnosticKind::PropertyAfterNode,
                         ))
                     }
@@ -471,6 +481,7 @@ where
                     if node_discovered {
                         self.diagnostics.push(Diagnostic::new(
                             prop.span(),
+                            self.lexer.source(),
                             DiagnosticKind::PropertyAfterNode,
                         ))
                     }
@@ -479,6 +490,7 @@ where
                 _ => {
                     return Err(Diagnostic::new(
                         self.lexer.last_pos().as_span(),
+                        self.lexer.source(),
                         Expected(vec![
                             TokenKind::Semicolon,
                             TokenKind::Equal,
@@ -500,6 +512,7 @@ where
         let Some(tok) = tok else {
             self.diagnostics.push(Diagnostic::new(
                 self.lexer.last_pos().as_span(),
+                self.lexer.source(),
                 Expected(vec![TokenKind::Semicolon]),
             ));
             return Ok(None);
@@ -534,8 +547,11 @@ where
         } else {
             self.lexer.last_pos().as_char_span()
         };
-        self.diagnostics
-            .push(Diagnostic::new(span, Expected(vec![TokenKind::Semicolon])));
+        self.diagnostics.push(Diagnostic::new(
+            span,
+            self.lexer.source(),
+            Expected(vec![TokenKind::Semicolon]),
+        ));
         Ok(None)
     }
 
@@ -544,7 +560,10 @@ where
         while self.lexer.peek().is_some() {
             elements.push(self.primary()?);
         }
-        Ok(DtsFile { elements })
+        Ok(DtsFile {
+            elements,
+            source: self.lexer.source(),
+        })
     }
 
     fn include_other_file(&mut self, span: Span, path: &str) -> Option<DtsFile> {
@@ -556,14 +575,18 @@ where
                 match subparser.file() {
                     Ok(file) => Some(file),
                     Err(_) => {
-                        self.diagnostics
-                            .push(Diagnostic::new(span, DiagnosticKind::ErrorsInInclude));
+                        self.diagnostics.push(Diagnostic::new(
+                            span,
+                            self.lexer.source(),
+                            DiagnosticKind::ErrorsInInclude,
+                        ));
                         None
                     }
                 }
             }
             Err(file_error) => {
-                self.diagnostics.push(Diagnostic::new(span, file_error));
+                self.diagnostics
+                    .push(Diagnostic::new(span, self.lexer.source(), file_error));
                 None
             }
         }
@@ -592,8 +615,8 @@ where
                 let tok = self.lexer.expect_next()?;
                 match tok.kind {
                     TokenKind::String(include_str) => Ok(Primary::CStyleInclude(include_str)),
-                    _ => Err(Diagnostic::new(
-                        tok.span(),
+                    _ => Err(Diagnostic::from_token(
+                        tok,
                         Expected(vec![TokenKind::String("".to_string())]),
                     )),
                 }
@@ -605,16 +628,16 @@ where
                 let path = match string_tok.kind.clone() {
                     TokenKind::String(string) => string,
                     _ => {
-                        return Err(Diagnostic::new(
-                            string_tok.span(),
+                        return Err(Diagnostic::from_token(
+                            string_tok,
                             Expected(vec![TokenKind::String("".into())]),
                         ));
                     }
                 };
                 if self.lexer.peek_kind() == Some(&TokenKind::Semicolon) {
                     let tok = self.lexer.expect_next()?;
-                    self.diagnostics.push(Diagnostic::new(
-                        tok.span(),
+                    self.diagnostics.push(Diagnostic::from_token(
+                        tok,
                         DiagnosticKind::ParserError(
                             "Include directive must not end with a semicolon".to_string(),
                         ),
@@ -645,8 +668,8 @@ where
                     payload: root_payload,
                 }))
             }
-            _ => Err(Diagnostic::new(
-                token.span(),
+            _ => Err(Diagnostic::from_token(
+                token,
                 Expected(vec![
                     TokenKind::Directive(CompilerDirective::DTSVersionHeader),
                     TokenKind::Directive(CompilerDirective::MemReserve),
@@ -703,14 +726,17 @@ mod test {
             vec![
                 Diagnostic::new(
                     Position::new(0, 8).as_char_span(),
+                    code.source(),
                     DiagnosticKind::Expected(vec![Semicolon]),
                 ),
                 Diagnostic::new(
                     Position::new(3, 19).as_char_span(),
+                    code.source(),
                     DiagnosticKind::Expected(vec![Semicolon]),
                 ),
                 Diagnostic::new(
                     Position::new(4, 1).as_span(),
+                    code.source(),
                     DiagnosticKind::Expected(vec![Semicolon]),
                 ),
             ]
@@ -872,7 +898,8 @@ mod test {
                         properties: vec![],
                         end: code.s1(";").token(),
                     },
-                }))]
+                }))],
+                source: code.source(),
             }
         )
     }
@@ -900,7 +927,8 @@ mod test {
                             end: code.s(";", 2).token(),
                         },
                     })),
-                ]
+                ],
+                source: code.source(),
             }
         )
     }
@@ -946,7 +974,8 @@ mod test {
                             end: code.s(";", 3).token(),
                         },
                     })),
-                ]
+                ],
+                source: code.source(),
             }
         )
     }
@@ -1023,7 +1052,8 @@ mod test {
                             end: code.s(";", 6).token(),
                         },
                     })),
-                ]
+                ],
+                source: code.source(),
             }
         )
     }
@@ -1048,9 +1078,14 @@ mod test {
         assert_eq!(
             diag,
             vec![
-                Diagnostic::new(code.s1("bar;").span(), DiagnosticKind::PropertyAfterNode),
+                Diagnostic::new(
+                    code.s1("bar;").span(),
+                    code.source(),
+                    DiagnosticKind::PropertyAfterNode
+                ),
                 Diagnostic::new(
                     code.s1("some_prop = <0x1>;").span(),
+                    code.source(),
                     DiagnosticKind::PropertyAfterNode,
                 ),
             ]
@@ -1086,7 +1121,8 @@ mod test {
                             end: code.s(";", 3).token(),
                         },
                     })),
-                ]
+                ],
+                source: code.source(),
             }
         );
     }
@@ -1156,6 +1192,7 @@ mod test {
             res,
             Err(Diagnostic::new(
                 code.s1("prop_a").end().as_span(),
+                code.source(),
                 DiagnosticKind::Expected(vec![Semicolon, Equal, OpenBrace]),
             ))
         )
@@ -1178,6 +1215,7 @@ mod test {
             diag,
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
+                code.source(),
                 DiagnosticKind::Expected(vec![Semicolon]),
             )]
         );

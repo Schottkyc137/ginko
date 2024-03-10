@@ -58,8 +58,12 @@ impl Code {
         }
     }
 
-    pub fn source(&self) -> &str {
+    pub fn code(&self) -> &str {
         &self.code
+    }
+
+    pub fn source(&self) -> Arc<str> {
+        self.source.clone()
     }
 
     pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)

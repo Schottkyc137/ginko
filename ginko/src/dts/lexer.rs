@@ -1,5 +1,5 @@
 use crate::dts::ast::CompilerDirective;
-use crate::dts::data::{Position, Span};
+use crate::dts::data::{HasSource, Position, Span};
 use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::reader::ByteReader;
 use crate::dts::reader::Reader;
@@ -100,6 +100,12 @@ pub struct Token {
 impl HasSpan for Token {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl HasSource for Token {
+    fn source(&self) -> Arc<str> {
+        self.source.clone()
     }
 }
 
@@ -451,6 +457,15 @@ where
     }
 }
 
+impl<R> HasSource for PeekingLexer<R>
+where
+    R: Reader + Sized,
+{
+    fn source(&self) -> Arc<str> {
+        self.lexer.source()
+    }
+}
+
 impl<R> PeekingLexer<R>
 where
     R: Reader + Sized,
@@ -471,9 +486,11 @@ where
         // something something cannot borrow as immutable something something
         // Therefore this is defined here as opposed to the `None` branch
         let eof_pos = self.lexer.pos();
+        let source = self.source();
         match self.peek() {
             None => Err(Diagnostic::new(
                 eof_pos.as_span(),
+                source,
                 DiagnosticKind::UnexpectedEOF,
             )),
             Some(tok) => Ok(tok),
@@ -486,6 +503,7 @@ where
         match next {
             None => Err(Diagnostic::new(
                 prev_pos.as_span(),
+                self.source(),
                 DiagnosticKind::UnexpectedEOF,
             )),
             Some(token) => {
@@ -494,6 +512,7 @@ where
                 } else {
                     Err(Diagnostic::new(
                         prev_pos.as_span(),
+                        self.source(),
                         DiagnosticKind::Expected(vec![token.kind]),
                     ))
                 }
@@ -507,6 +526,7 @@ where
         match next {
             None => Err(Diagnostic::new(
                 eof_pos.as_span(),
+                self.source(),
                 DiagnosticKind::UnexpectedEOF,
             )),
             Some(token) => Ok(token),

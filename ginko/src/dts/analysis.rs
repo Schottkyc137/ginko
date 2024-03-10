@@ -2,7 +2,7 @@ use crate::dts::ast::{
     AnyDirective, Cell, DtsFile, Node, NodePayload, Path, Primary, Property, PropertyValue,
     Reference, ReferencedNode, WithToken,
 };
-use crate::dts::data::{HasSpan, Span};
+use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ enum Labeled {
 pub struct Analysis {
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
-    unresolved_references: Vec<(Reference, Span)>,
+    unresolved_references: Vec<WithToken<Reference>>,
     file_type: FileType,
     is_plugin: bool,
 }
@@ -79,15 +79,15 @@ impl Analysis {
                 Primary::Directive(directive) => match directive {
                     AnyDirective::DtsHeader(tok) => {
                         if dts_header_seen {
-                            diagnostics.push(Diagnostic::new(
-                                tok.span(),
+                            diagnostics.push(Diagnostic::from_token(
+                                tok.clone(),
                                 DiagnosticKind::DuplicateDirective(
                                     CompilerDirective::DTSVersionHeader,
                                 ),
                             ))
                         } else if first_non_include {
-                            diagnostics.push(Diagnostic::new(
-                                tok.span(),
+                            diagnostics.push(Diagnostic::from_token(
+                                tok.clone(),
                                 DiagnosticKind::MisplacedDtsHeader,
                             ))
                         }
@@ -114,18 +114,28 @@ impl Analysis {
         if !dts_header_seen && self.file_type == FileType::DtSource {
             diagnostics.push(Diagnostic::new(
                 Position::zero().as_span(),
+                file.source(),
                 DiagnosticKind::NonDtsV1,
             ))
         }
         self.resolve_references(diagnostics)
     }
 
-    fn unresolved_reference_error(&self, span: Span, diagnostics: &mut Vec<Diagnostic>) {
+    fn unresolved_reference_error(
+        &self,
+        span: Span,
+        source: Arc<str>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Do not emit unresolved reference errors when we are not a plugin.
         // This will emit false positives as references can only be resolved with the full
         // device-tree information.
         if self.file_type == FileType::DtSource && !self.is_plugin {
-            diagnostics.push(Diagnostic::new(span, DiagnosticKind::UnresolvedReference));
+            diagnostics.push(Diagnostic::new(
+                span,
+                source,
+                DiagnosticKind::UnresolvedReference,
+            ));
         }
     }
 
@@ -151,7 +161,11 @@ impl Analysis {
                     .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label));
                 match path {
                     None => {
-                        self.unresolved_reference_error(reference.span(), diagnostics);
+                        self.unresolved_reference_error(
+                            reference.span(),
+                            reference.source(),
+                            diagnostics,
+                        );
                         Path::empty()
                     }
                     Some((path, _)) => path.clone(),
@@ -159,7 +173,11 @@ impl Analysis {
             }
             Reference::Path(path) => {
                 if !self.flat_nodes.contains_key(path) {
-                    self.unresolved_reference_error(reference.span(), diagnostics);
+                    self.unresolved_reference_error(
+                        reference.span(),
+                        reference.source(),
+                        diagnostics,
+                    );
                 };
                 path.clone()
             }
@@ -182,17 +200,18 @@ impl Analysis {
 
     pub fn resolve_references(&mut self, diagnostics: &mut Vec<Diagnostic>) {
         for reference in &self.unresolved_references {
-            let span = reference.1;
-            match &reference.0 {
+            let span = reference.span();
+            let source = reference.source();
+            match &reference.item() {
                 Reference::Label(label) => match self.labels.get(label) {
                     Some(_) => {}
                     None => {
-                        self.unresolved_reference_error(span, diagnostics);
+                        self.unresolved_reference_error(span, source, diagnostics);
                     }
                 },
                 Reference::Path(path) => match self.flat_nodes.get(path) {
                     None => {
-                        self.unresolved_reference_error(span, diagnostics);
+                        self.unresolved_reference_error(span, source, diagnostics);
                     }
                     Some(_) => {}
                 },
@@ -236,6 +255,7 @@ impl Analysis {
             if !matches!(value, PropertyValue::String(_)) {
                 diagnostics.push(Diagnostic::new(
                     value.span(),
+                    value.source(),
                     DiagnosticKind::NonStringInCompatible,
                 ))
             }
@@ -284,18 +304,14 @@ impl Analysis {
                     self.analyze_cell(diagnostics, cell)
                 }
             }
-            PropertyValue::Reference(reference) => {
-                self.analyze_reference(diagnostics, reference, reference.span())
-            }
+            PropertyValue::Reference(reference) => self.analyze_reference(diagnostics, reference),
         }
     }
 
     pub fn analyze_cell(&mut self, diagnostics: &mut [Diagnostic], value: &Cell) {
         match value {
             Cell::Number(_) => {}
-            Cell::Reference(reference) => {
-                self.analyze_reference(diagnostics, reference, reference.span())
-            }
+            Cell::Reference(reference) => self.analyze_reference(diagnostics, reference),
             Cell::Expression => {}
         }
     }
@@ -303,10 +319,9 @@ impl Analysis {
     pub fn analyze_reference(
         &mut self,
         _diagnostics: &mut [Diagnostic],
-        reference: &Reference,
-        span: Span,
+        reference: &WithToken<Reference>,
     ) {
-        self.unresolved_references.push((reference.clone(), span))
+        self.unresolved_references.push(reference.clone())
     }
 }
 
@@ -340,18 +355,22 @@ mod test {
             vec![
                 Diagnostic::new(
                     Position::new(8, 21).as_char_span(),
+                    code.source(),
                     DiagnosticKind::IllegalChar('#', NameContext::NodeName),
                 ),
                 Diagnostic::new(
                     Position::new(3, 8).as_char_span(),
+                    code.source(),
                     DiagnosticKind::IllegalChar('?', NameContext::Label),
                 ),
                 Diagnostic::new(
                     Position::new(4, 4).char_to(46),
+                    code.source(),
                     DiagnosticKind::NameTooLong(41, NameContext::Label),
                 ),
                 Diagnostic::new(
                     Position::new(6, 19).as_char_span(),
+                    code.source(),
                     DiagnosticKind::IllegalChar('#', NameContext::Label),
                 ),
             ]
@@ -386,10 +405,12 @@ mod test {
             vec![
                 Diagnostic::new(
                     code.s1("&node3").span(),
+                    code.source(),
                     DiagnosticKind::UnresolvedReference,
                 ),
                 Diagnostic::new(
                     code.s1("&{/node3}").span(),
+                    code.source(),
                     DiagnosticKind::UnresolvedReference,
                 ),
             ]
@@ -479,6 +500,7 @@ mod test {
             diagnostics,
             vec![Diagnostic::new(
                 Position::zero().as_span(),
+                code.source(),
                 DiagnosticKind::NonDtsV1,
             )]
         )
@@ -510,10 +532,12 @@ mod test {
             vec![
                 Diagnostic::new(
                     code.s1("&some_other_node").span(),
+                    code.source(),
                     DiagnosticKind::UnresolvedReference,
                 ),
                 Diagnostic::new(
                     code.s1("&{/some_other_node}").span(),
+                    code.source(),
                     DiagnosticKind::UnresolvedReference,
                 )
             ]
