@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_default();
     let mut diagnostics: Vec<Diagnostic> = vec![];
 
-    let mut parser = DtsParser::from_text(content.clone());
+    let mut parser = DtsParser::from_text(content.clone(), file_name.clone().into());
     match parser.file() {
         Ok(file) => {
             if !parser.diagnostics.is_empty() {

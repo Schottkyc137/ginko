@@ -4,6 +4,7 @@ use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::reader::ByteReader;
 use crate::dts::reader::Reader;
 use crate::dts::{Diagnostic, HasSpan};
+use std::sync::Arc;
 
 enum LexerState {
     ExpectingNodeOrPropertyName,
@@ -15,13 +16,14 @@ where
     R: Reader + Sized,
 {
     reader: R,
+    source: Arc<str>,
     state: LexerState,
     last_pos: Position,
 }
 
 impl Lexer<ByteReader> {
-    pub fn from_text(text: impl Into<String>) -> Lexer<ByteReader> {
-        Lexer::new(ByteReader::from_string(text.into()))
+    pub fn from_text(text: impl Into<String>, source: Arc<str>) -> Lexer<ByteReader> {
+        Lexer::new(ByteReader::from_string(text.into()), source)
     }
 }
 
@@ -29,9 +31,10 @@ impl<R> Lexer<R>
 where
     R: Reader + Sized,
 {
-    pub fn new(reader: R) -> Lexer<R> {
+    pub fn new(reader: R, source: Arc<str>) -> Lexer<R> {
         Lexer {
             reader,
+            source,
             state: LexerState::ExpectingNodeOrPropertyName,
             last_pos: Position::zero(),
         }
@@ -91,6 +94,7 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+    pub source: Arc<str>,
 }
 
 impl HasSpan for Token {
@@ -127,6 +131,10 @@ where
         self.reader.pos()
     }
 
+    pub fn source(&self) -> Arc<str> {
+        self.source.clone()
+    }
+
     // precondition: cursor is past '&' token
     // x = <&ref>
     //       ^~~ cursor is here
@@ -144,6 +152,7 @@ where
                 Some(Token {
                     span: start.to(self.reader.pos()),
                     kind: TokenKind::Ref(Reference::Path(String::from_utf8(path).unwrap())),
+                    source: self.source(),
                 })
             }
             b'a'..=b'z' | b'A'..=b'Z' => {
@@ -153,11 +162,13 @@ where
                 Some(Token {
                     span: start.to(self.reader.pos()),
                     kind: TokenKind::Ref(Reference::Simple(str)),
+                    source: self.source(),
                 })
             }
             _ => Some(Token {
                 span: start.to(self.reader.pos()),
                 kind: TokenKind::Ref(Reference::Simple("".to_string())),
+                source: self.source(),
             }),
         }
     }
@@ -173,6 +184,7 @@ where
                 Token {
                     span: start.to(self.reader.pos()),
                     kind: TokenKind::Label(String::from_utf8(value).unwrap()),
+                    source: self.source(),
                 }
             }
             Some(b'@') => {
@@ -183,11 +195,13 @@ where
                 Token {
                     span: start.to(self.reader.pos()),
                     kind: TokenKind::Ident(String::from_utf8(value).unwrap()),
+                    source: self.source(),
                 }
             }
             _ => Token {
                 span: start.to(self.reader.pos()),
                 kind: TokenKind::Ident(String::from_utf8(value).unwrap()),
+                source: self.source(),
             },
         }
     }
@@ -201,6 +215,7 @@ where
         Token {
             span: pos.to(self.reader.pos()),
             kind: TokenKind::Comment(comment_str),
+            source: self.source(),
         }
     }
 
@@ -221,6 +236,7 @@ where
                         return Some(Token {
                             span: pos.to(self.reader.pos()),
                             kind: TokenKind::Comment(str),
+                            source: self.source(),
                         });
                     } else {
                         buf.push(ch)
@@ -252,6 +268,7 @@ where
         Token {
             span: pos.to(self.reader.pos()),
             kind: TokenKind::Directive(directive),
+            source: self.source(),
         }
     }
 
@@ -282,6 +299,7 @@ where
                         return Some(Token {
                             span: pos.to(self.reader.pos()),
                             kind: TokenKind::String(str),
+                            source: self.source(),
                         });
                     }
                 }
@@ -301,6 +319,7 @@ where
         Token {
             span: pos.to(self.reader.pos()),
             kind: TokenKind::UnparsedNumber(str),
+            source: self.source(),
         }
     }
 
@@ -331,11 +350,13 @@ where
             return None;
         };
         let start_pos = self.reader.pos();
-        let mut simple_token = |kind: TokenKind| -> Option<Token> {
+        let source = self.source();
+        let simple_token = |kind: TokenKind| -> Option<Token> {
             self.reader.skip();
             Some(Token {
                 kind,
                 span: start_pos.to(self.reader.pos()),
+                source,
             })
         };
         use TokenKind::*;
@@ -362,6 +383,7 @@ where
                     return Some(Token {
                         span: start_pos.to(self.reader.pos()),
                         kind: Slash,
+                        source: self.source(),
                     });
                 };
                 match next_ch {
@@ -377,6 +399,7 @@ where
                     _ => Some(Token {
                         span: start_pos.to(self.reader.pos()),
                         kind: Slash,
+                        source: self.source(),
                     }),
                 }
             }
@@ -544,41 +567,51 @@ mod test {
     use crate::dts::lexer::TokenKind::*;
     use crate::dts::lexer::{CompilerDirective, Lexer, Reference, Token};
     use itertools::Itertools;
+    use std::sync::Arc;
 
-    fn tokenize_fully(string: impl Into<std::string::String>) -> Vec<Token> {
-        Lexer::from_text(string.into()).collect()
+    fn tokenize_fully(string: impl Into<std::string::String>) -> (Vec<Token>, Arc<str>) {
+        let source: Arc<str> = "inline_source".into();
+        (
+            Lexer::from_text(string.into(), source.clone()).collect(),
+            source,
+        )
     }
 
     #[test]
     pub fn tokenize_simple_characters() {
-        let str = "; = [] ><";
-        let tokens = tokenize_fully(str);
+        let (tokens, source) = tokenize_fully("; = [] ><");
         assert_eq!(
             tokens,
             vec![
                 Token {
                     kind: Semicolon,
                     span: Position::zero().to(Position::new(0, 1)),
+                    source: source.clone(),
                 },
                 Token {
                     kind: Equal,
                     span: Position::new(0, 2).to(Position::new(0, 3)),
+                    source: source.clone(),
                 },
                 Token {
                     kind: OpenBracket,
                     span: Position::new(0, 4).to(Position::new(0, 5)),
+                    source: source.clone(),
                 },
                 Token {
                     kind: CloseBracket,
                     span: Position::new(0, 5).to(Position::new(0, 6)),
+                    source: source.clone(),
                 },
                 Token {
                     kind: ChevronRight,
                     span: Position::new(0, 7).to(Position::new(0, 8)),
+                    source: source.clone(),
                 },
                 Token {
                     kind: ChevronLeft,
                     span: Position::new(0, 8).to(Position::new(0, 9)),
+                    source: source.clone(),
                 },
             ]
         )
@@ -586,146 +619,178 @@ mod test {
 
     #[test]
     pub fn tokenize_reference() {
-        let mut lexer = Lexer::from_text("&ref");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&ref", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 4)),
                 kind: Ref(Reference::Simple("ref".into())),
+                source: source.clone(),
             }
         );
-        let mut lexer = Lexer::from_text("&ref0_from_4");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&ref0_from_4", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 12)),
                 kind: Ref(Reference::Simple("ref0_from_4".into())),
+                source: source.clone(),
             }
         )
     }
 
     #[test]
     pub fn tokenize_node_name() {
-        let mut lexer = Lexer::from_text("node@addr");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("node@addr", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 9)),
                 kind: Ident("node@addr".into()),
+                source: source.clone(),
             }
         );
-        let mut lexer = Lexer::from_text("node@addr@");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("node@addr@", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 9)),
                 kind: Ident("node@addr".into()),
+                source: source.clone(),
             }
         );
         assert_eq!(
             lexer.next(),
             Some(Token {
                 span: Position::new(0, 9).as_char_span(),
-                kind: Unknown(b'@')
+                kind: Unknown(b'@'),
+                source: source.clone(),
             })
         )
     }
 
     #[test]
     pub fn error_on_wrong_reference() {
-        let mut lexer = Lexer::from_text("&0ref");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&0ref", source.clone());
         assert_eq!(
             lexer.next(),
             Some(Token {
                 kind: Ref(Reference::Simple("".to_string())),
-                span: Position::zero().as_char_span()
+                span: Position::zero().as_char_span(),
+                source: source.clone(),
             })
         );
 
-        let mut lexer = Lexer::from_text("& ref");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("& ref", source.clone());
         assert_eq!(
             lexer.next(),
             Some(Token {
                 kind: Ref(Reference::Simple("".to_string())),
-                span: Position::zero().as_char_span()
+                span: Position::zero().as_char_span(),
+                source: source.clone(),
             })
         );
     }
 
     #[test]
     pub fn tokenize_path_reference() {
-        let mut lexer = Lexer::from_text("&{}");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&{}", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 3)),
                 kind: Ref(Reference::Path("".into())),
+                source: source.clone(),
             }
         );
-        let mut lexer = Lexer::from_text("&{ref}");
+
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&{ref}", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 6)),
                 kind: Ref(Reference::Path("ref".into())),
+                source: source.clone(),
             }
         );
-        let mut lexer = Lexer::from_text("&{/}");
+
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&{/}", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 4)),
                 kind: Ref(Reference::Path("/".into())),
+                source: source.clone(),
             }
         );
-        let mut lexer = Lexer::from_text("&{/path/to/node}");
+
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("&{/path/to/node}", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 16)),
                 kind: Ref(Reference::Path("/path/to/node".into())),
+                source: source.clone(),
             }
         );
     }
 
     #[test]
     pub fn tokenize_property_name() {
-        let mut lexer = Lexer::from_text("fsbl,my_node#s");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("fsbl,my_node#s", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 14)),
                 kind: Ident("fsbl,my_node#s".into()),
+                source: source.clone(),
             }
         );
     }
 
     #[test]
     pub fn tokenize_labels() {
-        let mut lexer = Lexer::from_text("my_label:");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("my_label:", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 9)),
                 kind: Label("my_label".into()),
+                source: source.clone(),
             }
         );
 
-        let mut lexer = Lexer::from_text("my_label#:");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("my_label#:", source.clone());
         assert_eq!(
             lexer.next_expect(),
             Token {
                 span: Position::zero().to(Position::new(0, 10)),
                 kind: Label("my_label#".into()),
+                source: source.clone(),
             }
         );
     }
 
     #[test]
     pub fn tokenize_comment() {
+        let source: Arc<str> = "inline source".into();
         let mut lexer = Lexer::from_text(
             "something // &hshg chars
 next_token",
+            source.clone(),
         );
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
@@ -737,14 +802,17 @@ next_token",
                 Token {
                     span: Position::zero().to(Position::new(0, 9)),
                     kind: Ident("something".into()),
+                    source: source.clone(),
                 },
                 Token {
                     span: Position::new(0, 10).char_to(24),
                     kind: Comment(" &hshg chars".into()),
+                    source: source.clone(),
                 },
                 Token {
                     span: Position::new(1, 0).char_to(10),
                     kind: Ident("next_token".into()),
+                    source: source.clone(),
                 },
             ]
         );
@@ -752,7 +820,8 @@ next_token",
 
     #[test]
     pub fn tokenize_multiline_comment() {
-        let mut lexer = Lexer::from_text("token /* some comment */ token");
+        let source: Arc<str> = "inline source".into();
+        let mut lexer = Lexer::from_text("token /* some comment */ token", source.clone());
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
             tokens.push(lexer.consume().expect("Unexpected EOF"))
@@ -763,23 +832,29 @@ next_token",
                 Token {
                     span: Position::zero().to(Position::new(0, 5)),
                     kind: Ident("token".into()),
+                    source: source.clone(),
                 },
                 Token {
                     span: Position::new(0, 6).char_to(24),
                     kind: Comment(" some comment ".into()),
+                    source: source.clone(),
                 },
                 Token {
                     span: Position::new(0, 25).char_to(30),
                     kind: Ident("token".into()),
+                    source: source.clone(),
                 },
             ]
         );
+
+        let source: Arc<str> = "inline source".into();
         let mut lexer = Lexer::from_text(
             "/* first line
 second line
 third line
 */
 token",
+            source.clone(),
         );
         let mut tokens: Vec<Token> = vec![];
         while lexer.has_next() {
@@ -797,10 +872,12 @@ third line
 "
                         .into()
                     ),
+                    source: source.clone(),
                 },
                 Token {
                     span: Position::new(4, 0).char_to(5),
                     kind: Ident("token".into()),
+                    source: source.clone(),
                 },
             ]
         );
@@ -808,18 +885,23 @@ third line
 
     #[test]
     fn compiler_directive() {
+        let source: Arc<str> = "inline source".into();
         assert_eq!(
-            Lexer::from_text("/dts-v1/").next_expect(),
+            Lexer::from_text("/dts-v1/", source.clone()).next_expect(),
             Token {
                 span: Position::zero().char_to(8),
                 kind: Directive(CompilerDirective::DTSVersionHeader),
+                source: source.clone(),
             }
         );
+
+        let source: Arc<str> = "inline source".into();
         assert_eq!(
-            Lexer::from_text("/undefined/").next_expect(),
+            Lexer::from_text("/undefined/", source.clone()).next_expect(),
             Token {
                 span: Position::zero().char_to(11),
                 kind: Directive(CompilerDirective::Other("undefined".into())),
+                source: source.clone(),
             }
         )
     }
@@ -836,11 +918,13 @@ third line
         ];
 
         for (raw_str, expected) in strings {
+            let source: Arc<str> = "inline source".into();
             assert_eq!(
-                Lexer::from_text(raw_str).next_expect(),
+                Lexer::from_text(raw_str, source.clone()).next_expect(),
                 Token {
                     span: Position::zero().char_to(raw_str.len() as u32),
                     kind: String(expected.into()),
+                    source: source.clone(),
                 }
             )
         }
@@ -848,8 +932,11 @@ third line
 
     #[test]
     pub fn conflicting_node_names() {
+        let source: Arc<str> = "inline source".into();
         let str1 = "some_node { ,property-name = <1>,<2>; };";
-        let tokens = Lexer::from_text(str1).map(|tok| tok.kind).collect_vec();
+        let tokens = Lexer::from_text(str1, source.clone())
+            .map(|tok| tok.kind)
+            .collect_vec();
         assert_eq!(
             tokens,
             vec![

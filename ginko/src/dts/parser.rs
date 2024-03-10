@@ -35,8 +35,8 @@ where
 }
 
 impl Parser<ByteReader> {
-    pub fn from_text(text: impl Into<String>) -> Parser<ByteReader> {
-        let lexer = Lexer::from_text(text);
+    pub fn from_text(text: impl Into<String>, source: Arc<str>) -> Parser<ByteReader> {
+        let lexer = Lexer::from_text(text, source);
         Parser {
             lexer: lexer.into(),
             diagnostics: vec![],
@@ -551,7 +551,7 @@ where
         match fs::read_to_string(path) {
             Ok(contents) => {
                 let reader = ByteReader::from_string(contents);
-                let lexer = Lexer::new(reader);
+                let lexer = Lexer::new(reader, path.into());
                 let mut subparser = Parser::new(lexer);
                 match subparser.file() {
                     Ok(file) => Some(file),
@@ -1156,7 +1156,7 @@ mod test {
             res,
             Err(Diagnostic::new(
                 code.s1("prop_a").end().as_span(),
-                DiagnosticKind::Expected(vec![Semicolon, Equal, OpenBrace])
+                DiagnosticKind::Expected(vec![Semicolon, Equal, OpenBrace]),
             ))
         )
     }
@@ -1178,7 +1178,7 @@ mod test {
             diag,
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
-                DiagnosticKind::Expected(vec![Semicolon])
+                DiagnosticKind::Expected(vec![Semicolon]),
             )]
         );
     }

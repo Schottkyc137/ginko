@@ -310,7 +310,7 @@ mod tests {
             diag,
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
-                DiagnosticKind::Expected(vec![TokenKind::Semicolon])
+                DiagnosticKind::Expected(vec![TokenKind::Semicolon]),
             )]
         );
         let printer = DiagnosticPrinter {

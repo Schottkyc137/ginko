@@ -22,7 +22,12 @@ static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
     pub fn add_file(&mut self, url: Url, text: String, file_type: FileType) {
-        let (diagnostics, file, context) = analyze_text(text.clone(), file_type);
+        let file_name: String = url
+            .to_file_path()
+            .expect("Unexpectedly found non-file")
+            .to_string_lossy()
+            .into();
+        let (diagnostics, file, context) = analyze_text(text.clone(), file_name, file_type);
         self.files.insert(
             url.clone(),
             ProjectFile {
@@ -91,10 +96,11 @@ impl Project {
 
 fn analyze_text(
     text: String,
+    file_name: String,
     file_type: FileType,
 ) -> (Vec<Diagnostic>, Option<DtsFile>, Option<AnalysisContext>) {
     let reader = ByteReader::from_string(text);
-    let lexer = Lexer::new(reader);
+    let lexer = Lexer::new(reader, file_name.as_str().into());
     let mut parser = Parser::new(lexer);
     match parser.file() {
         Ok(file) => {

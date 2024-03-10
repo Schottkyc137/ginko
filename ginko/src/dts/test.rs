@@ -2,11 +2,13 @@ use crate::dts::analysis::AnalysisContext;
 use crate::dts::lexer::{Lexer, Token};
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, Span};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Code {
     pos: Span,
-    source: String,
+    code: String,
+    source: Arc<str>,
 }
 
 impl HasSpan for Code {
@@ -51,21 +53,22 @@ impl Code {
             .unwrap_or(Position::zero());
         Code {
             pos: Span::new(Position::zero(), last_pos),
-            source: code.into(),
+            code: code.into(),
+            source: Arc::from("inline source"),
         }
     }
 
     pub fn source(&self) -> &str {
-        &self.source
+        &self.code
     }
 
     pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)
     where
         F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
     {
-        let mut reader = ByteReader::from_string(self.source.clone());
+        let mut reader = ByteReader::from_string(self.code.clone());
         reader.seek(self.pos.start());
-        let lexer = Lexer::new(reader);
+        let lexer = Lexer::new(reader, self.source.clone());
         let mut parser = Parser::new(lexer);
         (parse_fn(&mut parser), parser.diagnostics)
     }
@@ -100,13 +103,14 @@ impl Code {
 
     fn in_range(&self, span: Span) -> Code {
         Code {
-            source: self.source.clone(),
+            code: self.code.clone(),
             pos: span,
+            source: self.source.clone(),
         }
     }
 
     pub fn s(&self, substr: &str, occurrence: usize) -> Code {
-        let rng = substr_range(&self.source, self.pos, substr, occurrence);
+        let rng = substr_range(&self.code, self.pos, substr, occurrence);
         self.in_range(rng)
     }
 
@@ -115,8 +119,10 @@ impl Code {
     }
 
     pub fn token(&self) -> Token {
-        let mut byte_reader = ByteReader::from_string(self.source.clone());
+        let mut byte_reader = ByteReader::from_string(self.code.clone());
         byte_reader.seek(self.pos.start());
-        Lexer::new(byte_reader).next().expect("Expected token")
+        Lexer::new(byte_reader, self.source.clone())
+            .next()
+            .expect("Expected token")
     }
 }
