@@ -79,8 +79,8 @@ impl Project {
     pub fn get_root(&self, path: &PathBuf) -> Option<&DtsFile> {
         match self.files.get(path) {
             Some(ProjectFile {
-                     file: Some(file), ..
-                 }) => Some(file),
+                file: Some(file), ..
+            }) => Some(file),
             _ => None,
         }
     }
