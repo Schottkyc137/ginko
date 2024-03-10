@@ -140,15 +140,6 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_directive(&mut self, _diagnsotics: &mut [Diagnostic], directive: &AnyDirective) {
-        match directive {
-            AnyDirective::DtsHeader(_) => {}
-            AnyDirective::Memreserve(_) => {}
-            AnyDirective::Include(..) => {}
-            AnyDirective::Plugin(_) => {}
-        }
-    }
-
     fn resolve_reference(
         &mut self,
         diagnostics: &mut Vec<Diagnostic>,
