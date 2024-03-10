@@ -45,6 +45,10 @@ fn substr_range(source: &str, range: Span, substr: &str, occurrence: usize) -> S
 
 impl Code {
     pub fn new(code: &str) -> Code {
+        Code::with_file_name(code, "inline source")
+    }
+
+    pub fn with_file_name(code: &str, file_name: &str) -> Code {
         let last_pos = code
             .lines()
             .enumerate()
@@ -54,7 +58,7 @@ impl Code {
         Code {
             pos: Span::new(Position::zero(), last_pos),
             code: code.into(),
-            source: Arc::from("inline source"),
+            source: Arc::from(file_name),
         }
     }
 
@@ -67,8 +71,8 @@ impl Code {
     }
 
     pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)
-    where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        where
+            F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
     {
         let mut reader = ByteReader::from_string(self.code.clone());
         reader.seek(self.pos.start());
@@ -78,16 +82,16 @@ impl Code {
     }
 
     pub fn parse_ok<F, T>(&self, parse_fn: F) -> (T, Vec<Diagnostic>)
-    where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        where
+            F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
     {
         let (res, diagnostics) = self.parse(parse_fn);
         (res.expect("Unexpectedly found non-ok value"), diagnostics)
     }
 
     pub fn parse_ok_no_diagnostics<F, T>(&self, parse_fn: F) -> T
-    where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        where
+            F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
     {
         let (res, diagnostics) = self.parse(parse_fn);
         assert!(

@@ -27,7 +27,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(file) => {
             if !parser.diagnostics.is_empty() {
                 let printer = DiagnosticPrinter {
-                    file_name,
                     code: content.lines().map(|line| line.to_string()).collect(),
                     diagnostics: &parser.diagnostics,
                 };
@@ -38,7 +37,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             analysis.analyze_file(&mut diagnostics, &file);
             if !diagnostics.is_empty() {
                 let printer = DiagnosticPrinter {
-                    file_name,
                     code: content.lines().map(|line| line.to_string()).collect(),
                     diagnostics: &diagnostics,
                 };
@@ -48,7 +46,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Err(err) => {
             let printer = DiagnosticPrinter {
-                file_name,
                 code: content.lines().map(|line| line.to_string()).collect(),
                 diagnostics: &[err],
             };

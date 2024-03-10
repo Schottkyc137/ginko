@@ -248,7 +248,6 @@ impl HasSource for Diagnostic {
 
 pub struct DiagnosticPrinter<'a> {
     pub diagnostics: &'a [Diagnostic],
-    pub file_name: String,
     pub code: Vec<String>,
 }
 
@@ -276,7 +275,7 @@ impl<'a> DiagnosticPrinter<'a> {
             f,
             "{} --> {}:{}:{}",
             diagnostic.default_severity(),
-            self.file_name,
+            diagnostic.source,
             start.line() + 1,
             start.character() + 1
         )?;
@@ -321,7 +320,7 @@ mod tests {
 
     #[test]
     fn display_missing_semicolon() {
-        let code = Code::new("/ {}");
+        let code = Code::with_file_name("/ {}", "fname");
         let (_, diag) = code.parse(Parser::file);
         assert_eq!(
             diag,
@@ -333,7 +332,6 @@ mod tests {
         );
         let printer = DiagnosticPrinter {
             diagnostics: &diag,
-            file_name: "fname".into(),
             code: vec!["/ {}".into()],
         };
         let formatter_err = "\
@@ -343,24 +341,24 @@ error --> fname:1:5
   |     ^ Expected ';'
 
 "
-        .to_string();
+            .to_string();
         assert_eq!(formatter_err, format!("{printer}"));
     }
 
     #[test]
     fn display_warning_message() {
-        let code = Code::new(
+        let code = Code::with_file_name(
             "\
         /dts-v1/;
 
         / {
             very-long-company,very-long-name;    
         };",
+            "fname",
         );
         let (_, diag) = code.parse(Parser::file);
         let printer = DiagnosticPrinter {
             diagnostics: &diag,
-            file_name: "fname".into(),
             code: code
                 .code()
                 .lines()
