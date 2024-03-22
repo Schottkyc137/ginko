@@ -116,17 +116,13 @@ Use [Ginko VSCode](https://github.com/Schottkyc137/ginko_vscode)
 
 #### Helix
 
-If you want to use the [Helix Editor](https://docs.helix-editor.com/languages.html), you can custom define a
-custom language in `languages.toml`. An example is below.
+If you want to use the [Helix
+Editor](https://docs.helix-editor.com/languages.html), you can modify the
+`devicetree` language definition in `languages.toml`. An example is below.
 
 ```toml
 [[language]]
-name = "dts"
-scope = "source.dts"
-file-types = ["dts", "dtsi"]
-comment-token = "//"
-indent = { tab-width = 4, unit = "    " }
-roots = [".git"]
+name = "devicetree"
 language-servers = ["ginko_ls"]
 
 [language-server.ginko_ls]
