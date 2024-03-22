@@ -89,4 +89,49 @@ Emacs or Vim
 - completion
 - formatting
 
+### Editor Configuration
+
+#### Neovim
+
+Either install the `ginko_ls` manually, or you can install with [`:Mason`](https://github.com/williamboman/mason.nvim).
+
+Configure the server with [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig) with the
+configuration name [`ginko_ls`](https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#als).
+
+In order to configure it, simply add the following to your `init.lua`
+
+```lua
+lspconfig = require('lspconfig')
+lspconfig['ginko_ls'].setup({
+  on_attach = on_attach,
+  capabilities = capabilities
+})
+```
+
+This assumes you have `on_attach` and `capabilities` defined, see the `nvim-lspconfig` docs for more information.
+
+#### VSCode
+
+Use [Ginko VSCode](https://github.com/Schottkyc137/ginko_vscode)
+
+#### Helix
+
+If you want to use the [Helix Editor](https://docs.helix-editor.com/languages.html), you can custom define a
+custom language in `languages.toml`. An example is below.
+
+```toml
+[[language]]
+name = "dts"
+scope = "source.dts"
+file-types = ["dts", "dtsi"]
+comment-token = "//"
+indent = { tab-width = 4, unit = "    " }
+roots = [".git"]
+language-servers = ["ginko_ls"]
+
+[language-server.ginko_ls]
+command = "ginko_ls"
+config = { provideFormatter = false }
+```
+
 All contributions, whether in the form of Pull Requests or Issues are highly appreciated and welcome.
