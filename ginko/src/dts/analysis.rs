@@ -13,6 +13,7 @@ use std::sync::Arc;
 /// Used when analyzing a device-tree
 enum Labeled {
     Node(Arc<Node>),
+    #[allow(unused)]
     Property(Arc<Property>),
 }
 

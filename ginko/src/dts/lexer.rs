@@ -151,16 +151,12 @@ where
     // x = <&ref>
     //       ^~~ cursor is here
     fn path_or_reference(&mut self, start: Position) -> Option<Token> {
-        let Some(ch) = self.reader.peek() else {
-            return None;
-        };
+        let ch = self.reader.peek()?;
         match ch {
             b'{' => {
                 self.reader.skip();
                 let path = self.read_while(|ch| ch != b'}');
-                let Some(_) = self.reader.consume() else {
-                    return None;
-                };
+                self.reader.consume()?;
                 Some(Token {
                     span: start.to(self.reader.pos()),
                     kind: TokenKind::Ref(Reference::Path(String::from_utf8(path).unwrap())),
@@ -237,9 +233,7 @@ where
     fn multi_line_comment(&mut self, pos: Position) -> Option<Token> {
         let mut buf: Vec<u8> = vec![];
         loop {
-            let Some(ch) = self.reader.consume() else {
-                return None;
-            };
+            let ch = self.reader.consume()?;
             match ch {
                 b'*' => {
                     if self.reader.peek() == Some(b'/') {
@@ -291,9 +285,7 @@ where
         let mut is_escaped: bool = false;
         let mut str = String::new();
         loop {
-            let Some(ch) = self.reader.consume() else {
-                return None;
-            };
+            let ch = self.reader.consume()?;
             match ch {
                 b'\\' => {
                     if is_escaped {
@@ -358,9 +350,7 @@ where
     fn consume(&mut self) -> Option<Token> {
         self.last_pos = self.pos();
         self.skip_whitespace();
-        let Some(ch) = self.reader.peek() else {
-            return None;
-        };
+        let ch = self.reader.peek()?;
         let start_pos = self.reader.pos();
         let source = self.source();
         let simple_token = |kind: TokenKind| -> Option<Token> {

@@ -57,22 +57,12 @@ impl Project {
     }
 
     pub fn document_reference(&self, path: &PathBuf, reference: &Reference) -> Option<String> {
-        let Some(analysis) = self.get_analysis(path) else {
-            return None;
-        };
-        let Some(referenced) = analysis.get_referenced(reference) else {
-            return None;
-        };
+        let referenced = self.get_analysis(path)?.get_referenced(reference)?;
         Some(format!("Node {}", referenced.name.name.clone()))
     }
 
     pub fn get_node_position(&self, path: &PathBuf, reference: &Reference) -> Option<Span> {
-        let Some(analysis) = self.get_analysis(path) else {
-            return None;
-        };
-        let Some(referenced) = analysis.get_referenced(reference) else {
-            return None;
-        };
+        let referenced = self.get_analysis(path)?.get_referenced(reference)?;
         Some(referenced.name.span())
     }
 
