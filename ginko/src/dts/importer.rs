@@ -1,14 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct CyclicDependencyError<V> {
-    cycles: Vec<V>,
+    elements: Vec<V>,
 }
 
 impl<V> CyclicDependencyError<V> {
     pub fn new(elements: Vec<V>) -> CyclicDependencyError<V> {
-        CyclicDependencyError { cycles: elements }
+        CyclicDependencyError { elements }
     }
 }
 
@@ -22,7 +22,7 @@ pub struct CyclicDependencyChecker<V>
     where
         V: Hash + Eq + Clone,
 {
-    dependencies: HashMap<V, Vec<V>>,
+    dependencies: HashSet<V>,
     trace_back: HashMap<V, V>,
 }
 
@@ -42,14 +42,14 @@ impl<V> CyclicDependencyChecker<V>
         element: impl HasDependencies<V>,
     ) -> Result<(), CyclicDependencyError<V>> {
         for dependency in element.dependencies() {
-            if self.dependencies.contains_key(dependency) {
+            if self.dependencies.contains(dependency) {
                 return Err(CyclicDependencyError::new(
                     self.trace_back(element.id(), dependency),
                 ));
             }
         }
         self.dependencies
-            .insert(element.id().clone(), element.dependencies().to_vec());
+            .insert(element.id().clone());
         for dependency in element.dependencies() {
             self.trace_back
                 .insert(dependency.clone(), element.id().clone());
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(checker.add(one), Ok(()));
         assert_eq!(
             checker.add(two),
-            Err(CyclicDependencyError { cycles: vec![2, 1] })
+            Err(CyclicDependencyError { elements: vec![2, 1] })
         );
     }
 
@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(
             checker.add(three),
             Err(CyclicDependencyError {
-                cycles: vec![3, 2, 1]
+                elements: vec![3, 2, 1]
             })
         );
     }
