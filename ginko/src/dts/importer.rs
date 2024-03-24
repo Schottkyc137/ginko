@@ -18,11 +18,15 @@ pub trait HasDependencies<V> {
     fn id(&self) -> &V;
 }
 
+/// Checks cyclic dependencies by adding them piece-by piece using the `add` method.
+/// This struct operates on easy cloneable objects (such as strings or ints)
+/// and can provide the dependency map later-on.
 pub struct CyclicDependencyChecker<V>
     where
         V: Hash + Eq + Clone,
 {
-    dependencies: HashSet<V>,
+    // Set of elements that are already found.
+    pool: HashSet<V>,
     trace_back: HashMap<V, V>,
 }
 
@@ -32,7 +36,7 @@ impl<V> CyclicDependencyChecker<V>
 {
     pub fn new() -> CyclicDependencyChecker<V> {
         CyclicDependencyChecker {
-            dependencies: Default::default(),
+            pool: Default::default(),
             trace_back: Default::default(),
         }
     }
@@ -42,13 +46,13 @@ impl<V> CyclicDependencyChecker<V>
         element: impl HasDependencies<V>,
     ) -> Result<(), CyclicDependencyError<V>> {
         for dependency in element.dependencies() {
-            if self.dependencies.contains(dependency) {
+            if self.pool.contains(dependency) && self.trace_back.contains_key(element.id()) {
                 return Err(CyclicDependencyError::new(
                     self.trace_back(element.id(), dependency),
                 ));
             }
         }
-        self.dependencies
+        self.pool
             .insert(element.id().clone());
         for dependency in element.dependencies() {
             self.trace_back
@@ -112,7 +116,6 @@ mod tests {
     fn ok_for_files_without_dependencies() {
         let mut checker = CyclicDependencyChecker::new();
 
-        // one has dependency on two and two has dependency on one.
         let one = SimpleDependency::new(1, vec![]);
         let two = SimpleDependency::new(2, vec![]);
 
@@ -124,11 +127,36 @@ mod tests {
     fn ok_for_unrelated_files() {
         let mut checker = CyclicDependencyChecker::new();
 
-        // one has dependency on two and two has dependency on one.
         let one = SimpleDependency::new(1, vec![2]);
         let three = SimpleDependency::new(3, vec![4]);
 
         assert_eq!(checker.add(one), Ok(()));
+        assert_eq!(checker.add(three), Ok(()));
+    }
+
+    #[test]
+    fn ok_dependencies_for_multiple_includes() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        let one = SimpleDependency::new(1, vec![]);
+        let two = SimpleDependency::new(2, vec![]);
+        let three = SimpleDependency::new(3, vec![1, 2]);
+
+        assert_eq!(checker.add(one), Ok(()));
+        assert_eq!(checker.add(two), Ok(()));
+        assert_eq!(checker.add(three), Ok(()));
+    }
+
+    #[test]
+    fn ok_for_dependency_in_multiple_files() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        let one = SimpleDependency::new(1, vec![2]);
+        let two = SimpleDependency::new(2, vec![]);
+        let three = SimpleDependency::new(3, vec![1]);
+
+        assert_eq!(checker.add(one), Ok(()));
+        assert_eq!(checker.add(two), Ok(()));
         assert_eq!(checker.add(three), Ok(()));
     }
 
