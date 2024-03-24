@@ -3,6 +3,7 @@ mod analysis;
 mod ast;
 mod data;
 mod diagnostics;
+mod importer;
 mod lexer;
 mod parser;
 mod project;
