@@ -97,7 +97,8 @@ impl LanguageServer for Backend {
         let file_type = FileType::from(file_path.as_path());
         if file_type == FileType::Unknown {
             self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
-            return;
+            // Even other than those files will be considered to device-tree source but the warning.
+            // return;
         }
         self.project
             .write()
