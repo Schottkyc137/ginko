@@ -1,5 +1,6 @@
 use crate::dts::ast::CompilerDirective;
 use crate::dts::data::{HasSource, HasSpan, Span};
+use crate::dts::importer::CyclicDependencyError;
 use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -38,6 +39,7 @@ pub enum DiagnosticKind {
     ParserError(String),
     IOError(String),
     ErrorsInInclude,
+    CyclicDependencyError(String),
 }
 
 pub enum SeverityLevel {
@@ -80,6 +82,7 @@ impl DiagnosticKind {
             DiagnosticKind::ParserError(_) => SeverityLevel::Error,
             DiagnosticKind::IOError(_) => SeverityLevel::Error,
             DiagnosticKind::ErrorsInInclude => SeverityLevel::Error,
+            DiagnosticKind::CyclicDependencyError(..) => SeverityLevel::Error,
         }
     }
 }
@@ -186,6 +189,9 @@ impl Display for DiagnosticKind {
             DiagnosticKind::ErrorsInInclude => {
                 write!(f, "Included file contains non-recoverable errors")
             }
+            DiagnosticKind::CyclicDependencyError(str) => {
+                write!(f, "Cyclic import: {str}")
+            }
         }
     }
 }
@@ -193,6 +199,20 @@ impl Display for DiagnosticKind {
 impl From<Error> for DiagnosticKind {
     fn from(value: Error) -> Self {
         DiagnosticKind::IOError(format!("{value}"))
+    }
+}
+
+impl<V> From<CyclicDependencyError<V>> for DiagnosticKind
+where
+    V: Display,
+{
+    fn from(value: CyclicDependencyError<V>) -> Self {
+        let str = value
+            .cycle()
+            .iter()
+            .map(|element| format!("{element}"))
+            .join(" -> ");
+        DiagnosticKind::CyclicDependencyError(str)
     }
 }
 
