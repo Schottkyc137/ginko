@@ -456,11 +456,10 @@ impl Display for CompilerDirective {
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Include {
     pub include_token: Token,
     pub file_name: WithToken<String>,
-    pub file: Option<DtsFile>,
 }
 
 impl HasSpan for Include {
