@@ -1,6 +1,6 @@
 use ginko::dts::{
-    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project,
-    SeverityLevel, Span,
+    AnyDirective, FileManager, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary,
+    Project, SeverityLevel, Span,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;

@@ -17,5 +17,5 @@ pub use ast::{AnyDirective, CompilerDirective, Node, NodePayload, Primary};
 pub use data::{FileType, HasSpan, Position, Span};
 pub use diagnostics::{Diagnostic, DiagnosticPrinter, SeverityLevel};
 pub use parser::Parser;
-pub use project::Project;
+pub use project::{FileManager, Project};
 pub use visitor::ItemAtCursor;

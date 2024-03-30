@@ -3,14 +3,34 @@ use crate::dts::ast::{DtsFile, Reference};
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, Span};
+use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-struct ProjectFile {
-    diagnostics: Vec<Diagnostic>,
-    file: Option<DtsFile>,
-    context: Option<AnalysisContext>,
+pub trait FileManager {
+    fn get_file(&self, path: &Path) -> Option<&ProjectFile>;
+
+    fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) -> &ProjectFile;
+}
+
+pub struct ProjectFile {
+    pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) file: Option<DtsFile>,
+    pub(crate) context: Option<AnalysisContext>,
+}
+
+impl ProjectFile {
+    pub fn analysis_context(&self) -> Option<&AnalysisContext> {
+        self.context.as_ref()
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
+            .next()
+            .is_some()
+    }
 }
 
 #[derive(Default)]
@@ -21,16 +41,11 @@ pub struct Project {
 static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
-    pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
-        let file = analyze_text(text, path.clone(), file_type);
-        self.files.insert(path, file);
-    }
-
     pub fn remove_file(&mut self, path: &PathBuf) {
         self.files.remove(path);
     }
 
-    pub fn get_diagnostics(&self, path: &PathBuf) -> &[Diagnostic] {
+    pub fn get_diagnostics(&self, path: &Path) -> &[Diagnostic] {
         self.files
             .get(path)
             .map(|file| &file.diagnostics)
@@ -74,26 +89,119 @@ impl Project {
             _ => None,
         }
     }
+
+    pub(crate) fn analyze_text(
+        &mut self,
+        text: String,
+        file_name: PathBuf,
+        file_type: FileType,
+    ) -> ProjectFile {
+        let reader = ByteReader::from_string(text);
+        let lexer = Lexer::new(reader, file_name.into());
+        let mut parser = Parser::new(lexer);
+        match parser.file() {
+            Ok(file) => {
+                let mut analysis = Analysis::new(file_type, self);
+                analysis.analyze_file(&mut parser.diagnostics, &file);
+                ProjectFile {
+                    diagnostics: parser.diagnostics,
+                    file: Some(file),
+                    context: Some(analysis.into_context()),
+                }
+            }
+            Err(err) => ProjectFile {
+                diagnostics: vec![err],
+                file: None,
+                context: None,
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub fn add_raw_file(&mut self, path: PathBuf, file: ProjectFile) {
+        self.files.insert(path, file);
+    }
 }
 
-fn analyze_text(text: String, file_name: PathBuf, file_type: FileType) -> ProjectFile {
-    let reader = ByteReader::from_string(text);
-    let lexer = Lexer::new(reader, file_name.into());
-    let mut parser = Parser::new(lexer);
-    match parser.file() {
-        Ok(file) => {
-            let mut analysis = Analysis::new(file_type);
-            analysis.analyze_file(&mut parser.diagnostics, &file);
-            ProjectFile {
-                diagnostics: parser.diagnostics,
-                file: Some(file),
-                context: Some(analysis.into_context()),
-            }
-        }
-        Err(err) => ProjectFile {
-            diagnostics: vec![err],
-            file: None,
-            context: None,
-        },
+impl FileManager for Project {
+    fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
+        self.files.get(path)
+    }
+
+    fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) -> &ProjectFile {
+        let file = self.analyze_text(text, path.clone(), file_type);
+        self.files.insert(path.clone(), file);
+        self.files.get(&path).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dts::diagnostics::DiagnosticKind;
+    use crate::dts::lexer::TokenKind;
+    use crate::dts::project::FileManager;
+    use crate::dts::test::Code;
+    use crate::dts::{Diagnostic, FileType, HasSpan, Project};
+    use std::path::PathBuf;
+
+    #[test]
+    pub fn file_with_includes() {
+        let mut project = Project::default();
+        let code = "";
+        let path: PathBuf = "path/to/file.dtsi".into();
+        project.add_file(path.clone(), code.to_owned(), FileType::DtSourceInclude);
+        let code2 = r#"
+/dts-v1/;
+
+/include/ "path/to/file.dtsi"
+"#;
+        let path2: PathBuf = "path/to/other/file.dts".into();
+        project.add_file(path2.clone(), code2.to_owned(), FileType::DtSource);
+        assert!(project.get_file(&path).is_some());
+        assert!(project.get_file(&path2).is_some());
+        assert!(project.get_diagnostics(&path).is_empty());
+        assert!(project.get_diagnostics(&path2).is_empty());
+        assert!(project.get_root(&path).is_some());
+        assert!(project.get_analysis(&path).is_some());
+        assert!(project.get_analysis(&path2).is_some());
+    }
+
+    #[test]
+    pub fn error_in_included_file_add_include_before_dts() {
+        let mut project = Project::default();
+        let code = Code::new("/ {}"); // missing semicolon
+        let path: PathBuf = "path/to/file.dtsi".into();
+        project.add_file(
+            path.clone(),
+            code.code().to_owned(),
+            FileType::DtSourceInclude,
+        );
+        let code2 = Code::new(
+            r#"
+/dts-v1/;
+
+/include/ "path/to/file.dtsi"
+"#,
+        );
+        let path2: PathBuf = "path/to/other/file.dts".into();
+        project.add_file(path2.clone(), code2.code().to_owned(), FileType::DtSource);
+        assert!(project.get_file(&path).is_some());
+        assert!(project.get_file(&path2).is_some());
+        assert_eq!(
+            project.get_diagnostics(&path),
+            vec![Diagnostic::new(
+                code.s1("}").end().as_span(),
+                path.clone().into(),
+                DiagnosticKind::Expected(vec![TokenKind::Semicolon])
+            )]
+        );
+        assert_eq!(
+            project.get_diagnostics(&path2),
+            vec![Diagnostic::new(
+                code2.s1(r#"/include/ "path/to/file.dtsi""#).span(),
+                path2.clone().into(),
+                DiagnosticKind::ErrorsInInclude
+            )]
+        );
     }
 }

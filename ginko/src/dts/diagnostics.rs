@@ -42,6 +42,7 @@ pub enum DiagnosticKind {
     CyclicDependencyError(String),
 }
 
+#[derive(Eq, PartialEq)]
 pub enum SeverityLevel {
     Error,
     Warning,

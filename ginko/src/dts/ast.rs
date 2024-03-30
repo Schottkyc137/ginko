@@ -4,7 +4,7 @@ use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter, LowerHex};
 use std::ops::Deref;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -468,9 +468,21 @@ impl HasSpan for Include {
     }
 }
 
+impl HasSource for Include {
+    fn source(&self) -> Arc<StdPath> {
+        self.include_token.source()
+    }
+}
+
 impl Display for Include {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "/include/ \"{}\"", self.file_name)
+    }
+}
+
+impl Include {
+    pub fn path(&self) -> PathBuf {
+        PathBuf::from(self.file_name.item())
     }
 }
 

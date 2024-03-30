@@ -1,9 +1,10 @@
 use crate::dts::ast::{
-    AnyDirective, Cell, DtsFile, Node, NodePayload, Path, Primary, Property, PropertyValue,
-    Reference, ReferencedNode, WithToken,
+    AnyDirective, Cell, DtsFile, Include, Node, NodePayload, Path, Primary, Property,
+    PropertyValue, Reference, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
+use crate::dts::project::FileManager;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
 use std::path::Path as StdPath;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 
 /// Something that can be labeled.
 /// Used when analyzing a device-tree
+#[derive(Clone)]
 enum Labeled {
     Node(Arc<Node>),
     #[allow(unused)]
@@ -18,7 +20,8 @@ enum Labeled {
 }
 
 /// Struct containing all important information when analyzing a device-tree
-pub struct Analysis {
+pub struct Analysis<'a> {
+    project: &'a mut dyn FileManager,
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
@@ -26,9 +29,10 @@ pub struct Analysis {
     is_plugin: bool,
 }
 
-impl Analysis {
-    pub fn new(file_type: FileType) -> Analysis {
+impl<'a> Analysis<'a> {
+    pub fn new(file_type: FileType, project: &'a mut dyn FileManager) -> Analysis<'a> {
         Analysis {
+            project,
             labels: Default::default(),
             flat_nodes: Default::default(),
             unresolved_references: Default::default(),
@@ -63,7 +67,7 @@ impl AnalysisContext {
     }
 }
 
-impl Analysis {
+impl Analysis<'_> {
     pub fn into_context(self) -> AnalysisContext {
         AnalysisContext {
             flat_nodes: self.flat_nodes,
@@ -72,7 +76,7 @@ impl Analysis {
     }
 }
 
-impl Analysis {
+impl Analysis<'_> {
     pub fn analyze_file(&mut self, diagnostics: &mut Vec<Diagnostic>, file: &DtsFile) {
         let mut first_non_include = false;
         let mut dts_header_seen = false;
@@ -96,7 +100,7 @@ impl Analysis {
                         dts_header_seen = true;
                     }
                     AnyDirective::Memreserve(_) => first_non_include = true,
-                    AnyDirective::Include(..) => {}
+                    AnyDirective::Include(include) => self.analyze_include(diagnostics, include),
                     AnyDirective::Plugin(_) => {
                         first_non_include = true;
                         self.is_plugin = true
@@ -121,6 +125,41 @@ impl Analysis {
             ))
         }
         self.resolve_references(diagnostics)
+    }
+
+    fn analyze_include(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
+        let path = include.path();
+        let file = match self.project.get_file(path.as_path()) {
+            Some(file) => file,
+            None => {
+                let text = match std::fs::read_to_string(&path) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        diagnostics.push(Diagnostic::new(
+                            include.span(),
+                            include.include_token.source(),
+                            DiagnosticKind::from(e),
+                        ));
+                        return;
+                    }
+                };
+                let file_type = FileType::from(path.as_path());
+                self.project.add_file(path, text, file_type)
+            }
+        };
+
+        // Analyse file
+        if let Some(context) = file.analysis_context() {
+            self.labels.extend(context.labels.clone());
+            self.flat_nodes.extend(context.flat_nodes.clone());
+        }
+        if file.has_errors() {
+            diagnostics.push(Diagnostic::new(
+                include.span(),
+                include.source(),
+                DiagnosticKind::ErrorsInInclude,
+            ))
+        }
     }
 
     fn unresolved_reference_error(
