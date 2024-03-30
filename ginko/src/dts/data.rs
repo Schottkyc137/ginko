@@ -47,7 +47,7 @@ impl FileType {
         match ending {
             "dts" => FileType::DtSource,
             "dtsi" => FileType::DtSourceInclude,
-            "dtso" => FileType::DtSourceOverlay,
+            "dtso" | "overlay" => FileType::DtSourceOverlay,
             _ => FileType::Unknown,
         }
     }
