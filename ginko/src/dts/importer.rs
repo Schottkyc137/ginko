@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::error::Error;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -34,12 +34,27 @@ where
         }
     }
 
+    /// Adds an element to the checker. This will return `Ok(())`,
+    /// if there are no cyclic dependencies and an error containing the import cycle, if there are
+    /// such dependencies.
+    ///
+    /// ## Edge cases:
+    /// * An element should only be added once.
+    /// * Therefore, all dependencies of the `element` must be added at once.
+    ///   You should not overwrite elements or add dependencies after adding the element.
+    ///
+    /// # Arguments
+    /// * `element` The node that contains dependencies
+    /// * `dependencies` The dependencies of the element.
     pub fn add(&mut self, element: V, dependencies: &[V]) -> Result<(), CyclicDependencyError<V>> {
+        debug_assert!(!self.nodes.contains_key(&element));
         self.nodes
             .insert(element.clone(), dependencies.iter().cloned().collect_vec());
         self.check_for_cyclic_dependencies(element)
     }
 
+    /// Checks for cycles in the dependency graph and returns `Ok(())`, if no cycles were found and
+    /// `CyclicDependencyError(...)` with the cycle, if cycles were found.
     fn check_for_cyclic_dependencies(&self, start: V) -> Result<(), CyclicDependencyError<V>> {
         let mut visited = HashSet::new();
         let mut stack = VecDeque::new();
@@ -181,5 +196,23 @@ mod tests {
         assert_eq!(checker.add(2, &[4]), Ok(()));
         assert_eq!(checker.add(4, &[]), Ok(()));
         assert_eq!(checker.add(3, &[4]), Ok(()));
+    }
+
+    #[test]
+    fn self_import() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        assert_eq!(
+            checker.add(1, &[1]),
+            Err(CyclicDependencyError::new(vec![1, 1]))
+        );
+    }
+
+    #[test]
+    fn parallel_edges() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        assert_eq!(checker.add(1, &[2]), Ok(()));
+        assert_eq!(checker.add(1, &[2]), Ok(()))
     }
 }
