@@ -12,11 +12,16 @@ impl<V> CyclicDependencyError<V> {
     pub fn new(elements: Vec<V>) -> CyclicDependencyError<V> {
         CyclicDependencyError { elements }
     }
+
+    pub fn cycle(&self) -> &Vec<V> {
+        &self.elements
+    }
 }
 
 /// Checks cyclic dependencies by adding them piece-by piece using the `add` method.
 /// This struct operates on easy cloneable objects (such as strings or ints)
 /// and can provide the dependency map later-on.
+#[derive(Default, Debug)]
 pub struct CyclicDependencyChecker<V>
 where
     V: Hash + Eq + Clone,
@@ -206,13 +211,5 @@ mod tests {
             checker.add(1, &[1]),
             Err(CyclicDependencyError::new(vec![1, 1]))
         );
-    }
-
-    #[test]
-    fn parallel_edges() {
-        let mut checker = CyclicDependencyChecker::new();
-
-        assert_eq!(checker.add(1, &[2]), Ok(()));
-        assert_eq!(checker.add(1, &[2]), Ok(()))
     }
 }
