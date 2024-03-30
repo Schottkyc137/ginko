@@ -36,21 +36,50 @@ where
     }
 
     pub fn add(&mut self, element: V, dependencies: &[V]) -> Result<(), CyclicDependencyError<V>> {
+        self.pool.insert(element.clone());
         for dependency in dependencies {
-            for dependency in dependencies {
-                self.trace_back
-                    .entry(dependency.clone())
-                    .or_default()
-                    .push(element.clone());
-            }
+            self.trace_back
+                .entry(dependency.clone())
+                .or_default()
+                .push(element.clone());
             if self.pool.contains(dependency) && self.trace_back.contains_key(&element) {
                 return Err(CyclicDependencyError::new(
                     self.trace_back(&element, dependency),
                 ));
             }
         }
-        self.pool.insert(element.clone());
         Ok(())
+    }
+
+    fn has_cycle(&self) -> bool {
+        // For every vertex v: visited(v) = finished(v) = false
+        let mut visited = HashSet::new();
+        let mut finished = HashSet::<&V>::new();
+        for (node, _) in &self.trace_back {
+            if self._has_cycle(&node, &mut visited, &mut finished) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn _has_cycle(&self, node: &V, visited: &mut HashSet<&V>, finished: &mut HashSet<&V>) -> bool {
+        if finished.contains(node) {
+            return false;
+        }
+        if visited.contains(node) {
+            return true;
+        }
+        return false;
+        // visited.insert(node)
+        // DFS(v) =
+        //   if finished(v): return
+        //   if visited(v):
+        //     "Cycle found"
+        //     return
+        //   visited(v) = true
+        //   for every neighbour w: DFS(w)
+        //   finished(v) = true
     }
 
     fn trace_back(&self, source: &V, target: &V) -> Vec<V> {
@@ -133,6 +162,15 @@ mod tests {
     }
 
     #[test]
+    fn ok_for_files_with_non_cyclic_dependencies() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        assert_eq!(checker.add(1, &[2]), Ok(()));
+        assert_eq!(checker.add(2, &[3]), Ok(()));
+        assert_eq!(checker.add(3, &[]), Ok(()));
+    }
+
+    #[test]
     fn ok_dependencies_for_multiple_includes() {
         let mut checker = CyclicDependencyChecker::new();
 
@@ -145,17 +183,9 @@ mod tests {
     fn ok_for_dependency_in_multiple_files() {
         let mut checker = CyclicDependencyChecker::new();
 
-        assert_eq!(checker.add(1, &[2]), Ok(()));
-        assert_eq!(checker.add(2, &[]), Ok(()));
+        assert_eq!(checker.add(1, &[]), Ok(()));
+        assert_eq!(checker.add(2, &[1]), Ok(()));
         assert_eq!(checker.add(3, &[1]), Ok(()));
-    }
-
-    #[test]
-    fn ok_for_files_with_non_cyclic_dependencies() {
-        let mut checker = CyclicDependencyChecker::new();
-
-        assert_eq!(checker.add(1, &[2]), Ok(()));
-        assert_eq!(checker.add(2, &[3]), Ok(()));
     }
 
     #[test]
@@ -204,5 +234,15 @@ mod tests {
             checker.add(2, &[3]),
             Err(CyclicDependencyError::new(vec![3, 2]))
         );
+    }
+
+    #[test]
+    fn complex_cyclic_dependency_graph() {
+        let mut checker = CyclicDependencyChecker::new();
+
+        assert_eq!(checker.add(1, &[2, 3]), Ok(()));
+        assert_eq!(checker.add(2, &[4]), Ok(()));
+        assert_eq!(checker.add(4, &[]), Ok(()));
+        assert_eq!(checker.add(3, &[4]), Ok(()));
     }
 }
