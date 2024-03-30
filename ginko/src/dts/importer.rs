@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::error::Error;
 use std::hash::Hash;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -19,9 +21,7 @@ pub struct CyclicDependencyChecker<V>
 where
     V: Hash + Eq + Clone,
 {
-    // Set of elements that are already added.
-    pool: HashSet<V>,
-    trace_back: HashMap<V, Vec<V>>,
+    nodes: HashMap<V, Vec<V>>,
 }
 
 impl<V> CyclicDependencyChecker<V>
@@ -30,114 +30,51 @@ where
 {
     pub fn new() -> CyclicDependencyChecker<V> {
         CyclicDependencyChecker {
-            pool: Default::default(),
-            trace_back: Default::default(),
+            nodes: Default::default(),
         }
     }
 
     pub fn add(&mut self, element: V, dependencies: &[V]) -> Result<(), CyclicDependencyError<V>> {
-        self.pool.insert(element.clone());
-        for dependency in dependencies {
-            self.trace_back
-                .entry(dependency.clone())
-                .or_default()
-                .push(element.clone());
-            if self.pool.contains(dependency) && self.trace_back.contains_key(&element) {
-                return Err(CyclicDependencyError::new(
-                    self.trace_back(&element, dependency),
-                ));
-            }
-        }
-        Ok(())
+        self.nodes
+            .insert(element.clone(), dependencies.iter().cloned().collect_vec());
+        self.check_for_cyclic_dependencies(element)
     }
 
-    fn has_cycle(&self) -> bool {
-        // For every vertex v: visited(v) = finished(v) = false
+    fn check_for_cyclic_dependencies(&self, start: V) -> Result<(), CyclicDependencyError<V>> {
         let mut visited = HashSet::new();
-        let mut finished = HashSet::<&V>::new();
-        for (node, _) in &self.trace_back {
-            if self._has_cycle(&node, &mut visited, &mut finished) {
-                return true;
+        let mut stack = VecDeque::new();
+        let mut parent: HashMap<V, V> = HashMap::new();
+
+        stack.push_front(start.clone());
+
+        while let Some(node) = stack.pop_front() {
+            if visited.contains(&node) {
+                let mut cycle = vec![node.clone()];
+                let mut prev = parent.get(&node).cloned();
+                while let Some(p) = prev {
+                    cycle.push(p.clone());
+                    if p == node {
+                        break;
+                    }
+                    prev = parent.get(&p).cloned();
+                }
+                cycle.reverse();
+                return Err(CyclicDependencyError::new(cycle));
             }
-        }
-        return false;
-    }
 
-    fn _has_cycle(&self, node: &V, visited: &mut HashSet<&V>, finished: &mut HashSet<&V>) -> bool {
-        if finished.contains(node) {
-            return false;
-        }
-        if visited.contains(node) {
-            return true;
-        }
-        return false;
-        // visited.insert(node)
-        // DFS(v) =
-        //   if finished(v): return
-        //   if visited(v):
-        //     "Cycle found"
-        //     return
-        //   visited(v) = true
-        //   for every neighbour w: DFS(w)
-        //   finished(v) = true
-    }
+            visited.insert(node.clone());
 
-    fn trace_back(&self, source: &V, target: &V) -> Vec<V> {
-        let mut work: HashSet<V> = HashSet::from_iter(self.trace_back.keys().cloned());
-        let mut distance = HashMap::<V, usize>::new();
-        let mut parents = HashMap::<V, V>::new();
-
-        for par in self.trace_back.get(source).unwrap() {
-            distance.insert(par.clone(), 1);
-        }
-
-        for v in self.trace_back.values().flatten() {
-            parents.insert(v.clone(), source.clone());
-        }
-        distance.insert(source.clone(), 0);
-        work.remove(source);
-
-        while !work.is_empty() {
-            let next = work
-                .iter()
-                .min_by(|a, b| {
-                    distance
-                        .get(a)
-                        .copied()
-                        .unwrap_or(usize::MAX)
-                        .cmp(&distance.get(b).copied().unwrap_or(usize::MAX))
-                })
-                .expect("No element but queue should not be empty")
-                .clone();
-            work.remove(&next);
-            for w in &work {
-                if distance.get(w).copied().unwrap_or(usize::MAX - 1)
-                    > distance.get(&next).copied().unwrap_or(usize::MAX - 1) + 1
-                {
-                    distance.insert(
-                        w.clone(),
-                        distance.get(&next).copied().unwrap_or(usize::MAX - 1) + 1,
-                    );
-                    parents.insert(w.clone(), next.clone());
+            if let Some(neighbors) = self.nodes.get(&node) {
+                for neighbor in neighbors {
+                    if !parent.contains_key(neighbor) {
+                        parent.insert(neighbor.clone(), node.clone());
+                        stack.push_front(neighbor.clone());
+                    }
                 }
             }
         }
 
-        for element in &self.trace_back {
-            let (mut q, _) = element;
-            if q != target {
-                continue;
-            }
-
-            let mut path: Vec<V> = Vec::new();
-            path.push(q.clone());
-            while q != source {
-                q = parents.get(q).unwrap();
-                path.push(q.clone());
-            }
-            return path;
-        }
-        unreachable!("Should not happen")
+        Ok(())
     }
 }
 
@@ -196,7 +133,7 @@ mod tests {
         assert_eq!(
             checker.add(2, &[1]),
             Err(CyclicDependencyError {
-                elements: vec![1, 2]
+                elements: vec![2, 1, 2]
             })
         );
     }
@@ -210,7 +147,7 @@ mod tests {
         assert_eq!(
             checker.add(3, &[1]),
             Err(CyclicDependencyError {
-                elements: vec![1, 2, 3]
+                elements: vec![3, 1, 2, 3]
             })
         );
     }
@@ -223,7 +160,7 @@ mod tests {
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(
             checker.add(2, &[3]),
-            Err(CyclicDependencyError::new(vec![3, 2]))
+            Err(CyclicDependencyError::new(vec![2, 3, 2]))
         );
 
         let mut checker = CyclicDependencyChecker::new();
@@ -232,7 +169,7 @@ mod tests {
         assert_eq!(checker.add(3, &[2]), Ok(()));
         assert_eq!(
             checker.add(2, &[3]),
-            Err(CyclicDependencyError::new(vec![3, 2]))
+            Err(CyclicDependencyError::new(vec![2, 3, 2]))
         );
     }
 
