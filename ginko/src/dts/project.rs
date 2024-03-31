@@ -8,6 +8,7 @@ use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::iter::empty;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -24,7 +25,8 @@ pub trait FileManager {
 }
 
 pub struct ProjectFile {
-    pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) parser_diagnostics: Vec<Diagnostic>,
+    pub(crate) analysis_diagnostics: Vec<Diagnostic>,
     pub(crate) file: Option<DtsFile>,
     pub(crate) context: Option<AnalysisContext>,
     pub(crate) file_type: FileType,
@@ -35,12 +37,15 @@ impl ProjectFile {
         self.context.as_ref()
     }
 
-    pub fn has_errors(&self) -> bool {
-        self.diagnostics
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.parser_diagnostics
             .iter()
-            .map(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
-            .next()
-            .is_some()
+            .chain(&self.analysis_diagnostics)
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics()
+            .any(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
     }
 }
 
@@ -49,8 +54,6 @@ pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
     importer: CyclicDependencyChecker<PathBuf>,
 }
-
-static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
     pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
@@ -66,11 +69,11 @@ impl Project {
         self.files.remove(path);
     }
 
-    pub fn get_diagnostics(&self, path: &Path) -> &[Diagnostic] {
-        self.files
-            .get(path)
-            .map(|file| &file.diagnostics)
-            .unwrap_or(&NO_DIAGNOSTICS)
+    pub fn get_diagnostics(&self, path: &Path) -> Box<dyn Iterator<Item = &Diagnostic> + '_> {
+        let Some(file) = self.files.get(path) else {
+            return Box::new(empty());
+        };
+        Box::new(file.diagnostics())
     }
 
     pub fn files(&self) -> impl Iterator<Item = &Path> {
@@ -130,17 +133,20 @@ impl Project {
         let mut parser = Parser::new(lexer);
         match parser.file() {
             Ok(file) => {
+                let mut analyis_diagnostics = Vec::new();
                 let mut analysis = Analysis::new(file_type, self);
-                analysis.analyze_file(&mut parser.diagnostics, &file);
+                analysis.analyze_file(&mut analyis_diagnostics, &file);
                 ProjectFile {
-                    diagnostics: parser.diagnostics,
+                    analysis_diagnostics: analyis_diagnostics,
+                    parser_diagnostics: parser.diagnostics,
                     file: Some(file),
                     context: Some(analysis.into_context()),
                     file_type,
                 }
             }
             Err(err) => ProjectFile {
-                diagnostics: vec![err],
+                parser_diagnostics: vec![err],
+                analysis_diagnostics: vec![],
                 file: None,
                 context: None,
                 file_type,
@@ -183,7 +189,7 @@ impl Project {
         let context = analysis.into_context();
         let mut_proj_file = self.files.get_mut(path).expect("File suddenly disappeared");
         mut_proj_file.context = Some(context);
-        mut_proj_file.diagnostics = diagnostics;
+        mut_proj_file.analysis_diagnostics = diagnostics;
     }
 }
 
@@ -220,6 +226,7 @@ mod tests {
     use crate::dts::project::FileManager;
     use crate::dts::test::Code;
     use crate::dts::{Diagnostic, FileType, HasSpan, Project};
+    use itertools::Itertools;
     use std::path::PathBuf;
 
     #[test]
@@ -246,8 +253,8 @@ mod tests {
             .expect("No cyclic dependencies expected");
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
-        assert!(project.get_diagnostics(&path).is_empty());
-        assert!(project.get_diagnostics(&path2).is_empty());
+        assert_eq!(project.get_diagnostics(&path).next(), None);
+        assert_eq!(project.get_diagnostics(&path2).next(), None);
         assert!(project.get_root(&path).is_some());
         assert!(project.get_analysis(&path).is_some());
         assert!(project.get_analysis(&path2).is_some());
@@ -285,7 +292,7 @@ mod tests {
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert_eq!(
-            project.get_diagnostics(&path),
+            project.get_diagnostics(&path).cloned().collect_vec(),
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
                 path.clone().into(),
@@ -293,7 +300,7 @@ mod tests {
             )]
         );
         assert_eq!(
-            project.get_diagnostics(&path2),
+            project.get_diagnostics(&path2).cloned().collect_vec(),
             vec![Diagnostic::new(
                 code2.s1(r#"/include/ "path/to/file.dtsi""#).span(),
                 path2.clone().into(),

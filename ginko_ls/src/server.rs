@@ -78,7 +78,6 @@ impl Backend {
                 .project
                 .read()
                 .get_diagnostics(&file)
-                .iter()
                 .map(lsp_diag_from_diag)
                 .collect_vec();
             self.client
