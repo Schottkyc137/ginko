@@ -6,6 +6,7 @@ use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -26,6 +27,7 @@ pub struct ProjectFile {
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) file: Option<DtsFile>,
     pub(crate) context: Option<AnalysisContext>,
+    pub(crate) file_type: FileType,
 }
 
 impl ProjectFile {
@@ -52,7 +54,12 @@ static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
     pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
-        let _ = self.add_file_with_parent(path, None, text, file_type);
+        let project_file = self.analyze_text(text, path.clone(), file_type);
+        self.files.insert(path.clone(), project_file);
+        let dependencies = self.importer.dependencies_of(path.clone()).collect_vec();
+        for dependency in dependencies {
+            self.reanalyze_file(&dependency)
+        }
     }
 
     pub fn remove_file(&mut self, path: &PathBuf) {
@@ -129,19 +136,54 @@ impl Project {
                     diagnostics: parser.diagnostics,
                     file: Some(file),
                     context: Some(analysis.into_context()),
+                    file_type,
                 }
             }
             Err(err) => ProjectFile {
                 diagnostics: vec![err],
                 file: None,
                 context: None,
+                file_type,
             },
         }
     }
 
-    #[cfg(test)]
-    pub fn add_raw_file(&mut self, path: PathBuf, file: ProjectFile) {
-        self.files.insert(path, file);
+    fn reanalyze_file(&mut self, path: &PathBuf) {
+        let Some(proj_file) = self.files.get(path) else {
+            return;
+        };
+        let Some(file) = &proj_file.file else {
+            return;
+        };
+
+        struct ReAnalysisManager<'a> {
+            project: &'a Project,
+        }
+
+        impl FileManager for ReAnalysisManager<'_> {
+            fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
+                self.project.get_file(path)
+            }
+
+            fn add_file_with_parent(
+                &mut self,
+                _path: PathBuf,
+                _parent: Option<PathBuf>,
+                _text: String,
+                _file_type: FileType,
+            ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>> {
+                unreachable!("All files should be present when re-analyzing")
+            }
+        }
+
+        let mut mgr = ReAnalysisManager { project: self };
+        let mut analysis = Analysis::new(proj_file.file_type, &mut mgr);
+        let mut diagnostics = Vec::new();
+        analysis.analyze_file(&mut diagnostics, file);
+        let context = analysis.into_context();
+        let mut_proj_file = self.files.get_mut(path).expect("File suddenly disappeared");
+        mut_proj_file.context = Some(context);
+        mut_proj_file.diagnostics = diagnostics;
     }
 }
 
