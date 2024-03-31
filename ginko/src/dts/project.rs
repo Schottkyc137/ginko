@@ -1,5 +1,6 @@
 use crate::dts::analysis::AnalysisContext;
 use crate::dts::ast::{DtsFile, Reference};
+use crate::dts::importer::{CyclicDependencyChecker, CyclicDependencyError};
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
@@ -10,7 +11,13 @@ use std::path::{Path, PathBuf};
 pub trait FileManager {
     fn get_file(&self, path: &Path) -> Option<&ProjectFile>;
 
-    fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) -> &ProjectFile;
+    fn add_file_with_parent(
+        &mut self,
+        path: PathBuf,
+        parent: Option<PathBuf>,
+        text: String,
+        file_type: FileType,
+    ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>>;
 }
 
 pub struct ProjectFile {
@@ -36,11 +43,16 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
+    importer: CyclicDependencyChecker<PathBuf>,
 }
 
 static NO_DIAGNOSTICS: Vec<Diagnostic> = Vec::new();
 
 impl Project {
+    pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
+        let _ = self.add_file_with_parent(path, None, text, file_type);
+    }
+
     pub fn remove_file(&mut self, path: &PathBuf) {
         self.files.remove(path);
     }
@@ -50,6 +62,10 @@ impl Project {
             .get(path)
             .map(|file| &file.diagnostics)
             .unwrap_or(&NO_DIAGNOSTICS)
+    }
+
+    pub fn files(&self) -> impl Iterator<Item = &Path> {
+        self.files.keys().map(|key| key.as_path())
     }
 
     pub fn get_analysis(&self, path: &PathBuf) -> Option<&AnalysisContext> {
@@ -128,10 +144,24 @@ impl FileManager for Project {
         self.files.get(path)
     }
 
-    fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) -> &ProjectFile {
+    fn add_file_with_parent(
+        &mut self,
+        path: PathBuf,
+        parent: Option<PathBuf>,
+        text: String,
+        file_type: FileType,
+    ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>> {
+        if self.files.contains_key(&path) {
+            return Ok(self.files.get(&path).unwrap());
+        }
+        if let Some(parent) = parent {
+            self.importer.add(parent, &[path.clone()])?;
+        } else {
+            self.importer.add(path.clone(), &[])?;
+        }
         let file = self.analyze_text(text, path.clone(), file_type);
         self.files.insert(path.clone(), file);
-        self.files.get(&path).unwrap()
+        Ok(self.files.get(&path).unwrap())
     }
 }
 
@@ -149,14 +179,23 @@ mod tests {
         let mut project = Project::default();
         let code = "";
         let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file(path.clone(), code.to_owned(), FileType::DtSourceInclude);
+        project
+            .add_file_with_parent(
+                path.clone(),
+                None,
+                code.to_owned(),
+                FileType::DtSourceInclude,
+            )
+            .expect("No cyclic dependencies expected");
         let code2 = r#"
 /dts-v1/;
 
 /include/ "path/to/file.dtsi"
 "#;
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file(path2.clone(), code2.to_owned(), FileType::DtSource);
+        project
+            .add_file_with_parent(path2.clone(), None, code2.to_owned(), FileType::DtSource)
+            .expect("No cyclic dependencies expected");
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert!(project.get_diagnostics(&path).is_empty());
@@ -171,11 +210,14 @@ mod tests {
         let mut project = Project::default();
         let code = Code::new("/ {}"); // missing semicolon
         let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file(
-            path.clone(),
-            code.code().to_owned(),
-            FileType::DtSourceInclude,
-        );
+        project
+            .add_file_with_parent(
+                path.clone(),
+                None,
+                code.code().to_owned(),
+                FileType::DtSourceInclude,
+            )
+            .expect("No cyclic dependencies expected");
         let code2 = Code::new(
             r#"
 /dts-v1/;
@@ -184,7 +226,14 @@ mod tests {
 "#,
         );
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file(path2.clone(), code2.code().to_owned(), FileType::DtSource);
+        project
+            .add_file_with_parent(
+                path2.clone(),
+                None,
+                code2.code().to_owned(),
+                FileType::DtSource,
+            )
+            .expect("No cyclic dependencies expected");
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert_eq!(

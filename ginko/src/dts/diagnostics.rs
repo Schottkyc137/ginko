@@ -6,7 +6,7 @@ use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::num::ParseIntError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -203,15 +203,12 @@ impl From<Error> for DiagnosticKind {
     }
 }
 
-impl<V> From<CyclicDependencyError<V>> for DiagnosticKind
-where
-    V: Display,
-{
-    fn from(value: CyclicDependencyError<V>) -> Self {
+impl From<CyclicDependencyError<PathBuf>> for DiagnosticKind {
+    fn from(value: CyclicDependencyError<PathBuf>) -> Self {
         let str = value
             .cycle()
             .iter()
-            .map(|element| format!("{element}"))
+            .map(|element| format!("{}", element.display()))
             .join(" -> ");
         DiagnosticKind::CyclicDependencyError(str)
     }

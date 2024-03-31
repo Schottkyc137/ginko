@@ -7,7 +7,7 @@ use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::project::FileManager;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 /// Something that can be labeled.
@@ -100,7 +100,9 @@ impl Analysis<'_> {
                         dts_header_seen = true;
                     }
                     AnyDirective::Memreserve(_) => first_non_include = true,
-                    AnyDirective::Include(include) => self.analyze_include(diagnostics, include),
+                    AnyDirective::Include(include) => {
+                        self.analyze_include(file, diagnostics, include)
+                    }
                     AnyDirective::Plugin(_) => {
                         first_non_include = true;
                         self.is_plugin = true
@@ -127,7 +129,12 @@ impl Analysis<'_> {
         self.resolve_references(diagnostics)
     }
 
-    fn analyze_include(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
+    fn analyze_include(
+        &mut self,
+        parent: &DtsFile,
+        diagnostics: &mut Vec<Diagnostic>,
+        include: &Include,
+    ) {
         let path = include.path();
         let file = match self.project.get_file(path.as_path()) {
             Some(file) => file,
@@ -144,7 +151,22 @@ impl Analysis<'_> {
                     }
                 };
                 let file_type = FileType::from(path.as_path());
-                self.project.add_file(path, text, file_type)
+                match self.project.add_file_with_parent(
+                    path,
+                    Some(PathBuf::from(parent.source.as_ref())),
+                    text,
+                    file_type,
+                ) {
+                    Ok(file) => file,
+                    Err(dependency_error) => {
+                        diagnostics.push(Diagnostic::new(
+                            include.span(),
+                            include.source(),
+                            DiagnosticKind::from(dependency_error),
+                        ));
+                        return;
+                    }
+                }
             }
         };
 

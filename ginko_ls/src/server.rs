@@ -1,6 +1,6 @@
 use ginko::dts::{
-    AnyDirective, FileManager, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary,
-    Project, SeverityLevel, Span,
+    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project,
+    SeverityLevel, Span,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -65,6 +65,27 @@ impl Backend {
             }
         }
     }
+
+    async fn publish_diagnostics(&self) {
+        let file_paths = self
+            .project
+            .read()
+            .files()
+            .map(|file| file.to_owned())
+            .collect_vec();
+        for file in file_paths {
+            let diagnostics = self
+                .project
+                .read()
+                .get_diagnostics(&file)
+                .iter()
+                .map(lsp_diag_from_diag)
+                .collect_vec();
+            self.client
+                .publish_diagnostics(Url::from_file_path(&file).unwrap(), diagnostics, None)
+                .await
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -102,16 +123,7 @@ impl LanguageServer for Backend {
         self.project
             .write()
             .add_file(file_path.clone(), params.text_document.text, file_type);
-        let diagnostics = self
-            .project
-            .read()
-            .get_diagnostics(&file_path)
-            .iter()
-            .map(lsp_diag_from_diag)
-            .collect_vec();
-        self.client
-            .publish_diagnostics(Url::from_file_path(file_path).unwrap(), diagnostics, None)
-            .await
+        self.publish_diagnostics().await
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -124,16 +136,7 @@ impl LanguageServer for Backend {
             params.content_changes.into_iter().next().unwrap().text,
             file_type,
         );
-        let diagnostics = self
-            .project
-            .read()
-            .get_diagnostics(&file_path)
-            .iter()
-            .map(lsp_diag_from_diag)
-            .collect_vec();
-        self.client
-            .publish_diagnostics(Url::from_file_path(&file_path).unwrap(), diagnostics, None)
-            .await
+        self.publish_diagnostics().await
     }
 
     async fn did_save(&self, _: DidSaveTextDocumentParams) {}
