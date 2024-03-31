@@ -166,8 +166,8 @@ impl LanguageServer for Backend {
         match item {
             ItemAtCursor::Reference(reference) => {
                 match project.get_node_position(&file_path, reference) {
-                    Some(span) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
-                        Url::from_file_path(file_path).unwrap(),
+                    Some((span, path)) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                        Url::from_file_path(path).unwrap(),
                         ginko_span_to_range(span),
                     )))),
                     None => Ok(None),
@@ -177,7 +177,7 @@ impl LanguageServer for Backend {
                 match Url::from_file_path(Path::new(include.file_name.item())) {
                     Ok(url) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         url,
-                        Range::new(Position::new(0, 0), Position::new(0, 0)),
+                        Range::default(),
                     )))),
                     _ => Ok(None),
                 }

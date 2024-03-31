@@ -1,5 +1,6 @@
 use crate::dts::analysis::AnalysisContext;
 use crate::dts::ast::{DtsFile, Reference};
+use crate::dts::data::HasSource;
 use crate::dts::importer::{CyclicDependencyChecker, CyclicDependencyError};
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
@@ -7,6 +8,7 @@ use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub trait FileManager {
     fn get_file(&self, path: &Path) -> Option<&ProjectFile>;
@@ -92,9 +94,13 @@ impl Project {
         Some(format!("Node {}", referenced.name.name.clone()))
     }
 
-    pub fn get_node_position(&self, path: &PathBuf, reference: &Reference) -> Option<Span> {
+    pub fn get_node_position(
+        &self,
+        path: &PathBuf,
+        reference: &Reference,
+    ) -> Option<(Span, Arc<Path>)> {
         let referenced = self.get_analysis(path)?.get_referenced(reference)?;
-        Some(referenced.name.span())
+        Some((referenced.name.span(), referenced.name.source()))
     }
 
     pub fn get_root(&self, path: &PathBuf) -> Option<&DtsFile> {
