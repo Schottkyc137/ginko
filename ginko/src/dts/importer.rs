@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CyclicDependencyError<V> {
     elements: Vec<V>,
 }
@@ -21,7 +21,7 @@ impl<V> CyclicDependencyError<V> {
 /// This struct operates on easy cloneable objects (such as strings or ints)
 /// and can provide the dependency map later-on.
 #[derive(Default, Debug)]
-pub struct CyclicDependencyChecker<V>
+pub struct ImportGuard<V>
 where
     V: Hash + Eq + Clone,
 {
@@ -29,7 +29,7 @@ where
     back_track: HashMap<V, HashSet<V>>,
 }
 
-impl<V> CyclicDependencyChecker<V>
+impl<V> ImportGuard<V>
 where
     V: Hash + Eq + Clone,
 {
@@ -151,13 +151,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::importer::{CyclicDependencyChecker, CyclicDependencyError};
+    use crate::dts::importer::{CyclicDependencyError, ImportGuard};
     use assert_unordered::assert_eq_unordered;
     use itertools::Itertools;
 
     #[test]
     fn ok_for_files_without_dependencies() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[]), Ok(()));
         assert_eq!(checker.add(2, &[]), Ok(()));
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn ok_for_unrelated_files() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(3, &[4]), Ok(()));
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn ok_for_files_with_non_cyclic_dependencies() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(2, &[3]), Ok(()));
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn ok_dependencies_for_multiple_includes() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[]), Ok(()));
         assert_eq!(checker.add(2, &[]), Ok(()));
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn ok_for_dependency_in_multiple_files() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[]), Ok(()));
         assert_eq!(checker.add(2, &[1]), Ok(()));
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn simple_cyclic_dependency() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn cylic_dependency_spanning_multiple_files() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(2, &[3]), Ok(()));
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn cyclic_dependency_is_independent_of_order() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(3, &[2]), Ok(()));
         assert_eq!(checker.add(1, &[2]), Ok(()));
@@ -236,7 +236,7 @@ mod tests {
             Err(CyclicDependencyError::new(vec![2, 3, 2]))
         );
 
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(3, &[2]), Ok(()));
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn complex_cyclic_dependency_graph() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2, 3]), Ok(()));
         assert_eq!(checker.add(2, &[4]), Ok(()));
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn self_import() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(
             checker.add(1, &[1]),
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn double_edges() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(1, &[2]), Ok(()))
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn dependencies() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(1, &[3]), Ok(()));
 
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn file_only_has_self_as_dependencies() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
         assert_eq!(checker.add(1, &[]), Ok(()));
 
         assert_eq_unordered!(checker.dependencies_of(1).collect_vec(), vec![1]);
@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn multiple_dependencies() {
-        let mut checker = CyclicDependencyChecker::default();
+        let mut checker = ImportGuard::default();
         assert_eq!(checker.add(1, &[2, 3]), Ok(()));
         assert_eq!(checker.add(4, &[2]), Ok(()));
 

@@ -4,10 +4,10 @@ use crate::dts::ast::{
 };
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
-use crate::dts::project::FileManager;
+use crate::dts::project::Project;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
-use std::path::{Path as StdPath, PathBuf};
+use std::path::Path as StdPath;
 use std::sync::Arc;
 
 /// Something that can be labeled.
@@ -21,7 +21,7 @@ enum Labeled {
 
 /// Struct containing all important information when analyzing a device-tree
 pub struct Analysis<'a> {
-    project: &'a mut dyn FileManager,
+    project: &'a Project,
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
@@ -30,7 +30,7 @@ pub struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    pub fn new(file_type: FileType, project: &'a mut dyn FileManager) -> Analysis<'a> {
+    pub fn new(file_type: FileType, project: &'a Project) -> Analysis<'a> {
         Analysis {
             project,
             labels: Default::default(),
@@ -100,9 +100,7 @@ impl Analysis<'_> {
                         dts_header_seen = true;
                     }
                     AnyDirective::Memreserve(_) => first_non_include = true,
-                    AnyDirective::Include(include) => {
-                        self.analyze_include(file, diagnostics, include)
-                    }
+                    AnyDirective::Include(include) => self.analyze_include(diagnostics, include),
                     AnyDirective::Plugin(_) => {
                         first_non_include = true;
                         self.is_plugin = true
@@ -129,45 +127,10 @@ impl Analysis<'_> {
         self.resolve_references(diagnostics)
     }
 
-    fn analyze_include(
-        &mut self,
-        parent: &DtsFile,
-        diagnostics: &mut Vec<Diagnostic>,
-        include: &Include,
-    ) {
+    fn analyze_include(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
         let path = include.path();
-        let file = match self.project.get_file(path.as_path()) {
-            Some(file) => file,
-            None => {
-                let text = match std::fs::read_to_string(&path) {
-                    Ok(text) => text,
-                    Err(e) => {
-                        diagnostics.push(Diagnostic::new(
-                            include.span(),
-                            include.include_token.source(),
-                            DiagnosticKind::from(e),
-                        ));
-                        return;
-                    }
-                };
-                let file_type = FileType::from(path.as_path());
-                match self.project.add_file_with_parent(
-                    path,
-                    Some(PathBuf::from(parent.source.as_ref())),
-                    text,
-                    file_type,
-                ) {
-                    Ok(file) => file,
-                    Err(dependency_error) => {
-                        diagnostics.push(Diagnostic::new(
-                            include.span(),
-                            include.source(),
-                            DiagnosticKind::from(dependency_error),
-                        ));
-                        return;
-                    }
-                }
-            }
+        let Some(file) = self.project.get_file(&path) else {
+            return;
         };
 
         // Analyse file

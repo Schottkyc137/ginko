@@ -107,8 +107,8 @@ impl Code {
 
     pub fn get_analyzed_file(&self) -> (Vec<Diagnostic>, AnalysisContext) {
         let (file, mut diagnostics) = self.parse_ok(Parser::file);
-        let mut fake_project = Project::default();
-        let mut analysis = Analysis::new(FileType::DtSource, &mut fake_project);
+        let fake_project = Project::default();
+        let mut analysis = Analysis::new(FileType::DtSource, &fake_project);
         analysis.analyze_file(&mut diagnostics, &file);
         let context = analysis.into_context();
         (diagnostics, context)

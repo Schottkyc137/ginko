@@ -1,35 +1,24 @@
 use crate::dts::analysis::AnalysisContext;
 use crate::dts::ast::{DtsFile, Reference};
 use crate::dts::data::HasSource;
-use crate::dts::importer::{CyclicDependencyChecker, CyclicDependencyError};
+use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
-use itertools::Itertools;
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
 use std::collections::HashMap;
+use std::fs;
 use std::iter::empty;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub trait FileManager {
-    fn get_file(&self, path: &Path) -> Option<&ProjectFile>;
-
-    fn add_file_with_parent(
-        &mut self,
-        path: PathBuf,
-        parent: Option<PathBuf>,
-        text: String,
-        file_type: FileType,
-    ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>>;
-}
-
+#[derive(Default)]
 pub struct ProjectFile {
     pub(crate) parser_diagnostics: Vec<Diagnostic>,
     pub(crate) analysis_diagnostics: Vec<Diagnostic>,
     pub(crate) file: Option<DtsFile>,
     pub(crate) context: Option<AnalysisContext>,
-    pub(crate) file_type: FileType,
+    pub(crate) _file_type: FileType,
 }
 
 impl ProjectFile {
@@ -52,17 +41,14 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
-    importer: CyclicDependencyChecker<PathBuf>,
 }
 
 impl Project {
     pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
-        let project_file = self.analyze_text(text, path.clone(), file_type);
-        self.files.insert(path.clone(), project_file);
-        let dependencies = self.importer.dependencies_of(path.clone()).collect_vec();
-        for dependency in dependencies {
-            self.reanalyze_file(&dependency)
-        }
+        // First step: Parse file and all dependencies.
+        // Dependencies are cached.
+        self.parse_file(path.clone(), text, file_type);
+        // Second step: Analyze
     }
 
     pub fn remove_file(&mut self, path: &PathBuf) {
@@ -122,100 +108,67 @@ impl Project {
         }
     }
 
-    pub(crate) fn analyze_text(
-        &mut self,
-        text: String,
-        file_name: PathBuf,
-        file_type: FileType,
-    ) -> ProjectFile {
+    fn parse_file(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
         let reader = ByteReader::from_string(text);
-        let lexer = Lexer::new(reader, file_name.into());
+        let lexer = Lexer::new(reader, file_name.clone().into());
         let mut parser = Parser::new(lexer);
         match parser.file() {
             Ok(file) => {
-                let mut analyis_diagnostics = Vec::new();
-                let mut analysis = Analysis::new(file_type, self);
-                analysis.analyze_file(&mut analyis_diagnostics, &file);
-                ProjectFile {
-                    analysis_diagnostics: analyis_diagnostics,
-                    parser_diagnostics: parser.diagnostics,
-                    file: Some(file),
-                    context: Some(analysis.into_context()),
-                    file_type,
+                // insert dummy file to be defined so that no cyclic dependency can occur.
+                self.files.insert(file_name.clone(), ProjectFile::default());
+                for include in file
+                    .elements
+                    .iter()
+                    .filter_map(|primary| primary.as_include())
+                {
+                    let path = include.path();
+                    // Avoids duplicate insertion and cyclic dependencies
+                    if self.files.contains_key(&path) {
+                        continue;
+                    }
+                    match fs::read_to_string(&path) {
+                        Ok(text) => {
+                            let typ = FileType::from(path.as_path());
+                            self.parse_file(path, text, typ);
+                        }
+                        Err(err) => parser.diagnostics.push(Diagnostic::from_token(
+                            include.include_token.clone(),
+                            DiagnosticKind::from(err),
+                        )),
+                    }
                 }
+                self.files.insert(
+                    file_name,
+                    ProjectFile {
+                        parser_diagnostics: parser.diagnostics,
+                        file: Some(file),
+                        _file_type: file_type,
+                        context: None,
+                        analysis_diagnostics: vec![],
+                    },
+                );
             }
-            Err(err) => ProjectFile {
-                parser_diagnostics: vec![err],
-                analysis_diagnostics: vec![],
-                file: None,
-                context: None,
-                file_type,
-            },
-        }
+            Err(err) => {
+                self.files.insert(
+                    file_name,
+                    ProjectFile {
+                        parser_diagnostics: vec![err],
+                        analysis_diagnostics: vec![],
+                        file: None,
+                        context: None,
+                        _file_type: file_type,
+                    },
+                );
+            }
+        };
     }
 
-    fn reanalyze_file(&mut self, path: &PathBuf) {
-        let Some(proj_file) = self.files.get(path) else {
-            return;
-        };
-        let Some(file) = &proj_file.file else {
-            return;
-        };
-
-        struct ReAnalysisManager<'a> {
-            project: &'a Project,
-        }
-
-        impl FileManager for ReAnalysisManager<'_> {
-            fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
-                self.project.get_file(path)
-            }
-
-            fn add_file_with_parent(
-                &mut self,
-                _path: PathBuf,
-                _parent: Option<PathBuf>,
-                _text: String,
-                _file_type: FileType,
-            ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>> {
-                unreachable!("All files should be present when re-analyzing")
-            }
-        }
-
-        let mut mgr = ReAnalysisManager { project: self };
-        let mut analysis = Analysis::new(proj_file.file_type, &mut mgr);
-        let mut diagnostics = Vec::new();
-        analysis.analyze_file(&mut diagnostics, file);
-        let context = analysis.into_context();
-        let mut_proj_file = self.files.get_mut(path).expect("File suddenly disappeared");
-        mut_proj_file.context = Some(context);
-        mut_proj_file.analysis_diagnostics = diagnostics;
-    }
-}
-
-impl FileManager for Project {
-    fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
+    pub fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
         self.files.get(path)
     }
 
-    fn add_file_with_parent(
-        &mut self,
-        path: PathBuf,
-        parent: Option<PathBuf>,
-        text: String,
-        file_type: FileType,
-    ) -> Result<&ProjectFile, CyclicDependencyError<PathBuf>> {
-        if self.files.contains_key(&path) {
-            return Ok(self.files.get(&path).unwrap());
-        }
-        if let Some(parent) = parent {
-            self.importer.add(parent, &[path.clone()])?;
-        } else {
-            self.importer.add(path.clone(), &[])?;
-        }
-        let file = self.analyze_text(text, path.clone(), file_type);
-        self.files.insert(path.clone(), file);
-        Ok(self.files.get(&path).unwrap())
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.files.values().flat_map(|val| &val.parser_diagnostics)
     }
 }
 
@@ -223,7 +176,6 @@ impl FileManager for Project {
 mod tests {
     use crate::dts::diagnostics::DiagnosticKind;
     use crate::dts::lexer::TokenKind;
-    use crate::dts::project::FileManager;
     use crate::dts::test::Code;
     use crate::dts::{Diagnostic, FileType, HasSpan, Project};
     use itertools::Itertools;
@@ -234,23 +186,15 @@ mod tests {
         let mut project = Project::default();
         let code = "";
         let path: PathBuf = "path/to/file.dtsi".into();
-        project
-            .add_file_with_parent(
-                path.clone(),
-                None,
-                code.to_owned(),
-                FileType::DtSourceInclude,
-            )
-            .expect("No cyclic dependencies expected");
+        project.add_file(path.clone(), code.to_owned(), FileType::DtSourceInclude);
+
         let code2 = r#"
 /dts-v1/;
 
 /include/ "path/to/file.dtsi"
 "#;
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project
-            .add_file_with_parent(path2.clone(), None, code2.to_owned(), FileType::DtSource)
-            .expect("No cyclic dependencies expected");
+        project.add_file(path2.clone(), code2.to_owned(), FileType::DtSource);
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert_eq!(project.get_diagnostics(&path).next(), None);
@@ -265,14 +209,11 @@ mod tests {
         let mut project = Project::default();
         let code = Code::new("/ {}"); // missing semicolon
         let path: PathBuf = "path/to/file.dtsi".into();
-        project
-            .add_file_with_parent(
-                path.clone(),
-                None,
-                code.code().to_owned(),
-                FileType::DtSourceInclude,
-            )
-            .expect("No cyclic dependencies expected");
+        project.add_file(
+            path.clone(),
+            code.code().to_owned(),
+            FileType::DtSourceInclude,
+        );
         let code2 = Code::new(
             r#"
 /dts-v1/;
@@ -281,14 +222,8 @@ mod tests {
 "#,
         );
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project
-            .add_file_with_parent(
-                path2.clone(),
-                None,
-                code2.code().to_owned(),
-                FileType::DtSource,
-            )
-            .expect("No cyclic dependencies expected");
+        project.add_file(path2.clone(), code2.code().to_owned(), FileType::DtSource);
+
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert_eq!(

@@ -34,8 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("{}", printer);
                 exit(1);
             }
-            let mut fake_project = Project::default();
-            let mut analysis = Analysis::new(file_ending, &mut fake_project);
+            let fake_project = Project::default();
+            let mut analysis = Analysis::new(file_ending, &fake_project);
             analysis.analyze_file(&mut diagnostics, &file);
             if !diagnostics.is_empty() {
                 let printer = DiagnosticPrinter {

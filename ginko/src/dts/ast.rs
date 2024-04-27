@@ -532,6 +532,15 @@ pub enum Primary {
     CStyleInclude(String),
 }
 
+impl Primary {
+    pub fn as_include(&self) -> Option<&Include> {
+        match self {
+            Primary::Directive(AnyDirective::Include(include)) => Some(include),
+            _ => None,
+        }
+    }
+}
+
 impl Display for Primary {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
