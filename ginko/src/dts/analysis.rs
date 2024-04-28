@@ -42,6 +42,7 @@ impl<'a> Analysis<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct AnalysisContext {
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
@@ -50,7 +51,6 @@ pub struct AnalysisContext {
 pub struct AnalysisResult {
     pub context: AnalysisContext,
     pub diagnostics: Vec<Diagnostic>,
-    pub includes: HashMap<PathBuf, AnalysisResult>,
 }
 
 impl AnalysisContext {
@@ -79,7 +79,7 @@ pub struct FileContext {
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
     file_type: FileType,
-    includes: HashMap<PathBuf, AnalysisResult>,
+    includes: HashMap<PathBuf, AnalysisContext>,
 }
 
 impl FileContext {
@@ -96,10 +96,10 @@ impl FileContext {
             Some(node)
         } else {
             for result in self.includes.values() {
-                if let Some(reference) =
-                    result.context.flat_nodes.iter().find(|(_, value)| {
-                        value.label.as_ref().map(|node| node.item()) == Some(label)
-                    })
+                if let Some(reference) = result
+                    .flat_nodes
+                    .iter()
+                    .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label))
                 {
                     return Some(reference);
                 }
@@ -117,7 +117,6 @@ impl FileContext {
                 labels: self.labels,
             },
             diagnostics: self.diagnostics,
-            includes: self.includes,
         }
     }
 }
@@ -193,15 +192,15 @@ impl Analysis<'_> {
             ));
             return;
         };
-        let Some(file) = self
+        let Some(context) = self
             .project
             .get_file(&path)
-            .and_then(|file| file.file.as_ref())
+            .and_then(|file| file.context.as_ref())
         else {
             return;
         };
-        let analysis_result = self.analyze_file(file, FileType::DtSourceInclude);
-        ctx.includes.insert(path, analysis_result);
+        ctx.flat_nodes.extend(context.flat_nodes.clone());
+        ctx.labels.extend(context.labels.clone());
     }
 
     fn unresolved_reference_error(&self, ctx: &mut FileContext, span: Span, source: Arc<StdPath>) {

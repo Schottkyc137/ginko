@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
+use crate::dts::analysis::{Analysis, AnalysisContext};
 use crate::dts::ast::{DtsFile, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::diagnostics::DiagnosticKind;
@@ -6,6 +6,7 @@ use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::fs;
 use std::iter::empty;
@@ -23,6 +24,17 @@ pub struct ProjectFile {
 }
 
 impl ProjectFile {
+    pub fn includes(&self) -> Vec<PathBuf> {
+        let Some(file) = &self.file else {
+            return vec![];
+        };
+        file.elements
+            .iter()
+            .filter_map(|el| el.as_include())
+            .map(|incl| incl.path())
+            .collect_vec()
+    }
+
     pub fn analysis_context(&self) -> Option<&AnalysisContext> {
         self.context.as_ref()
     }
@@ -56,32 +68,51 @@ impl Project {
         // First step: Parse file and all dependencies.
         // Dependencies are cached.
         self.parse_file(path.clone(), text, file_type);
-        // Second step: Analyze
-        let context = if let Some(project_file) = self.files.get(&path) {
-            if let Some(dts_file) = &project_file.file {
+
+        let keys = self.compute_key_order();
+
+        for key in &keys {
+            let proj_file = self.files.get(key).unwrap();
+            let result = if let Some(file) = &proj_file.file {
                 let mut analysis = Analysis::new(self);
-                analysis.analyze_file(dts_file, project_file.file_type)
+                analysis.analyze_file(file, proj_file.file_type)
             } else {
-                return;
-            }
-        } else {
-            return;
-        };
-        self.add_analyis_context(path, context);
+                continue;
+            };
+            let proj_file = self.files.get_mut(key).unwrap();
+            proj_file.context = Some(result.context);
+            proj_file.analysis_diagnostics = result.diagnostics;
+        }
     }
 
-    pub fn add_analyis_context(&mut self, path: PathBuf, ctx: AnalysisResult) {
-        let AnalysisResult {
-            context,
-            diagnostics,
-            includes,
-        } = ctx;
-        let file = self.files.get_mut(&path).expect("Not analyzed");
-        file.context = Some(context);
-        file.analysis_diagnostics = diagnostics;
-        for (path, result) in includes {
-            self.add_analyis_context(path, result)
+    /// Computes the order in which files must be analyzed.
+    /// inefficient at the moment at O(n^3)
+    fn compute_key_order(&self) -> Vec<PathBuf> {
+        let mut map: HashMap<_, Vec<_>> = HashMap::new();
+        for (path, file) in &self.files {
+            let Some(dts_file) = &file.file else { continue };
+            map.entry(path.clone()).or_default();
+            let includes = dts_file
+                .elements
+                .iter()
+                .filter_map(|el| el.as_include())
+                .map(|incl| incl.path())
+                .collect_vec();
+            for include in includes {
+                map.entry(include).or_default().push(path.clone())
+            }
         }
+        let mut current_order = self.files.keys().cloned().collect_vec();
+        for (key, value) in &map {
+            let key_idx = current_order.iter().position(|r| r == key).unwrap();
+            for v in value {
+                let value_idx = current_order.iter().position(|r| r == v).unwrap();
+                if key_idx > value_idx {
+                    current_order.swap(key_idx, value_idx)
+                }
+            }
+        }
+        current_order
     }
 
     pub fn remove_file(&mut self, path: &PathBuf) {
