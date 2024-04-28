@@ -6,7 +6,7 @@ use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::fs;
 use std::iter::empty;
 use std::path::{Path, PathBuf};
@@ -46,59 +46,6 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
-}
-
-impl Project {
-    pub fn dependencies_of(&self, file: PathBuf) -> impl Iterator<Item = PathBuf> + '_ {
-        DependencyItr::new(&self.files, file)
-    }
-}
-
-struct DependencyItr<'a> {
-    map: &'a HashMap<PathBuf, ProjectFile>,
-    visited: HashSet<PathBuf>,
-    queue: VecDeque<PathBuf>,
-}
-
-impl<'a> DependencyItr<'a> {
-    pub fn new(map: &'a HashMap<PathBuf, ProjectFile>, start: PathBuf) -> DependencyItr<'a> {
-        let mut visited = HashSet::new();
-        let mut queue = VecDeque::new();
-
-        visited.insert(start.clone());
-        queue.push_back(start.clone());
-
-        DependencyItr {
-            map,
-            visited,
-            queue,
-        }
-    }
-}
-
-impl<'a> Iterator for DependencyItr<'a> {
-    type Item = PathBuf;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.queue.pop_front() {
-            if let Some(neighbors) = self
-                .map
-                .get(&node)
-                .and_then(|proj_file| proj_file.file.as_ref())
-            {
-                for neighbor in neighbors.elements.iter().filter_map(|el| el.as_include()) {
-                    let path = neighbor.path();
-                    if !self.visited.contains(&path) {
-                        self.visited.insert(path.clone());
-                        self.queue.push_back(path);
-                    }
-                }
-            }
-            Some(node)
-        } else {
-            None
-        }
-    }
 }
 
 impl Project {
@@ -154,10 +101,6 @@ impl Project {
 
     pub fn project_files(&self) -> impl Iterator<Item = &ProjectFile> {
         self.files.values()
-    }
-
-    pub fn items(&self) -> impl Iterator<Item = (&Path, &ProjectFile)> {
-        self.files.iter().map(|(key, value)| (key.as_path(), value))
     }
 
     pub fn get_analysis(&self, path: &PathBuf) -> Option<&AnalysisContext> {
@@ -262,10 +205,6 @@ impl Project {
 
     pub fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
         self.files.get(path)
-    }
-
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.files.values().flat_map(|val| &val.parser_diagnostics)
     }
 }
 
