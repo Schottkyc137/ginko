@@ -4,10 +4,11 @@ use crate::dts::ast::{
 };
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
+use crate::dts::import_guard::ImportGuard;
 use crate::dts::project::Project;
 use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
 use std::collections::HashMap;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 /// Something that can be labeled.
@@ -19,25 +20,24 @@ enum Labeled {
     Property(Arc<Property>),
 }
 
-/// Struct containing all important information when analyzing a device-tree
-pub struct Analysis<'a> {
+/// Struct containing all important information when analyzing a device-tree.
+/// This struct only takes care of identifying cyclic dependencies, but
+pub(crate) struct Analysis<'a> {
+    import_guard: ImportGuard<PathBuf>,
     project: &'a Project,
-    labels: HashMap<String, Labeled>,
-    flat_nodes: HashMap<Path, Arc<Node>>,
-    unresolved_references: Vec<WithToken<Reference>>,
-    file_type: FileType,
     is_plugin: bool,
+    first_non_include: bool,
+    dts_header_seen: bool,
 }
 
 impl<'a> Analysis<'a> {
-    pub fn new(file_type: FileType, project: &'a Project) -> Analysis<'a> {
+    pub fn new(project: &'a Project) -> Analysis<'a> {
         Analysis {
             project,
-            labels: Default::default(),
-            flat_nodes: Default::default(),
-            unresolved_references: Default::default(),
-            file_type,
+            import_guard: ImportGuard::default(),
             is_plugin: false,
+            first_non_include: false,
+            dts_header_seen: false,
         }
     }
 }
@@ -45,6 +45,12 @@ impl<'a> Analysis<'a> {
 pub struct AnalysisContext {
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
+}
+
+pub struct AnalysisResult {
+    pub context: AnalysisContext,
+    pub diagnostics: Vec<Diagnostic>,
+    pub includes: HashMap<PathBuf, AnalysisResult>,
 }
 
 impl AnalysisContext {
@@ -67,97 +73,143 @@ impl AnalysisContext {
     }
 }
 
-impl Analysis<'_> {
-    pub fn into_context(self) -> AnalysisContext {
-        AnalysisContext {
-            flat_nodes: self.flat_nodes,
-            labels: self.labels,
+pub struct FileContext {
+    diagnostics: Vec<Diagnostic>,
+    labels: HashMap<String, Labeled>,
+    flat_nodes: HashMap<Path, Arc<Node>>,
+    unresolved_references: Vec<WithToken<Reference>>,
+    file_type: FileType,
+    includes: HashMap<PathBuf, AnalysisResult>,
+}
+
+impl FileContext {
+    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    pub fn resolve_reference(&self, label: &String) -> Option<(&Path, &Arc<Node>)> {
+        if let Some(node) = self
+            .flat_nodes
+            .iter()
+            .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label))
+        {
+            Some(node)
+        } else {
+            for result in self.includes.values() {
+                if let Some(reference) =
+                    result.context.flat_nodes.iter().find(|(_, value)| {
+                        value.label.as_ref().map(|node| node.item()) == Some(label)
+                    })
+                {
+                    return Some(reference);
+                }
+            }
+            None
+        }
+    }
+}
+
+impl FileContext {
+    pub fn into_result(self) -> AnalysisResult {
+        AnalysisResult {
+            context: AnalysisContext {
+                flat_nodes: self.flat_nodes,
+                labels: self.labels,
+            },
+            diagnostics: self.diagnostics,
+            includes: self.includes,
         }
     }
 }
 
 impl Analysis<'_> {
-    pub fn analyze_file(&mut self, diagnostics: &mut Vec<Diagnostic>, file: &DtsFile) {
-        let mut first_non_include = false;
-        let mut dts_header_seen = false;
+    pub fn analyze_file(&mut self, file: &DtsFile, file_type: FileType) -> AnalysisResult {
+        let mut ctx = FileContext {
+            file_type,
+            labels: HashMap::default(),
+            diagnostics: Vec::default(),
+            flat_nodes: HashMap::default(),
+            unresolved_references: Vec::default(),
+            includes: HashMap::default(),
+        };
         for primary in &file.elements {
             match primary {
                 Primary::Directive(directive) => match directive {
                     AnyDirective::DtsHeader(tok) => {
-                        if dts_header_seen {
-                            diagnostics.push(Diagnostic::from_token(
+                        if self.dts_header_seen {
+                            ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
                                 DiagnosticKind::DuplicateDirective(
                                     CompilerDirective::DTSVersionHeader,
                                 ),
                             ))
-                        } else if first_non_include {
-                            diagnostics.push(Diagnostic::from_token(
+                        } else if self.first_non_include {
+                            ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
                                 DiagnosticKind::MisplacedDtsHeader,
                             ))
                         }
-                        dts_header_seen = true;
+                        self.dts_header_seen = true;
                     }
-                    AnyDirective::Memreserve(_) => first_non_include = true,
-                    AnyDirective::Include(include) => self.analyze_include(diagnostics, include),
+                    AnyDirective::Memreserve(_) => self.first_non_include = true,
+                    AnyDirective::Include(include) => self.analyze_include(&mut ctx, file, include),
                     AnyDirective::Plugin(_) => {
-                        first_non_include = true;
+                        self.first_non_include = true;
                         self.is_plugin = true
                     }
                 },
                 Primary::Root(root_node) => {
-                    self.analyze_node(diagnostics, root_node.clone(), Path::empty());
-                    first_non_include = true
+                    self.analyze_node(&mut ctx, root_node.clone(), Path::empty());
+                    self.first_non_include = true
                 }
                 Primary::ReferencedNode(referenced_node) => {
-                    self.analyze_referenced_node(diagnostics, referenced_node);
-                    first_non_include = true
+                    self.analyze_referenced_node(&mut ctx, referenced_node);
+                    self.first_non_include = true
                 }
                 Primary::CStyleInclude(_) => {}
             }
         }
-        if !dts_header_seen && self.file_type == FileType::DtSource {
-            diagnostics.push(Diagnostic::new(
+        if !self.dts_header_seen && ctx.file_type == FileType::DtSource {
+            ctx.add_diagnostic(Diagnostic::new(
                 Position::zero().as_span(),
                 file.source(),
                 DiagnosticKind::NonDtsV1,
             ))
         }
-        self.resolve_references(diagnostics)
+        self.resolve_references(&mut ctx);
+        ctx.into_result()
     }
 
-    fn analyze_include(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
+    fn analyze_include(&mut self, ctx: &mut FileContext, parent: &DtsFile, include: &Include) {
         let path = include.path();
-        let Some(file) = self.project.get_file(&path) else {
-            return;
-        };
-
-        // Analyse file
-        if let Some(context) = file.analysis_context() {
-            self.labels.extend(context.labels.clone());
-            self.flat_nodes.extend(context.flat_nodes.clone());
-        }
-        if file.has_errors() {
-            diagnostics.push(Diagnostic::new(
+        if let Err(err) = self
+            .import_guard
+            .add(path.clone(), &[parent.source.clone().to_path_buf()])
+        {
+            ctx.add_diagnostic(Diagnostic::new(
                 include.span(),
                 include.source(),
-                DiagnosticKind::ErrorsInInclude,
-            ))
-        }
+                DiagnosticKind::from(err),
+            ));
+            return;
+        };
+        let Some(file) = self
+            .project
+            .get_file(&path)
+            .and_then(|file| file.file.as_ref())
+        else {
+            return;
+        };
+        let analysis_result = self.analyze_file(file, FileType::DtSourceInclude);
+        ctx.includes.insert(path, analysis_result);
     }
 
-    fn unresolved_reference_error(
-        &self,
-        span: Span,
-        source: Arc<StdPath>,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) {
+    fn unresolved_reference_error(&self, ctx: &mut FileContext, span: Span, source: Arc<StdPath>) {
         // Do not emit unresolved reference errors when we are not a plugin.
         // This will emit false positives as references can only be resolved with the full
         // device-tree information.
-        if self.file_type == FileType::DtSource && !self.is_plugin {
-            diagnostics.push(Diagnostic::new(
+        if ctx.file_type == FileType::DtSource && !self.is_plugin {
+            ctx.add_diagnostic(Diagnostic::new(
                 span,
                 source,
                 DiagnosticKind::UnresolvedReference,
@@ -167,68 +219,50 @@ impl Analysis<'_> {
 
     fn resolve_reference(
         &mut self,
-        diagnostics: &mut Vec<Diagnostic>,
+        ctx: &mut FileContext,
         reference: &WithToken<Reference>,
     ) -> Path {
         match reference.item() {
-            Reference::Label(label) => {
-                let path = self
-                    .flat_nodes
-                    .iter()
-                    .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label));
-                match path {
-                    None => {
-                        self.unresolved_reference_error(
-                            reference.span(),
-                            reference.source(),
-                            diagnostics,
-                        );
-                        Path::empty()
-                    }
-                    Some((path, _)) => path.clone(),
+            Reference::Label(label) => match ctx.resolve_reference(label) {
+                None => {
+                    self.unresolved_reference_error(ctx, reference.span(), reference.source());
+                    Path::empty()
                 }
-            }
+                Some((path, _)) => path.clone(),
+            },
             Reference::Path(path) => {
-                if !self.flat_nodes.contains_key(path) {
-                    self.unresolved_reference_error(
-                        reference.span(),
-                        reference.source(),
-                        diagnostics,
-                    );
+                if !ctx.flat_nodes.contains_key(path) {
+                    self.unresolved_reference_error(ctx, reference.span(), reference.source());
                 };
                 path.clone()
             }
         }
     }
 
-    pub fn analyze_referenced_node(
-        &mut self,
-        diagnostics: &mut Vec<Diagnostic>,
-        node: &ReferencedNode,
-    ) {
-        let path = if self.file_type == FileType::DtSource {
-            self.resolve_reference(diagnostics, &node.reference)
+    pub fn analyze_referenced_node(&mut self, ctx: &mut FileContext, node: &ReferencedNode) {
+        let path = if ctx.file_type == FileType::DtSource {
+            self.resolve_reference(ctx, &node.reference)
         } else {
             // This is an include; simply assume the 'root' path
             Path::empty()
         };
-        self.analyze_node_payload(diagnostics, &node.payload, path);
+        self.analyze_node_payload(ctx, &node.payload, path);
     }
 
-    pub fn resolve_references(&mut self, diagnostics: &mut Vec<Diagnostic>) {
-        for reference in &self.unresolved_references {
+    pub fn resolve_references(&self, ctx: &mut FileContext) {
+        for reference in ctx.unresolved_references.clone() {
             let span = reference.span();
             let source = reference.source();
             match &reference.item() {
-                Reference::Label(label) => match self.labels.get(label) {
+                Reference::Label(label) => match ctx.labels.get(label) {
                     Some(_) => {}
                     None => {
-                        self.unresolved_reference_error(span, source, diagnostics);
+                        self.unresolved_reference_error(ctx, span, source);
                     }
                 },
-                Reference::Path(path) => match self.flat_nodes.get(path) {
+                Reference::Path(path) => match ctx.flat_nodes.get(path) {
                     None => {
-                        self.unresolved_reference_error(span, source, diagnostics);
+                        self.unresolved_reference_error(ctx, span, source);
                     }
                     Some(_) => {}
                 },
@@ -236,41 +270,28 @@ impl Analysis<'_> {
         }
     }
 
-    pub fn analyze_node(&mut self, diagnostics: &mut Vec<Diagnostic>, node: Arc<Node>, path: Path) {
+    pub fn analyze_node(&mut self, ctx: &mut FileContext, node: Arc<Node>, path: Path) {
         if let Some(label) = &node.label {
-            self.labels
+            ctx.labels
                 .insert(label.item().clone(), Labeled::Node(node.clone()));
         }
-        self.flat_nodes.insert(path.clone(), node.clone());
-        self.analyze_node_payload(diagnostics, &node.payload, path)
+        ctx.flat_nodes.insert(path.clone(), node.clone());
+        self.analyze_node_payload(ctx, &node.payload, path)
     }
 
-    fn analyze_node_payload(
-        &mut self,
-        diagnostics: &mut Vec<Diagnostic>,
-        payload: &NodePayload,
-        path: Path,
-    ) {
+    fn analyze_node_payload(&mut self, ctx: &mut FileContext, payload: &NodePayload, path: Path) {
         for prop in payload.properties.clone() {
-            self.analyze_property(diagnostics, prop);
+            self.analyze_property(ctx, prop);
         }
         for node in &payload.child_nodes {
-            self.analyze_node(
-                diagnostics,
-                node.clone(),
-                path.with_child(node.name.item().clone()),
-            )
+            self.analyze_node(ctx, node.clone(), path.with_child(node.name.item().clone()))
         }
     }
 
-    fn check_is_string_list(
-        &mut self,
-        diagnostics: &mut Vec<Diagnostic>,
-        values: &Vec<PropertyValue>,
-    ) {
+    fn check_is_string_list(&mut self, ctx: &mut FileContext, values: &Vec<PropertyValue>) {
         for value in values {
             if !matches!(value, PropertyValue::String(_)) {
-                diagnostics.push(Diagnostic::new(
+                ctx.add_diagnostic(Diagnostic::new(
                     value.span(),
                     value.source(),
                     DiagnosticKind::NonStringInCompatible,
@@ -279,66 +300,54 @@ impl Analysis<'_> {
         }
     }
 
-    fn check_is_single_string(
-        &mut self,
-        _diagnostics: &mut [Diagnostic],
-        values: &[PropertyValue],
-    ) {
+    fn check_is_single_string(&mut self, _ctx: &mut FileContext, values: &[PropertyValue]) {
         if values.len() != 1 {}
     }
 
-    fn check_is_single_u32(&mut self, _diagnostics: &mut [Diagnostic], values: &[PropertyValue]) {
+    fn check_is_single_u32(&mut self, _ctx: &mut FileContext, values: &[PropertyValue]) {
         if values.len() != 1 {}
     }
 
-    pub fn analyze_property(&mut self, diagnostics: &mut Vec<Diagnostic>, property: Arc<Property>) {
+    pub fn analyze_property(&mut self, ctx: &mut FileContext, property: Arc<Property>) {
         if let Some(label) = &property.label {
-            self.labels
+            ctx.labels
                 .insert(label.item().clone(), Labeled::Property(property.clone()));
         }
         for value in &property.values {
-            self.analyze_property_value(diagnostics, value)
+            self.analyze_property_value(ctx, value)
         }
 
         match property.name.as_str() {
-            "compatible" => self.check_is_string_list(diagnostics, &property.values),
-            "model" => self.check_is_single_string(diagnostics, &property.values),
-            "phandle" => self.check_is_single_u32(diagnostics, &property.values),
+            "compatible" => self.check_is_string_list(ctx, &property.values),
+            "model" => self.check_is_single_string(ctx, &property.values),
+            "phandle" => self.check_is_single_u32(ctx, &property.values),
             _ => {}
         }
     }
 
-    pub fn analyze_property_value(
-        &mut self,
-        diagnostics: &mut [Diagnostic],
-        value: &PropertyValue,
-    ) {
+    pub fn analyze_property_value(&mut self, ctx: &mut FileContext, value: &PropertyValue) {
         match value {
             PropertyValue::String(_) => {}
             PropertyValue::ByteStrings(..) => {}
             PropertyValue::Cells(_, cells, _) => {
                 for cell in cells {
-                    self.analyze_cell(diagnostics, cell)
+                    self.analyze_cell(ctx, cell)
                 }
             }
-            PropertyValue::Reference(reference) => self.analyze_reference(diagnostics, reference),
+            PropertyValue::Reference(reference) => self.analyze_reference(ctx, reference),
         }
     }
 
-    pub fn analyze_cell(&mut self, diagnostics: &mut [Diagnostic], value: &Cell) {
+    pub fn analyze_cell(&mut self, ctx: &mut FileContext, value: &Cell) {
         match value {
             Cell::Number(_) => {}
-            Cell::Reference(reference) => self.analyze_reference(diagnostics, reference),
+            Cell::Reference(reference) => self.analyze_reference(ctx, reference),
             Cell::Expression => {}
         }
     }
 
-    pub fn analyze_reference(
-        &mut self,
-        _diagnostics: &mut [Diagnostic],
-        reference: &WithToken<Reference>,
-    ) {
-        self.unresolved_references.push(reference.clone())
+    pub fn analyze_reference(&mut self, ctx: &mut FileContext, reference: &WithToken<Reference>) {
+        ctx.unresolved_references.push(reference.clone())
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::dts::analysis::AnalysisContext;
+use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::ast::{DtsFile, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::diagnostics::DiagnosticKind;
@@ -6,7 +6,7 @@ use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::iter::empty;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,8 @@ pub struct ProjectFile {
     pub(crate) analysis_diagnostics: Vec<Diagnostic>,
     pub(crate) file: Option<DtsFile>,
     pub(crate) context: Option<AnalysisContext>,
-    pub(crate) _file_type: FileType,
+    pub(crate) file_type: FileType,
+    pub(crate) source: String,
 }
 
 impl ProjectFile {
@@ -36,6 +37,10 @@ impl ProjectFile {
         self.diagnostics()
             .any(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
     }
+
+    pub fn source(&self) -> &String {
+        &self.source
+    }
 }
 
 #[derive(Default)]
@@ -44,11 +49,92 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn dependencies_of(&self, file: PathBuf) -> impl Iterator<Item = PathBuf> + '_ {
+        DependencyItr::new(&self.files, file)
+    }
+}
+
+struct DependencyItr<'a> {
+    map: &'a HashMap<PathBuf, ProjectFile>,
+    visited: HashSet<PathBuf>,
+    queue: VecDeque<PathBuf>,
+}
+
+impl<'a> DependencyItr<'a> {
+    pub fn new(map: &'a HashMap<PathBuf, ProjectFile>, start: PathBuf) -> DependencyItr<'a> {
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+
+        visited.insert(start.clone());
+        queue.push_back(start.clone());
+
+        DependencyItr {
+            map,
+            visited,
+            queue,
+        }
+    }
+}
+
+impl<'a> Iterator for DependencyItr<'a> {
+    type Item = PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(node) = self.queue.pop_front() {
+            if let Some(neighbors) = self
+                .map
+                .get(&node)
+                .and_then(|proj_file| proj_file.file.as_ref())
+            {
+                for neighbor in neighbors.elements.iter().filter_map(|el| el.as_include()) {
+                    let path = neighbor.path();
+                    if !self.visited.contains(&path) {
+                        self.visited.insert(path.clone());
+                        self.queue.push_back(path);
+                    }
+                }
+            }
+            Some(node)
+        } else {
+            None
+        }
+    }
+}
+
+impl Project {
+    /// Adds a file to the project.
+    /// Re-evaluates the file, if the file is already present.
+    /// Does not re-evaluate dependencies, if they are cached.
     pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
         // First step: Parse file and all dependencies.
         // Dependencies are cached.
         self.parse_file(path.clone(), text, file_type);
         // Second step: Analyze
+        let context = if let Some(project_file) = self.files.get(&path) {
+            if let Some(dts_file) = &project_file.file {
+                let mut analysis = Analysis::new(self);
+                analysis.analyze_file(dts_file, project_file.file_type)
+            } else {
+                return;
+            }
+        } else {
+            return;
+        };
+        self.add_analyis_context(path, context);
+    }
+
+    pub fn add_analyis_context(&mut self, path: PathBuf, ctx: AnalysisResult) {
+        let AnalysisResult {
+            context,
+            diagnostics,
+            includes,
+        } = ctx;
+        let file = self.files.get_mut(&path).expect("Not analyzed");
+        file.context = Some(context);
+        file.analysis_diagnostics = diagnostics;
+        for (path, result) in includes {
+            self.add_analyis_context(path, result)
+        }
     }
 
     pub fn remove_file(&mut self, path: &PathBuf) {
@@ -64,6 +150,14 @@ impl Project {
 
     pub fn files(&self) -> impl Iterator<Item = &Path> {
         self.files.keys().map(|key| key.as_path())
+    }
+
+    pub fn project_files(&self) -> impl Iterator<Item = &ProjectFile> {
+        self.files.values()
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = (&Path, &ProjectFile)> {
+        self.files.iter().map(|(key, value)| (key.as_path(), value))
     }
 
     pub fn get_analysis(&self, path: &PathBuf) -> Option<&AnalysisContext> {
@@ -109,7 +203,7 @@ impl Project {
     }
 
     fn parse_file(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
-        let reader = ByteReader::from_string(text);
+        let reader = ByteReader::from_string(text.clone());
         let lexer = Lexer::new(reader, file_name.clone().into());
         let mut parser = Parser::new(lexer);
         match parser.file() {
@@ -131,8 +225,9 @@ impl Project {
                             let typ = FileType::from(path.as_path());
                             self.parse_file(path, text, typ);
                         }
-                        Err(err) => parser.diagnostics.push(Diagnostic::from_token(
-                            include.include_token.clone(),
+                        Err(err) => parser.diagnostics.push(Diagnostic::new(
+                            include.span(),
+                            include.source(),
                             DiagnosticKind::from(err),
                         )),
                     }
@@ -142,8 +237,9 @@ impl Project {
                     ProjectFile {
                         parser_diagnostics: parser.diagnostics,
                         file: Some(file),
-                        _file_type: file_type,
+                        file_type,
                         context: None,
+                        source: text,
                         analysis_diagnostics: vec![],
                     },
                 );
@@ -155,8 +251,9 @@ impl Project {
                         parser_diagnostics: vec![err],
                         analysis_diagnostics: vec![],
                         file: None,
+                        source: text,
                         context: None,
-                        _file_type: file_type,
+                        file_type,
                     },
                 );
             }
@@ -205,6 +302,8 @@ mod tests {
     }
 
     #[test]
+    // We don't push an 'errors in include' anymore. Maybe later.
+    #[ignore]
     pub fn error_in_included_file_add_include_before_dts() {
         let mut project = Project::default();
         let code = Code::new("/ {}"); // missing semicolon

@@ -1,6 +1,6 @@
 use crate::dts::ast::CompilerDirective;
 use crate::dts::data::{HasSource, HasSpan, Span};
-use crate::dts::importer::CyclicDependencyError;
+use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};

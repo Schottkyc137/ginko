@@ -54,10 +54,6 @@ where
         self.check_for_cyclic_dependencies(element)
     }
 
-    pub fn dependencies_of(&self, start: V) -> impl Iterator<Item = V> + '_ {
-        DependencyItr::new(&self.back_track, start)
-    }
-
     /// Checks for cycles in the dependency graph and returns `Ok(())`, if no cycles were found and
     /// `CyclicDependencyError(...)` with the cycle, if cycles were found.
     fn check_for_cyclic_dependencies(&self, start: V) -> Result<(), CyclicDependencyError<V>> {
@@ -98,62 +94,9 @@ where
     }
 }
 
-struct DependencyItr<'a, V>
-where
-    V: Eq + Hash + Clone,
-{
-    map: &'a HashMap<V, HashSet<V>>,
-    visited: HashSet<V>,
-    queue: VecDeque<V>,
-}
-
-impl<'a, V> DependencyItr<'a, V>
-where
-    V: Eq + Hash + Clone,
-{
-    pub fn new(map: &'a HashMap<V, HashSet<V>>, start: V) -> DependencyItr<'a, V> {
-        let mut visited = HashSet::new();
-        let mut queue = VecDeque::new();
-
-        visited.insert(start.clone());
-        queue.push_back(start.clone());
-
-        DependencyItr {
-            map,
-            visited,
-            queue,
-        }
-    }
-}
-
-impl<'a, V> Iterator for DependencyItr<'a, V>
-where
-    V: Eq + Hash + Clone,
-{
-    type Item = V;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.queue.pop_front() {
-            if let Some(neighbors) = self.map.get(&node) {
-                for neighbor in neighbors {
-                    if !self.visited.contains(neighbor) {
-                        self.visited.insert(neighbor.clone());
-                        self.queue.push_back(neighbor.clone());
-                    }
-                }
-            }
-            Some(node)
-        } else {
-            None
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::dts::importer::{CyclicDependencyError, ImportGuard};
-    use assert_unordered::assert_eq_unordered;
-    use itertools::Itertools;
+    use crate::dts::import_guard::{CyclicDependencyError, ImportGuard};
 
     #[test]
     fn ok_for_files_without_dependencies() {
@@ -272,34 +215,5 @@ mod tests {
 
         assert_eq!(checker.add(1, &[2]), Ok(()));
         assert_eq!(checker.add(1, &[2]), Ok(()))
-    }
-
-    #[test]
-    fn dependencies() {
-        let mut checker = ImportGuard::default();
-        assert_eq!(checker.add(1, &[2]), Ok(()));
-        assert_eq!(checker.add(1, &[3]), Ok(()));
-
-        assert_eq!(checker.dependencies_of(2).collect_vec(), vec![2, 1]);
-        assert_eq!(checker.dependencies_of(3).collect_vec(), vec![3, 1]);
-    }
-
-    #[test]
-    fn file_only_has_self_as_dependencies() {
-        let mut checker = ImportGuard::default();
-        assert_eq!(checker.add(1, &[]), Ok(()));
-
-        assert_eq_unordered!(checker.dependencies_of(1).collect_vec(), vec![1]);
-    }
-
-    #[test]
-    fn multiple_dependencies() {
-        let mut checker = ImportGuard::default();
-        assert_eq!(checker.add(1, &[2, 3]), Ok(()));
-        assert_eq!(checker.add(4, &[2]), Ok(()));
-
-        assert_eq_unordered!(checker.dependencies_of(1).collect_vec(), vec![1]);
-        assert_eq_unordered!(checker.dependencies_of(2).collect_vec(), vec![1, 2, 4]);
-        assert_eq_unordered!(checker.dependencies_of(3).collect_vec(), vec![3, 1]);
     }
 }
