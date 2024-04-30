@@ -3,6 +3,7 @@ use crate::dts::lexer::Token;
 use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter, LowerHex};
+use std::io;
 use std::ops::Deref;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
@@ -481,8 +482,8 @@ impl Display for Include {
 }
 
 impl Include {
-    pub fn path(&self) -> PathBuf {
-        PathBuf::from(self.file_name.item())
+    pub fn path(&self) -> Result<PathBuf, io::Error> {
+        PathBuf::from(self.file_name.item()).canonicalize()
     }
 }
 

@@ -24,17 +24,6 @@ pub struct ProjectFile {
 }
 
 impl ProjectFile {
-    pub fn includes(&self) -> Vec<PathBuf> {
-        let Some(file) = &self.file else {
-            return vec![];
-        };
-        file.elements
-            .iter()
-            .filter_map(|el| el.as_include())
-            .map(|incl| incl.path())
-            .collect_vec()
-    }
-
     pub fn analysis_context(&self) -> Option<&AnalysisContext> {
         self.context.as_ref()
     }
@@ -62,19 +51,29 @@ pub struct Project {
 
 impl Project {
     pub fn add_file(&mut self, file_name: PathBuf) -> Result<(), io::Error> {
+        let file_name = file_name.canonicalize()?;
         let content = fs::read_to_string(file_name.clone())?;
         let file_ending = FileType::from(file_name.as_path());
         self.add_file_with_text(file_name, content, file_ending);
         Ok(())
     }
 
-    /// Adds a file to the project.
+    /// Adds a file to the project with already given text.
     /// Re-evaluates the file, if the file is already present.
     /// Does not re-evaluate dependencies, if they are cached.
-    pub fn add_file_with_text(&mut self, path: PathBuf, text: String, file_type: FileType) {
+    ///
+    /// # Parameters
+    /// * file_name: The name of the file.
+    /// * text: The contents of the file.
+    /// * file_type: Defines how the file should be analyzed.
+    ///
+    /// # Panics
+    /// If `file_name` does not point to a valid file.
+    pub fn add_file_with_text(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
+        let file_name = file_name.canonicalize().expect("File must be present");
         // First step: Parse file and all dependencies.
         // Dependencies are cached.
-        self.parse_file(path.clone(), text, file_type);
+        self.parse_file(file_name.clone(), text, file_type);
 
         let keys = self.compute_key_order();
 
@@ -105,10 +104,11 @@ impl Project {
                 .filter_map(|el| el.as_include())
                 .map(|incl| incl.path())
                 .collect_vec();
-            for include in includes {
+            for include in includes.into_iter().flatten() {
                 map.entry(include).or_default().push(path.clone())
             }
         }
+        // This is very inefficient. Probably there is a better way.
         let mut current_order = self.files.keys().cloned().collect_vec();
         for (key, value) in &map {
             let key_idx = current_order.iter().position(|r| r == key).unwrap();
@@ -122,12 +122,14 @@ impl Project {
         current_order
     }
 
-    pub fn remove_file(&mut self, path: &PathBuf) {
-        self.files.remove(path);
+    pub fn remove_file(&mut self, path: &Path) {
+        if let Ok(path) = path.canonicalize() {
+            self.files.remove(&path);
+        }
     }
 
     pub fn get_diagnostics(&self, path: &Path) -> Box<dyn Iterator<Item = &Diagnostic> + '_> {
-        let Some(file) = self.files.get(path) else {
+        let Some(file) = self.get_file(path) else {
             return Box::new(empty());
         };
         Box::new(file.diagnostics())
@@ -141,8 +143,8 @@ impl Project {
         self.files.values()
     }
 
-    pub fn get_analysis(&self, path: &PathBuf) -> Option<&AnalysisContext> {
-        match self.files.get(path) {
+    pub fn get_analysis(&self, path: &Path) -> Option<&AnalysisContext> {
+        match self.get_file(path) {
             None => None,
             Some(project) => project.context.as_ref(),
         }
@@ -164,34 +166,30 @@ impl Project {
         panic!("Found diagnostics")
     }
 
-    pub fn find_at_pos<'a>(
-        &'a self,
-        path: &PathBuf,
-        position: &Position,
-    ) -> Option<ItemAtCursor<'a>> {
-        let file = match self.files.get(path).and_then(|file| file.file.as_ref()) {
+    pub fn find_at_pos<'a>(&'a self, path: &Path, position: &Position) -> Option<ItemAtCursor<'a>> {
+        let file = match self.get_file(path).and_then(|file| file.file.as_ref()) {
             None => return None,
             Some(file) => file,
         };
         file.item_at_cursor(position)
     }
 
-    pub fn document_reference(&self, path: &PathBuf, reference: &Reference) -> Option<String> {
+    pub fn document_reference(&self, path: &Path, reference: &Reference) -> Option<String> {
         let referenced = self.get_analysis(path)?.get_referenced(reference)?;
         Some(format!("Node {}", referenced.name.name.clone()))
     }
 
     pub fn get_node_position(
         &self,
-        path: &PathBuf,
+        path: &Path,
         reference: &Reference,
     ) -> Option<(Span, Arc<Path>)> {
         let referenced = self.get_analysis(path)?.get_referenced(reference)?;
         Some((referenced.name.span(), referenced.name.source()))
     }
 
-    pub fn get_root(&self, path: &PathBuf) -> Option<&DtsFile> {
-        match self.files.get(path) {
+    pub fn get_root(&self, path: &Path) -> Option<&DtsFile> {
+        match self.get_file(path) {
             Some(ProjectFile {
                 file: Some(file), ..
             }) => Some(file),
@@ -212,15 +210,25 @@ impl Project {
                     .iter()
                     .filter_map(|primary| primary.as_include())
                 {
-                    let path = include.path();
+                    let canonicalized_path = match include.path() {
+                        Ok(path) => path,
+                        Err(err) => {
+                            parser.diagnostics.push(Diagnostic::new(
+                                include.span(),
+                                include.source(),
+                                DiagnosticKind::from(err),
+                            ));
+                            continue;
+                        }
+                    };
                     // Avoids duplicate insertion and cyclic dependencies
-                    if self.files.contains_key(&path) {
+                    if self.files.contains_key(&canonicalized_path) {
                         continue;
                     }
-                    match fs::read_to_string(&path) {
+                    match fs::read_to_string(&canonicalized_path) {
                         Ok(text) => {
-                            let typ = FileType::from(path.as_path());
-                            self.parse_file(path, text, typ);
+                            let typ = FileType::from(canonicalized_path.as_path());
+                            self.parse_file(canonicalized_path, text, typ);
                         }
                         Err(err) => parser.diagnostics.push(Diagnostic::new(
                             include.span(),
@@ -258,7 +266,10 @@ impl Project {
     }
 
     pub fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
-        self.files.get(path)
+        match path.canonicalize() {
+            Ok(path) => self.files.get(&path),
+            Err(_) => None,
+        }
     }
 }
 
@@ -269,37 +280,57 @@ mod tests {
     use crate::dts::test::Code;
     use crate::dts::{ast, Diagnostic, FileType, HasSpan, ItemAtCursor, Project};
     use itertools::Itertools;
-    use std::error::Error;
     use std::io::{Seek, Write};
     use std::path::PathBuf;
+    use tempfile::NamedTempFile;
+
+    fn tempfile(code: &str) -> (Code, NamedTempFile) {
+        let code = Code::new(code);
+        let mut file = NamedTempFile::new().expect("cannot create temporary file");
+        write!(file, "{}", code.code()).expect("write dont work");
+        file.rewind().expect("rewind dont work");
+        (code, file)
+    }
 
     #[test]
     pub fn file_with_includes() {
         let mut project = Project::default();
-        let code = "";
-        let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file_with_text(path.clone(), code.to_owned(), FileType::DtSourceInclude);
+        let (code, file) = tempfile("");
+        project.add_file_with_text(
+            file.path().to_owned(),
+            code.code().to_owned(),
+            FileType::DtSourceInclude,
+        );
 
-        let code2 = r#"
+        let (code2, file2) = tempfile(
+            format!(
+                r#"
 /dts-v1/;
 
-/include/ "path/to/file.dtsi"
-"#;
-        let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file_with_text(path2.clone(), code2.to_owned(), FileType::DtSource);
-        assert!(project.get_file(&path).is_some());
-        assert!(project.get_file(&path2).is_some());
-        assert_eq!(project.get_diagnostics(&path).next(), None);
-        assert_eq!(project.get_diagnostics(&path2).next(), None);
-        assert!(project.get_root(&path).is_some());
-        assert!(project.get_analysis(&path).is_some());
-        assert!(project.get_analysis(&path2).is_some());
+/include/ "{}"
+"#,
+                file.path().display()
+            )
+            .as_str(),
+        );
+        project.add_file_with_text(
+            file2.path().to_owned(),
+            code2.code().to_owned(),
+            FileType::DtSource,
+        );
+        assert!(project.get_file(file.path()).is_some());
+        assert!(project.get_file(file2.path()).is_some());
+        assert_eq!(project.get_diagnostics(file.path()).next(), None);
+        assert_eq!(project.get_diagnostics(file2.path()).next(), None);
+        assert!(project.get_root(file.path()).is_some());
+        assert!(project.get_analysis(file.path()).is_some());
+        assert!(project.get_analysis(file2.path()).is_some());
     }
 
     #[test]
     pub fn cross_file_references() {
         let mut project = Project::default();
-        let code1 = Code::new(
+        let (code1, file1) = tempfile(
             r#"
 / {
     some_node: node_a {
@@ -308,11 +339,7 @@ mod tests {
 };
 "#,
         );
-        let mut file1 = tempfile::NamedTempFile::new().expect("cannot create temporary file");
-        write!(file1, "{}", code1.code()).expect("write dont work");
-        file1.rewind().expect("rewind dont work");
-
-        let code2 = Code::new(
+        let (code2, file2) = tempfile(
             format!(
                 r#"
 /dts-v1/;
@@ -322,14 +349,10 @@ mod tests {
 &some_node {{
 }};
 "#,
-                file1.path().to_string_lossy()
+                file1.path().display()
             )
             .as_str(),
         );
-
-        let mut file2 = tempfile::NamedTempFile::new().expect("cannot create temporary file");
-        write!(file2, "{}", code2.code()).expect("write dont work");
-        file2.rewind().expect("rewind dont work");
 
         project
             .add_file(file2.path().to_path_buf())
@@ -339,16 +362,19 @@ mod tests {
 
         let substr = code2.s1("&some_node");
         let item = project
-            .find_at_pos(&file2.path().to_path_buf(), &substr.span().start())
+            .find_at_pos(file2.path(), &substr.span().start())
             .expect("Found no item");
         let ItemAtCursor::Reference(reference) = item else {
             panic!("Found non-node at cursor")
         };
         assert_eq!(reference, &ast::Reference::Label("some_node".to_owned()));
-        match project.get_node_position(&file2.path().to_path_buf(), reference) {
+        match project.get_node_position(file2.path(), reference) {
             Some((span, path)) => {
                 assert_eq!(span, code1.s1("node_a").span());
-                assert_eq!(path.to_path_buf(), file1.path().to_path_buf());
+                assert_eq!(
+                    path.to_path_buf(),
+                    file1.path().canonicalize().expect("File does not exist")
+                );
             }
             None => panic!("References does not reference nodes"),
         }

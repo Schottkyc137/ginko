@@ -1,9 +1,7 @@
 use clap::Parser;
-use ginko::dts::FileType;
 use ginko::dts::{DiagnosticPrinter, Project};
 use itertools::Itertools;
 use std::error::Error;
-use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
 

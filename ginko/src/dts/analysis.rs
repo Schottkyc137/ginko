@@ -180,7 +180,17 @@ impl Analysis<'_> {
     }
 
     fn analyze_include(&mut self, ctx: &mut FileContext, parent: &DtsFile, include: &Include) {
-        let path = include.path();
+        let path = match include.path() {
+            Ok(path) => path,
+            Err(err) => {
+                ctx.add_diagnostic(Diagnostic::new(
+                    include.span(),
+                    include.source(),
+                    DiagnosticKind::from(err),
+                ));
+                return;
+            }
+        };
         if let Err(err) = self
             .import_guard
             .add(path.clone(), &[parent.source.clone().to_path_buf()])
