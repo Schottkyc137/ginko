@@ -119,9 +119,11 @@ impl LanguageServer for Backend {
             self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
             return;
         }
-        self.project
-            .write()
-            .add_file(file_path.clone(), params.text_document.text, file_type);
+        self.project.write().add_file_with_text(
+            file_path.clone(),
+            params.text_document.text,
+            file_type,
+        );
         self.publish_diagnostics().await
     }
 
@@ -130,7 +132,7 @@ impl LanguageServer for Backend {
             return;
         };
         let file_type = FileType::from(file_path.as_path());
-        self.project.write().add_file(
+        self.project.write().add_file_with_text(
             file_path.clone(),
             params.content_changes.into_iter().next().unwrap().text,
             file_type,

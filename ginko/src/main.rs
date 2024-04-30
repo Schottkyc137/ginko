@@ -17,10 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let mut project = Project::default();
     let file_name = PathBuf::from(args.file);
-    let content = fs::read_to_string(file_name.clone())?;
-    let file_ending = FileType::from(file_name.as_path());
-
-    project.add_file(file_name, content, file_ending);
+    project.add_file(file_name)?;
 
     let mut has_errors = false;
     for file in project.project_files() {

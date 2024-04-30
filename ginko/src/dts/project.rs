@@ -8,10 +8,10 @@ use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::fs;
 use std::iter::empty;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{fs, io};
 
 #[derive(Default)]
 pub struct ProjectFile {
@@ -61,10 +61,17 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn add_file(&mut self, file_name: PathBuf) -> Result<(), io::Error> {
+        let content = fs::read_to_string(file_name.clone())?;
+        let file_ending = FileType::from(file_name.as_path());
+        self.add_file_with_text(file_name, content, file_ending);
+        Ok(())
+    }
+
     /// Adds a file to the project.
     /// Re-evaluates the file, if the file is already present.
     /// Does not re-evaluate dependencies, if they are cached.
-    pub fn add_file(&mut self, path: PathBuf, text: String, file_type: FileType) {
+    pub fn add_file_with_text(&mut self, path: PathBuf, text: String, file_type: FileType) {
         // First step: Parse file and all dependencies.
         // Dependencies are cached.
         self.parse_file(path.clone(), text, file_type);
@@ -139,6 +146,22 @@ impl Project {
             None => None,
             Some(project) => project.context.as_ref(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn assert_no_diagnostics(&self) {
+        let diagnostics = self
+            .files
+            .values()
+            .flat_map(|file| file.diagnostics())
+            .collect_vec();
+        if diagnostics.is_empty() {
+            return;
+        }
+        for diag in diagnostics {
+            println!("{diag:?}");
+        }
+        panic!("Found diagnostics")
     }
 
     pub fn find_at_pos<'a>(
@@ -244,8 +267,10 @@ mod tests {
     use crate::dts::diagnostics::DiagnosticKind;
     use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
-    use crate::dts::{Diagnostic, FileType, HasSpan, Project};
+    use crate::dts::{ast, Diagnostic, FileType, HasSpan, ItemAtCursor, Project};
     use itertools::Itertools;
+    use std::error::Error;
+    use std::io::{Seek, Write};
     use std::path::PathBuf;
 
     #[test]
@@ -253,7 +278,7 @@ mod tests {
         let mut project = Project::default();
         let code = "";
         let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file(path.clone(), code.to_owned(), FileType::DtSourceInclude);
+        project.add_file_with_text(path.clone(), code.to_owned(), FileType::DtSourceInclude);
 
         let code2 = r#"
 /dts-v1/;
@@ -261,7 +286,7 @@ mod tests {
 /include/ "path/to/file.dtsi"
 "#;
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file(path2.clone(), code2.to_owned(), FileType::DtSource);
+        project.add_file_with_text(path2.clone(), code2.to_owned(), FileType::DtSource);
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
         assert_eq!(project.get_diagnostics(&path).next(), None);
@@ -272,13 +297,71 @@ mod tests {
     }
 
     #[test]
+    pub fn cross_file_references() {
+        let mut project = Project::default();
+        let code1 = Code::new(
+            r#"
+/ {
+    some_node: node_a {
+        // ...
+    };
+};
+"#,
+        );
+        let mut file1 = tempfile::NamedTempFile::new().expect("cannot create temporary file");
+        write!(file1, "{}", code1.code()).expect("write dont work");
+        file1.rewind().expect("rewind dont work");
+
+        let code2 = Code::new(
+            format!(
+                r#"
+/dts-v1/;
+
+/include/ "{}"
+
+&some_node {{
+}};
+"#,
+                file1.path().to_string_lossy()
+            )
+            .as_str(),
+        );
+
+        let mut file2 = tempfile::NamedTempFile::new().expect("cannot create temporary file");
+        write!(file2, "{}", code2.code()).expect("write dont work");
+        file2.rewind().expect("rewind dont work");
+
+        project
+            .add_file(file2.path().to_path_buf())
+            .expect("Unexpected IO error");
+
+        project.assert_no_diagnostics();
+
+        let substr = code2.s1("&some_node");
+        let item = project
+            .find_at_pos(&file2.path().to_path_buf(), &substr.span().start())
+            .expect("Found no item");
+        let ItemAtCursor::Reference(reference) = item else {
+            panic!("Found non-node at cursor")
+        };
+        assert_eq!(reference, &ast::Reference::Label("some_node".to_owned()));
+        match project.get_node_position(&file2.path().to_path_buf(), reference) {
+            Some((span, path)) => {
+                assert_eq!(span, code1.s1("node_a").span());
+                assert_eq!(path.to_path_buf(), file1.path().to_path_buf());
+            }
+            None => panic!("References does not reference nodes"),
+        }
+    }
+
+    #[test]
     // We don't push an 'errors in include' anymore. Maybe later.
     #[ignore]
     pub fn error_in_included_file_add_include_before_dts() {
         let mut project = Project::default();
         let code = Code::new("/ {}"); // missing semicolon
         let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file(
+        project.add_file_with_text(
             path.clone(),
             code.code().to_owned(),
             FileType::DtSourceInclude,
@@ -291,7 +374,7 @@ mod tests {
 "#,
         );
         let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file(path2.clone(), code2.code().to_owned(), FileType::DtSource);
+        project.add_file_with_text(path2.clone(), code2.code().to_owned(), FileType::DtSource);
 
         assert!(project.get_file(&path).is_some());
         assert!(project.get_file(&path2).is_some());
