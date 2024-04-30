@@ -381,6 +381,40 @@ mod tests {
     }
 
     #[test]
+    pub fn file_with_multiple_includes() {
+        let mut project = Project::default();
+        let (_, file1) = tempfile("");
+        project
+            .add_file(file1.path().to_path_buf())
+            .expect("Unexpected IO error");
+
+        let (_, file2) = tempfile("");
+        project
+            .add_file(file2.path().to_path_buf())
+            .expect("Unexpected IO error");
+
+        let (_, file3) = tempfile(
+            format!(
+                r#"
+/dts-v1/;
+
+/include/ "{}"
+/include/ "{}"
+"#,
+                file1.path().display(),
+                file2.path().display()
+            )
+            .as_str(),
+        );
+
+        project
+            .add_file(file3.path().to_path_buf())
+            .expect("Unexpected IO error");
+
+        project.assert_no_diagnostics();
+    }
+
+    #[test]
     // We don't push an 'errors in include' anymore. Maybe later.
     #[ignore]
     pub fn error_in_included_file_add_include_before_dts() {
