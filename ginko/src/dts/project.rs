@@ -415,6 +415,34 @@ mod tests {
     }
 
     #[test]
+    pub fn file_with_nested_includes() {
+        let mut project = Project::default();
+        let (_, file1) = tempfile("");
+        let (_, file2) = tempfile(format!(r#"/include/ "{}""#, file1.path().display()).as_str());
+        let (_, file3) = tempfile(
+            format!(
+                r#"
+/dts-v1/;
+
+/include/ "{}"
+"#,
+                file2.path().display()
+            )
+            .as_str(),
+        );
+
+        project
+            .add_file(file3.path().to_path_buf())
+            .expect("Unexpected IO error");
+
+        project.assert_no_diagnostics();
+
+        assert!(project.get_file(file1.path()).is_some());
+        assert!(project.get_file(file2.path()).is_some());
+        assert!(project.get_file(file3.path()).is_some());
+    }
+
+    #[test]
     // We don't push an 'errors in include' anymore. Maybe later.
     #[ignore]
     pub fn error_in_included_file_add_include_before_dts() {
