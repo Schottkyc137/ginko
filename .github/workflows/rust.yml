@@ -66,7 +66,7 @@ jobs:
 
       - name: Test
         if: matrix.os != 'macos-latest' # There are no free runners for Apple Silicon available at the moment
-        run: cargo tests --verbose --manifest-path ${{ matrix.crate }}/Cargo.toml --target ${{ matrix.target }}
+        run: cargo test --verbose --manifest-path ${{ matrix.crate }}/Cargo.toml --target ${{ matrix.target }}
 
       - name: Assemble
         if: matrix.rust == 'stable'
