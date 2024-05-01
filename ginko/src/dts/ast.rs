@@ -483,7 +483,7 @@ impl Display for Include {
 
 impl Include {
     pub fn path(&self) -> Result<PathBuf, io::Error> {
-        PathBuf::from(self.file_name.item()).canonicalize()
+        dunce::canonicalize(self.file_name.item())
     }
 }
 

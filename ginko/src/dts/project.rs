@@ -78,7 +78,7 @@ pub struct Project {
 
 impl Project {
     pub fn add_file(&mut self, file_name: PathBuf) -> Result<(), io::Error> {
-        let file_name = file_name.canonicalize()?;
+        let file_name = dunce::canonicalize(file_name)?;
         let content = fs::read_to_string(file_name.clone())?;
         let file_ending = FileType::from(file_name.as_path());
         self.add_file_with_text(file_name, content, file_ending);
@@ -97,7 +97,7 @@ impl Project {
     /// # Panics
     /// If `file_name` does not point to a valid file.
     pub fn add_file_with_text(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
-        let file_name = file_name.canonicalize().expect("File must be present");
+        let file_name = dunce::canonicalize(file_name).expect("File must be present");
         // First step: Parse file and all dependencies.
         // Dependencies are cached.
         self.parse_file(file_name.clone(), text, file_type);
@@ -150,7 +150,7 @@ impl Project {
     }
 
     pub fn remove_file(&mut self, path: &Path) {
-        if let Ok(path) = path.canonicalize() {
+        if let Ok(path) = dunce::canonicalize(path) {
             self.files.remove(&path);
         }
     }
@@ -278,7 +278,7 @@ impl Project {
     }
 
     pub fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
-        match path.canonicalize() {
+        match dunce::canonicalize(path) {
             Ok(path) => self.files.get(&path),
             Err(_) => None,
         }
@@ -387,7 +387,7 @@ mod tests {
                 assert_eq!(span, code1.s1("node_a").span());
                 assert_eq!(
                     path.to_path_buf(),
-                    file1.path().canonicalize().expect("File does not exist")
+                    dunce::canonicalize(file1.path()).expect("File does not exist")
                 );
             }
             None => panic!("References does not reference nodes"),
@@ -406,7 +406,7 @@ mod tests {
                 assert_eq!(span, code1.s1("node_a").span());
                 assert_eq!(
                     path.to_path_buf(),
-                    file1.path().canonicalize().expect("File does not exist")
+                    dunce::canonicalize(file1.path()).expect("File does not exist")
                 );
             }
             None => panic!("References does not reference nodes"),
@@ -515,9 +515,7 @@ mod tests {
             project.get_diagnostics(file1.path()).cloned().collect_vec(),
             vec![Diagnostic::new(
                 code1.s1("}").end().as_span(),
-                file1
-                    .path()
-                    .canonicalize()
+                dunce::canonicalize(file1.path())
                     .expect("Cannot canonicalize")
                     .into(),
                 DiagnosticKind::Expected(vec![TokenKind::Semicolon])
@@ -529,9 +527,7 @@ mod tests {
                 code2
                     .s1(format!(r#"/include/ "{}""#, file1.path().display()).as_str())
                     .span(),
-                file2
-                    .path()
-                    .canonicalize()
+                dunce::canonicalize(file2.path())
                     .expect("Cannot canonicalize")
                     .into(),
                 DiagnosticKind::ErrorsInInclude
