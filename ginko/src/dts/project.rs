@@ -162,6 +162,11 @@ impl Project {
         Box::new(file.diagnostics())
     }
 
+    #[cfg(test)]
+    pub fn all_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.files.values().flat_map(|file| file.diagnostics())
+    }
+
     pub fn files(&self) -> impl Iterator<Item = &Path> {
         self.files.keys().map(|key| key.as_path())
     }
@@ -291,7 +296,9 @@ mod tests {
     use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
     use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
+    use assert_matches::assert_matches;
     use itertools::Itertools;
+    use std::fs;
     use std::fs::File;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -314,8 +321,7 @@ mod tests {
         ) -> (Code, PathBuf) {
             let code = Code::new(content.as_ref());
             let file_path = self.inner.path().join(name);
-            let mut file = File::create(&file_path).expect("Cannot create temporary file");
-            write!(file, "{}", code.code()).expect("Cannot write to file");
+            fs::write(&file_path, code.code()).expect("Cannot write to file");
             (code, file_path)
         }
 
@@ -439,12 +445,27 @@ mod tests {
         let (mut file1, path1) = temp_dir.new_file("test.dts");
         let (mut file2, path2) = temp_dir.new_file("test-include.dtsi");
 
-        write!(file2, r#"/dts-v1/; /include/ "{}""#, path1.display())
+        write!(file1, r#"/dts-v1/; /include/ "{}""#, path2.display())
             .expect("Cannot write to file 2");
-        write!(file1, r#"/include/ "{}""#, path2.display()).expect("Cannot write to file1");
+        write!(file2, r#"/include/ "{}""#, path1.display()).expect("Cannot write to file1");
 
         let mut project = Project::default();
-        project.add_file(path2).expect("Cannot add file to project");
+        project
+            .add_file(path1.clone())
+            .expect("Cannot add file to project");
+
+        let diag = project.all_diagnostics().cloned().collect_vec();
+        // This is explicitly vague. There should be some error somewhere,
+        // but the exact location is not perfect at the moment.
+        // This is because the error only occurs in one file while it should occur in all
+        // files affected by the cyclic include.
+        assert_matches!(
+            &diag[..],
+            &[Diagnostic {
+                kind: DiagnosticKind::CyclicDependencyError(_),
+                ..
+            }]
+        );
     }
 
     #[test]

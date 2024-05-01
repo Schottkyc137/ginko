@@ -222,9 +222,9 @@ impl From<ParseIntError> for DiagnosticKind {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Diagnostic {
-    kind: DiagnosticKind,
-    span: Span,
-    source: Arc<Path>,
+    pub kind: DiagnosticKind,
+    pub span: Span,
+    pub source: Arc<Path>,
 }
 
 impl Diagnostic {
