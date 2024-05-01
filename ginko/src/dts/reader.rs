@@ -1,4 +1,6 @@
 use crate::dts::data::Position;
+use std::io;
+use std::io::Read;
 
 pub trait Reader {
     fn consume(&mut self) -> Option<u8>;
@@ -71,6 +73,12 @@ impl ByteReader {
             pos: Position::zero(),
             char_pos: 0,
         }
+    }
+
+    pub fn from_read(mut read: impl Read) -> Result<ByteReader, io::Error> {
+        let mut str = String::new();
+        read.read_to_string(&mut str)?;
+        Ok(ByteReader::from_string(str))
     }
 
     #[cfg(test)]

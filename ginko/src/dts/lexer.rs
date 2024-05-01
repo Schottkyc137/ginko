@@ -17,7 +17,7 @@ where
     R: Reader + Sized,
 {
     reader: R,
-    source: Arc<std::path::Path>,
+    source: Arc<Path>,
     state: LexerState,
     last_pos: Position,
 }

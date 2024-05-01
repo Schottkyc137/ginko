@@ -1,8 +1,8 @@
-use crate::dts::analysis::AnalysisContext;
+use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::data::HasSource;
 use crate::dts::lexer::{Lexer, Token};
 use crate::dts::reader::{ByteReader, Reader};
-use crate::dts::{Analysis, Diagnostic, FileType, HasSpan, Parser, Position, Span};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Project, Span};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -106,10 +106,15 @@ impl Code {
     }
 
     pub fn get_analyzed_file(&self) -> (Vec<Diagnostic>, AnalysisContext) {
-        let (file, mut diagnostics) = self.parse_ok(Parser::file);
-        let mut analysis = Analysis::new(FileType::DtSource);
-        analysis.analyze_file(&mut diagnostics, &file);
-        let context = analysis.into_context();
+        let (file, mut parse_diagnostics) = self.parse_ok(Parser::file);
+        let fake_project = Project::default();
+        let mut analysis = Analysis::new();
+        let AnalysisResult {
+            context,
+            mut diagnostics,
+            ..
+        } = analysis.analyze_file(&file, FileType::DtSource, &fake_project);
+        diagnostics.append(&mut parse_diagnostics);
         (diagnostics, context)
     }
 

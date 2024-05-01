@@ -9,8 +9,7 @@ use crate::dts::lexer::{Lexer, PeekingLexer, Reference, Token, TokenKind};
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{CompilerDirective, HasSpan};
 use itertools::Itertools;
-use std::fs;
-use std::path::{Path as StdPath, PathBuf};
+use std::path::Path as StdPath;
 use std::sync::Arc;
 
 pub struct Parser<R>
@@ -567,32 +566,6 @@ where
         })
     }
 
-    fn include_other_file(&mut self, span: Span, path: &str) -> Option<DtsFile> {
-        match fs::read_to_string(path) {
-            Ok(contents) => {
-                let reader = ByteReader::from_string(contents);
-                let lexer = Lexer::new(reader, PathBuf::from(path).into());
-                let mut subparser = Parser::new(lexer);
-                match subparser.file() {
-                    Ok(file) => Some(file),
-                    Err(_) => {
-                        self.diagnostics.push(Diagnostic::new(
-                            span,
-                            self.lexer.source(),
-                            DiagnosticKind::ErrorsInInclude,
-                        ));
-                        None
-                    }
-                }
-            }
-            Err(file_error) => {
-                self.diagnostics
-                    .push(Diagnostic::new(span, self.lexer.source(), file_error));
-                None
-            }
-        }
-    }
-
     pub fn primary(&mut self) -> Result<Primary> {
         let token = self.lexer.expect_next()?;
         match &token.kind {
@@ -644,10 +617,8 @@ where
                         ),
                     ))
                 }
-                let include_file = self.include_other_file(string_tok.span(), &path);
                 Ok(Primary::Directive(AnyDirective::Include(Include {
                     include_token,
-                    file: include_file,
                     file_name: WithToken::new(path, string_tok.clone()),
                 })))
             }

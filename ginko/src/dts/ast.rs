@@ -3,8 +3,9 @@ use crate::dts::lexer::Token;
 use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter, LowerHex};
+use std::io;
 use std::ops::Deref;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -456,11 +457,10 @@ impl Display for CompilerDirective {
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Include {
     pub include_token: Token,
     pub file_name: WithToken<String>,
-    pub file: Option<DtsFile>,
 }
 
 impl HasSpan for Include {
@@ -469,9 +469,21 @@ impl HasSpan for Include {
     }
 }
 
+impl HasSource for Include {
+    fn source(&self) -> Arc<StdPath> {
+        self.include_token.source()
+    }
+}
+
 impl Display for Include {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "/include/ \"{}\"", self.file_name)
+    }
+}
+
+impl Include {
+    pub fn path(&self) -> Result<PathBuf, io::Error> {
+        dunce::canonicalize(self.file_name.item())
     }
 }
 
@@ -519,6 +531,15 @@ pub enum Primary {
     ReferencedNode(ReferencedNode),
     // C-style includes should be put into a separate pass
     CStyleInclude(String),
+}
+
+impl Primary {
+    pub fn as_include(&self) -> Option<&Include> {
+        match self {
+            Primary::Directive(AnyDirective::Include(include)) => Some(include),
+            _ => None,
+        }
+    }
 }
 
 impl Display for Primary {

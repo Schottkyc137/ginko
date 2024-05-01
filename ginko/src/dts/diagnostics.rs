@@ -1,11 +1,12 @@
 use crate::dts::ast::CompilerDirective;
 use crate::dts::data::{HasSource, HasSpan, Span};
+use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::num::ParseIntError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -38,8 +39,10 @@ pub enum DiagnosticKind {
     ParserError(String),
     IOError(String),
     ErrorsInInclude,
+    CyclicDependencyError(String),
 }
 
+#[derive(Eq, PartialEq)]
 pub enum SeverityLevel {
     Error,
     Warning,
@@ -80,6 +83,7 @@ impl DiagnosticKind {
             DiagnosticKind::ParserError(_) => SeverityLevel::Error,
             DiagnosticKind::IOError(_) => SeverityLevel::Error,
             DiagnosticKind::ErrorsInInclude => SeverityLevel::Error,
+            DiagnosticKind::CyclicDependencyError(..) => SeverityLevel::Error,
         }
     }
 }
@@ -184,7 +188,10 @@ impl Display for DiagnosticKind {
                 write!(f, "{msg}")
             }
             DiagnosticKind::ErrorsInInclude => {
-                write!(f, "Included file contains non-recoverable errors")
+                write!(f, "Included file contains errors")
+            }
+            DiagnosticKind::CyclicDependencyError(str) => {
+                write!(f, "Cyclic include: {str}")
             }
         }
     }
@@ -196,6 +203,17 @@ impl From<Error> for DiagnosticKind {
     }
 }
 
+impl From<CyclicDependencyError<PathBuf>> for DiagnosticKind {
+    fn from(value: CyclicDependencyError<PathBuf>) -> Self {
+        let str = value
+            .cycle()
+            .iter()
+            .map(|element| format!("{}", element.display()))
+            .join(" -> ");
+        DiagnosticKind::CyclicDependencyError(str)
+    }
+}
+
 impl From<ParseIntError> for DiagnosticKind {
     fn from(value: ParseIntError) -> Self {
         DiagnosticKind::IntError(value)
@@ -204,9 +222,9 @@ impl From<ParseIntError> for DiagnosticKind {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Diagnostic {
-    kind: DiagnosticKind,
-    span: Span,
-    source: Arc<Path>,
+    pub kind: DiagnosticKind,
+    pub span: Span,
+    pub source: Arc<Path>,
 }
 
 impl Diagnostic {
