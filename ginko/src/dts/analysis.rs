@@ -5,8 +5,7 @@ use crate::dts::ast::{
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::import_guard::ImportGuard;
-use crate::dts::project::Project;
-use crate::dts::{CompilerDirective, Diagnostic, FileType, Position};
+use crate::dts::{CompilerDirective, Diagnostic, FileType, Position, Project};
 use std::collections::HashMap;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
@@ -22,22 +21,14 @@ enum Labeled {
 
 /// Struct containing all important information when analyzing a device-tree.
 /// This struct only takes care of identifying cyclic dependencies, but
-pub(crate) struct Analysis<'a> {
+pub(crate) struct Analysis {
     import_guard: ImportGuard<PathBuf>,
-    project: &'a Project,
-    is_plugin: bool,
-    first_non_include: bool,
-    dts_header_seen: bool,
 }
 
-impl<'a> Analysis<'a> {
-    pub fn new(project: &'a Project) -> Analysis<'a> {
+impl Analysis {
+    pub fn new() -> Analysis {
         Analysis {
-            project,
             import_guard: ImportGuard::default(),
-            is_plugin: false,
-            first_non_include: false,
-            dts_header_seen: false,
         }
     }
 }
@@ -73,16 +64,20 @@ impl AnalysisContext {
     }
 }
 
-pub struct FileContext {
+pub struct FileContext<'a> {
+    project: &'a Project,
     diagnostics: Vec<Diagnostic>,
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
     file_type: FileType,
     includes: HashMap<PathBuf, AnalysisContext>,
+    is_plugin: bool,
+    first_non_include: bool,
+    dts_header_seen: bool,
 }
 
-impl FileContext {
+impl FileContext<'_> {
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
@@ -109,7 +104,7 @@ impl FileContext {
     }
 }
 
-impl FileContext {
+impl FileContext<'_> {
     pub fn into_result(self) -> AnalysisResult {
         AnalysisResult {
             context: AnalysisContext {
@@ -121,8 +116,13 @@ impl FileContext {
     }
 }
 
-impl Analysis<'_> {
-    pub fn analyze_file(&mut self, file: &DtsFile, file_type: FileType) -> AnalysisResult {
+impl Analysis {
+    pub fn analyze_file(
+        &mut self,
+        file: &DtsFile,
+        file_type: FileType,
+        project: &Project,
+    ) -> AnalysisResult {
         let mut ctx = FileContext {
             file_type,
             labels: HashMap::default(),
@@ -130,45 +130,49 @@ impl Analysis<'_> {
             flat_nodes: HashMap::default(),
             unresolved_references: Vec::default(),
             includes: HashMap::default(),
+            project,
+            is_plugin: file_type == FileType::DtSourceOverlay,
+            dts_header_seen: false,
+            first_non_include: false,
         };
         for primary in &file.elements {
             match primary {
                 Primary::Directive(directive) => match directive {
                     AnyDirective::DtsHeader(tok) => {
-                        if self.dts_header_seen {
+                        if ctx.dts_header_seen {
                             ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
                                 DiagnosticKind::DuplicateDirective(
                                     CompilerDirective::DTSVersionHeader,
                                 ),
                             ))
-                        } else if self.first_non_include {
+                        } else if ctx.first_non_include {
                             ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
                                 DiagnosticKind::MisplacedDtsHeader,
                             ))
                         }
-                        self.dts_header_seen = true;
+                        ctx.dts_header_seen = true;
                     }
-                    AnyDirective::Memreserve(_) => self.first_non_include = true,
+                    AnyDirective::Memreserve(_) => ctx.first_non_include = true,
                     AnyDirective::Include(include) => self.analyze_include(&mut ctx, file, include),
                     AnyDirective::Plugin(_) => {
-                        self.first_non_include = true;
-                        self.is_plugin = true
+                        ctx.first_non_include = true;
+                        ctx.is_plugin = true
                     }
                 },
                 Primary::Root(root_node) => {
                     self.analyze_node(&mut ctx, root_node.clone(), Path::empty());
-                    self.first_non_include = true
+                    ctx.first_non_include = true
                 }
                 Primary::ReferencedNode(referenced_node) => {
                     self.analyze_referenced_node(&mut ctx, referenced_node);
-                    self.first_non_include = true
+                    ctx.first_non_include = true
                 }
                 Primary::CStyleInclude(_) => {}
             }
         }
-        if !self.dts_header_seen && ctx.file_type == FileType::DtSource {
+        if !ctx.dts_header_seen && ctx.file_type == FileType::DtSource {
             ctx.add_diagnostic(Diagnostic::new(
                 Position::zero().as_span(),
                 file.source(),
@@ -201,23 +205,28 @@ impl Analysis<'_> {
                 DiagnosticKind::from(err),
             ));
             return;
-        };
-        let Some(context) = self
-            .project
-            .get_file(&path)
-            .and_then(|file| file.context.as_ref())
-        else {
+        }
+        let Some(proj_file) = ctx.project.get_file(&path) else {
             return;
         };
-        ctx.flat_nodes.extend(context.flat_nodes.clone());
-        ctx.labels.extend(context.labels.clone());
+        if proj_file.has_errors() {
+            ctx.add_diagnostic(Diagnostic::new(
+                include.span(),
+                include.source(),
+                DiagnosticKind::ErrorsInInclude,
+            ));
+        }
+        if let Some(context) = proj_file.context.as_ref() {
+            ctx.flat_nodes.extend(context.flat_nodes.clone());
+            ctx.labels.extend(context.labels.clone());
+        }
     }
 
     fn unresolved_reference_error(&self, ctx: &mut FileContext, span: Span, source: Arc<StdPath>) {
         // Do not emit unresolved reference errors when we are not a plugin.
         // This will emit false positives as references can only be resolved with the full
         // device-tree information.
-        if ctx.file_type == FileType::DtSource && !self.is_plugin {
+        if ctx.file_type == FileType::DtSource && !ctx.is_plugin {
             ctx.add_diagnostic(Diagnostic::new(
                 span,
                 source,

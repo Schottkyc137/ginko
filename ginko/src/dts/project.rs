@@ -1,5 +1,5 @@
 use crate::dts::analysis::{Analysis, AnalysisContext};
-use crate::dts::ast::{DtsFile, Reference};
+use crate::dts::ast::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::lexer::Lexer;
@@ -24,6 +24,33 @@ pub struct ProjectFile {
 }
 
 impl ProjectFile {
+    pub fn parsed(
+        diagnostics: Vec<Diagnostic>,
+        file: DtsFile,
+        file_type: FileType,
+        source: String,
+    ) -> ProjectFile {
+        ProjectFile {
+            parser_diagnostics: diagnostics,
+            file: Some(file),
+            file_type,
+            context: None,
+            source,
+            analysis_diagnostics: vec![],
+        }
+    }
+
+    pub fn unrecoverable(err: Diagnostic, source: String, file_type: FileType) -> ProjectFile {
+        ProjectFile {
+            parser_diagnostics: vec![err],
+            analysis_diagnostics: vec![],
+            file: None,
+            source,
+            context: None,
+            file_type,
+        }
+    }
+
     pub fn analysis_context(&self) -> Option<&AnalysisContext> {
         self.context.as_ref()
     }
@@ -77,11 +104,11 @@ impl Project {
 
         let keys = self.compute_key_order();
 
+        let mut analysis = Analysis::new();
         for key in &keys {
             let proj_file = self.files.get(key).unwrap();
             let result = if let Some(file) = &proj_file.file {
-                let mut analysis = Analysis::new(self);
-                analysis.analyze_file(file, proj_file.file_type)
+                analysis.analyze_file(file, proj_file.file_type, self)
             } else {
                 continue;
             };
@@ -205,64 +232,49 @@ impl Project {
             Ok(file) => {
                 // insert dummy file to be defined so that no cyclic dependency can occur.
                 self.files.insert(file_name.clone(), ProjectFile::default());
-                for include in file
-                    .elements
+                file.elements
                     .iter()
                     .filter_map(|primary| primary.as_include())
-                {
-                    let canonicalized_path = match include.path() {
-                        Ok(path) => path,
-                        Err(err) => {
-                            parser.diagnostics.push(Diagnostic::new(
-                                include.span(),
-                                include.source(),
-                                DiagnosticKind::from(err),
-                            ));
-                            continue;
-                        }
-                    };
-                    // Avoids duplicate insertion and cyclic dependencies
-                    if self.files.contains_key(&canonicalized_path) {
-                        continue;
-                    }
-                    match fs::read_to_string(&canonicalized_path) {
-                        Ok(text) => {
-                            let typ = FileType::from(canonicalized_path.as_path());
-                            self.parse_file(canonicalized_path, text, typ);
-                        }
-                        Err(err) => parser.diagnostics.push(Diagnostic::new(
-                            include.span(),
-                            include.source(),
-                            DiagnosticKind::from(err),
-                        )),
-                    }
-                }
+                    .for_each(|include| self.parse_included_file(&mut parser.diagnostics, include));
                 self.files.insert(
                     file_name,
-                    ProjectFile {
-                        parser_diagnostics: parser.diagnostics,
-                        file: Some(file),
-                        file_type,
-                        context: None,
-                        source: text,
-                        analysis_diagnostics: vec![],
-                    },
+                    ProjectFile::parsed(parser.diagnostics, file, file_type, text),
                 );
             }
             Err(err) => {
-                self.files.insert(
-                    file_name,
-                    ProjectFile {
-                        parser_diagnostics: vec![err],
-                        analysis_diagnostics: vec![],
-                        file: None,
-                        source: text,
-                        context: None,
-                        file_type,
-                    },
-                );
+                self.files
+                    .insert(file_name, ProjectFile::unrecoverable(err, text, file_type));
             }
         };
+    }
+
+    fn parse_included_file(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
+        let canonicalized_path = match include.path() {
+            Ok(path) => path,
+            Err(err) => {
+                diagnostics.push(Diagnostic::new(
+                    include.span(),
+                    include.source(),
+                    DiagnosticKind::from(err),
+                ));
+                return;
+            }
+        };
+        // Avoids duplicate insertion and cyclic dependencies
+        if self.files.contains_key(&canonicalized_path) {
+            return;
+        }
+        match fs::read_to_string(&canonicalized_path) {
+            Ok(text) => {
+                let typ = FileType::from(canonicalized_path.as_path());
+                self.parse_file(canonicalized_path, text, typ);
+            }
+            Err(err) => diagnostics.push(Diagnostic::new(
+                include.span(),
+                include.source(),
+                DiagnosticKind::from(err),
+            )),
+        }
     }
 
     pub fn get_file(&self, path: &Path) -> Option<&ProjectFile> {
@@ -348,6 +360,9 @@ mod tests {
 
 &some_node {{
 }};
+
+&{{/node_a}} {{
+}};
 "#,
                 file1.path().display()
             )
@@ -378,6 +393,40 @@ mod tests {
             }
             None => panic!("References does not reference nodes"),
         }
+
+        let substr = code2.s1("&{/node_a}");
+        let item = project
+            .find_at_pos(file2.path(), &substr.span().start())
+            .expect("Found no item");
+        let ItemAtCursor::Reference(reference) = item else {
+            panic!("Found non-node at cursor")
+        };
+        assert_eq!(reference, &ast::Reference::Path("/node_a".into()));
+        match project.get_node_position(file2.path(), reference) {
+            Some((span, path)) => {
+                assert_eq!(span, code1.s1("node_a").span());
+                assert_eq!(
+                    path.to_path_buf(),
+                    file1.path().canonicalize().expect("File does not exist")
+                );
+            }
+            None => panic!("References does not reference nodes"),
+        }
+    }
+
+    #[test]
+    pub fn cyclic_import_error() {
+        let mut file1 = NamedTempFile::new().expect("cannot create temporary file");
+        let mut file2 = NamedTempFile::new().expect("cannot create temporary file");
+
+        write!(file2, r#"/dts-v1/; /include/ "{}""#, file1.path().display())
+            .expect("Cannot write to file 2");
+        write!(file1, r#"/include/ "{}""#, file2.path().display()).expect("Cannot write to file1");
+
+        let mut project = Project::default();
+        project
+            .add_file(file2.path().to_path_buf())
+            .expect("Cannot add file to project");
     }
 
     #[test]
