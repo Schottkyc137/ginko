@@ -153,7 +153,9 @@ impl Analysis {
                     ctx.first_non_include = true
                 }
                 Primary::CStyleInclude(_) => {}
-                Primary::DeletedNode(..) => {}
+                Primary::DeletedNode(_, reference) => {
+                    self.resolve_reference(&mut ctx, reference);
+                }
             }
         }
         if !ctx.dts_header_seen && ctx.file_type == FileType::DtSource {

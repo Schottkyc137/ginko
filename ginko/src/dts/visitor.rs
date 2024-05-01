@@ -31,7 +31,7 @@ impl Primary {
             Primary::Root(root) => root.item_at_cursor(cursor),
             Primary::ReferencedNode(node) => node.item_at_cursor(cursor),
             Primary::CStyleInclude(_) => None,
-            Primary::DeletedNode(..) => None,
+            Primary::DeletedNode(_, node_ref) => Some(ItemAtCursor::Reference(node_ref.item())),
         }
     }
 }
@@ -87,8 +87,8 @@ impl NodeItem {
         match self {
             NodeItem::Property(property) => property.item_at_cursor(cursor),
             NodeItem::Node(node) => node.item_at_cursor(cursor),
-            NodeItem::DeletedNode(_, _) => None,
-            NodeItem::DeletedProperty(_, _) => None,
+            NodeItem::DeletedNode(..) => None,
+            NodeItem::DeletedProperty(..) => None,
         }
     }
 }
