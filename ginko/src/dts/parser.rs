@@ -1,6 +1,6 @@
 use crate::dts::ast::{
-    AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeName, NodePayload, Path, Primary,
-    Property, PropertyValue, ReferencedNode, WithToken,
+    AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeItem, NodeName, NodePayload, Path,
+    Primary, Property, PropertyValue, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, Span};
 use crate::dts::diagnostics::DiagnosticKind::Expected;
@@ -12,6 +12,8 @@ use itertools::Itertools;
 use std::path::Path as StdPath;
 use std::sync::Arc;
 
+/// The `Parser` class is responsible for syntactical analysis,
+/// transforming the input token stream into an AST.
 pub struct Parser<R>
 where
     R: Reader + Sized,
@@ -409,8 +411,7 @@ where
     pub fn node_payload(&mut self) -> Result<NodePayload> {
         let end: Token;
         self.lexer.expect(TokenKind::OpenBrace)?;
-        let mut properties: Vec<Arc<Property>> = vec![];
-        let mut child_nodes: Vec<Arc<Node>> = vec![];
+        let mut items: Vec<NodeItem> = vec![];
         let mut node_discovered = false;
         loop {
             let tok = self.lexer.expect_next()?;
@@ -448,11 +449,11 @@ where
                     let node_name: WithToken<NodeName> = From::from(ident);
                     self.check_is_node_name(node_name.span(), &node_name);
                     let payload = self.node_payload()?;
-                    child_nodes.push(Arc::new(Node {
+                    items.push(NodeItem::Node(Arc::new(Node {
                         name: node_name,
                         label,
                         payload,
-                    }))
+                    })));
                 }
                 TokenKind::Equal => {
                     self.skip_tok();
@@ -472,7 +473,7 @@ where
                             DiagnosticKind::PropertyAfterNode,
                         ))
                     }
-                    properties.push(Arc::new(prop));
+                    items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 TokenKind::Semicolon => {
                     self.skip_tok();
@@ -485,7 +486,7 @@ where
                             DiagnosticKind::PropertyAfterNode,
                         ))
                     }
-                    properties.push(Arc::new(prop));
+                    items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 _ => {
                     return Err(Diagnostic::new(
@@ -500,13 +501,11 @@ where
                 }
             }
         }
-        Ok(NodePayload {
-            child_nodes,
-            properties,
-            end,
-        })
+        Ok(NodePayload { items, end })
     }
 
+    /// Special function to expect a semicolon, but recover in common circumstances
+    /// such as forgetting the semicolon after a closing brace ('}') char.
     fn expect_semicolon(&mut self) -> Result<Option<Token>> {
         let tok = self.lexer.peek();
         let Some(tok) = tok else {
@@ -657,8 +656,8 @@ where
 #[cfg(test)]
 mod test {
     use crate::dts::ast::{
-        Cell, DtsFile, Memreserve, Node, NodeName, NodePayload, Path, Property, PropertyValue,
-        Reference, WithToken,
+        Cell, DtsFile, Memreserve, Node, NodeItem, NodeName, NodePayload, Path, Property,
+        PropertyValue, Reference, WithToken,
     };
     use crate::dts::data::HasSource;
     use crate::dts::diagnostics::{Diagnostic, DiagnosticKind};
@@ -867,8 +866,7 @@ mod test {
                     label: None,
                     name: WithToken::new(NodeName::simple("/"), code.s1("/").token()),
                     payload: NodePayload {
-                        child_nodes: vec![],
-                        properties: vec![],
+                        items: vec![],
                         end: code.s1(";").token(),
                     },
                 }))],
@@ -895,8 +893,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![],
-                            properties: vec![],
+                            items: vec![],
                             end: code.s(";", 2).token(),
                         },
                     })),
@@ -928,7 +925,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![Arc::new(Node {
+                            items: vec![NodeItem::Node(Arc::new(Node {
                                 label: Some(WithToken::new(
                                     "my_node".into(),
                                     code.s1("my_node:").token(),
@@ -938,12 +935,10 @@ mod test {
                                     code.s1("sub_node@200").token(),
                                 ),
                                 payload: NodePayload {
-                                    child_nodes: vec![],
-                                    properties: vec![],
+                                    items: vec![],
                                     end: code.s(";", 2).token(),
                                 },
-                            })],
-                            properties: vec![],
+                            }))],
                             end: code.s(";", 3).token(),
                         },
                     })),
@@ -977,16 +972,15 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![Arc::new(Node {
+                            items: vec![NodeItem::Node(Arc::new(Node {
                                 label: None,
                                 name: WithToken::new(
                                     NodeName::with_address("pic", "10000000"),
                                     code.s1("pic@10000000").token(),
                                 ),
                                 payload: NodePayload {
-                                    child_nodes: vec![],
-                                    properties: vec![
-                                        Arc::new(Property {
+                                    items: vec![
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "phandle".into(),
@@ -996,8 +990,8 @@ mod test {
                                                 .s1("<1>")
                                                 .parse_ok_no_diagnostics(Parser::property_values),
                                             end: code.s(";", 2).token(),
-                                        }),
-                                        Arc::new(Property {
+                                        })),
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "interrupt-controller".into(),
@@ -1005,8 +999,8 @@ mod test {
                                             ),
                                             values: vec![],
                                             end: code.s(";", 3).token(),
-                                        }),
-                                        Arc::new(Property {
+                                        })),
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "reg".into(),
@@ -1016,12 +1010,11 @@ mod test {
                                                 .s1("<0x10000000 0x100>")
                                                 .parse_ok_no_diagnostics(Parser::property_values),
                                             end: code.s(";", 4).token(),
-                                        }),
+                                        })),
                                     ],
                                     end: code.s(";", 5).token(),
                                 },
-                            })],
-                            properties: vec![],
+                            }))],
                             end: code.s(";", 6).token(),
                         },
                     })),
@@ -1089,8 +1082,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 5).token()),
                         payload: NodePayload {
-                            child_nodes: vec![],
-                            properties: vec![],
+                            items: vec![],
                             end: code.s(";", 3).token(),
                         },
                     })),
@@ -1191,6 +1183,47 @@ mod test {
                 code.source(),
                 DiagnosticKind::Expected(vec![Semicolon]),
             )]
+        );
+    }
+
+    #[test]
+    fn delete_property_syntax() {
+        let code = Code::new(
+            "
+/ {
+    node-2 {
+        /delete-property/ node-2-pa;
+    };
+};
+        ",
+        );
+        let (primary, diag) = code.parse_ok(Parser::primary);
+
+        assert!(diag.is_empty());
+
+        assert_eq!(
+            primary,
+            Primary::Root(Arc::new(Node {
+                label: None,
+                name: WithToken::new(NodeName::simple("/"), code.s1("/").token()),
+                payload: NodePayload {
+                    items: vec![NodeItem::Node(Arc::new(Node {
+                        label: None,
+                        name: WithToken::new(NodeName::simple("node-2"), code.s1("node-2").token()),
+                        payload: NodePayload {
+                            end: code.s(";", 1).token(),
+                            items: vec![NodeItem::DeletedProperty(
+                                code.s1("/delete-property/").token(),
+                                WithToken::new(
+                                    "node-2-pa".to_string(),
+                                    code.s1("node-2-pa").token()
+                                )
+                            )]
+                        }
+                    }))],
+                    end: code.s(";", 2).token()
+                }
+            }))
         );
     }
 }

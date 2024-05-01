@@ -12,7 +12,7 @@ mod reader;
 mod test;
 mod visitor;
 
-pub use ast::{AnyDirective, CompilerDirective, Node, NodePayload, Primary};
+pub use ast::{AnyDirective, CompilerDirective, Node, NodeItem, NodePayload, Primary};
 pub use data::{FileType, HasSpan, Position, Span};
 pub use diagnostics::{Diagnostic, DiagnosticPrinter, SeverityLevel};
 pub use parser::Parser;

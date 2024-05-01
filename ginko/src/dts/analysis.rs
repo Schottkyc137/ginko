@@ -1,5 +1,5 @@
 use crate::dts::ast::{
-    AnyDirective, Cell, DtsFile, Include, Node, NodePayload, Path, Primary, Property,
+    AnyDirective, Cell, DtsFile, Include, Node, NodeItem, NodePayload, Path, Primary, Property,
     PropertyValue, Reference, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, HasSpan, Span};
@@ -281,11 +281,15 @@ impl Analysis {
     }
 
     fn analyze_node_payload(&mut self, ctx: &mut FileContext, payload: &NodePayload, path: Path) {
-        for prop in payload.properties.clone() {
-            self.analyze_property(ctx, prop);
-        }
-        for node in &payload.child_nodes {
-            self.analyze_node(ctx, node.clone(), path.with_child(node.name.item().clone()))
+        for item in &payload.items {
+            match item {
+                NodeItem::Property(property) => self.analyze_property(ctx, property.clone()),
+                NodeItem::Node(node) => {
+                    self.analyze_node(ctx, node.clone(), path.with_child(node.name.item().clone()))
+                }
+                NodeItem::DeletedNode(..) => {}
+                NodeItem::DeletedProperty(..) => {}
+            }
         }
     }
 

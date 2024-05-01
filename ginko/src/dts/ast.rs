@@ -345,20 +345,37 @@ pub struct Node {
 }
 
 #[derive(Eq, PartialEq, Debug)]
+pub enum NodeItem {
+    Property(Arc<Property>),
+    Node(Arc<Node>),
+    DeletedNode(Token, WithToken<NodeName>),
+    DeletedProperty(Token, WithToken<String>),
+}
+
+impl Display for NodeItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeItem::Property(property) => write!(f, "{}", property),
+            NodeItem::Node(node) => write!(f, "{}", node),
+            NodeItem::DeletedNode(_, node_name) => write!(f, "/delete-node/ {}", node_name),
+            NodeItem::DeletedProperty(_, property_name) => {
+                write!(f, "/delete-property/ {}", property_name)
+            }
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Debug)]
 pub struct NodePayload {
-    pub properties: Vec<Arc<Property>>,
-    pub child_nodes: Vec<Arc<Node>>,
+    pub items: Vec<NodeItem>,
     pub end: Token,
 }
 
 impl Display for NodePayload {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{{")?;
-        for prop in &self.properties {
-            writeln!(f, "    {prop}")?;
-        }
-        for child_node in &self.child_nodes {
-            writeln!(f, "    {child_node}")?;
+        for item in &self.items {
+            writeln!(f, "    {item}")?;
         }
         write!(f, "}};")
     }

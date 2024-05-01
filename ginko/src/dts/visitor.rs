@@ -2,7 +2,7 @@ use crate::dts::ast::{
     AnyDirective, Cell, DtsFile, Include, Node, NodePayload, Primary, Property, PropertyValue,
     Reference, ReferencedNode, WithToken,
 };
-use crate::dts::{HasSpan, Position};
+use crate::dts::{HasSpan, NodeItem, Position};
 
 #[allow(unused)]
 pub enum ItemAtCursor<'a> {
@@ -72,17 +72,23 @@ impl Node {
 
 impl NodePayload {
     pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
-        for node in &self.child_nodes {
+        for node in &self.items {
             if let Some(item) = node.item_at_cursor(cursor) {
                 return Some(item);
             }
         }
-        for prop in &self.properties {
-            if let Some(item) = prop.item_at_cursor(cursor) {
-                return Some(item);
-            }
-        }
         None
+    }
+}
+
+impl NodeItem {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+        match self {
+            NodeItem::Property(property) => property.item_at_cursor(cursor),
+            NodeItem::Node(node) => node.item_at_cursor(cursor),
+            NodeItem::DeletedNode(_, _) => None,
+            NodeItem::DeletedProperty(_, _) => None,
+        }
     }
 }
 
