@@ -290,58 +290,78 @@ mod tests {
     use crate::dts::diagnostics::DiagnosticKind;
     use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
-    use crate::dts::{ast, Diagnostic, FileType, HasSpan, ItemAtCursor, Project};
+    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
     use itertools::Itertools;
-    use std::io::{Seek, Write};
-    use tempfile::NamedTempFile;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+    use tempfile::tempdir;
 
-    fn tempfile(code: &str) -> (Code, NamedTempFile) {
-        let code = Code::new(code);
-        let mut file = NamedTempFile::new().expect("cannot create temporary file");
-        write!(file, "{}", code.code()).expect("write dont work");
-        file.rewind().expect("rewind dont work");
-        (code, file)
+    struct TempDir {
+        inner: tempfile::TempDir,
+    }
+
+    impl TempDir {
+        pub fn new() -> TempDir {
+            let dir = tempdir().expect("Cannot create temporary directory");
+            TempDir { inner: dir }
+        }
+
+        pub fn add_file(
+            &self,
+            name: impl AsRef<Path>,
+            content: impl AsRef<str>,
+        ) -> (Code, PathBuf) {
+            let code = Code::new(content.as_ref());
+            let file_path = self.inner.path().join(name);
+            let mut file = File::create(&file_path).expect("Cannot create temporary file");
+            write!(file, "{}", code.code()).expect("Cannot write to file");
+            (code, file_path)
+        }
+
+        pub fn new_file(&self, name: impl AsRef<Path>) -> (File, PathBuf) {
+            let file_path = self.inner.path().join(name);
+            (
+                File::create(&file_path).expect("Cannot create temporary file"),
+                file_path,
+            )
+        }
     }
 
     #[test]
     pub fn file_with_includes() {
         let mut project = Project::default();
-        let (code, file) = tempfile("");
-        project.add_file_with_text(
-            file.path().to_owned(),
-            code.code().to_owned(),
-            FileType::DtSourceInclude,
-        );
+        let temp_dir = TempDir::new();
+        let (_, path1) = temp_dir.add_file("test-include.dtsi", "");
+        project.add_file(path1.clone()).expect("Cannot add file");
 
-        let (code2, file2) = tempfile(
+        let (_, file2) = temp_dir.add_file(
+            "test-file.dts",
             format!(
                 r#"
 /dts-v1/;
 
 /include/ "{}"
 "#,
-                file.path().display()
-            )
-            .as_str(),
+                path1.display()
+            ),
         );
-        project.add_file_with_text(
-            file2.path().to_owned(),
-            code2.code().to_owned(),
-            FileType::DtSource,
-        );
-        assert!(project.get_file(file.path()).is_some());
-        assert!(project.get_file(file2.path()).is_some());
-        assert_eq!(project.get_diagnostics(file.path()).next(), None);
-        assert_eq!(project.get_diagnostics(file2.path()).next(), None);
-        assert!(project.get_root(file.path()).is_some());
-        assert!(project.get_analysis(file.path()).is_some());
-        assert!(project.get_analysis(file2.path()).is_some());
+        project.add_file(file2.clone()).expect("Cannot add file");
+        assert!(project.get_file(&path1).is_some());
+        assert!(project.get_file(&file2).is_some());
+        assert_eq!(project.get_diagnostics(&path1).next(), None);
+        assert_eq!(project.get_diagnostics(&file2).next(), None);
+        assert!(project.get_root(&path1).is_some());
+        assert!(project.get_analysis(&path1).is_some());
+        assert!(project.get_analysis(&file2).is_some());
     }
 
     #[test]
     pub fn cross_file_references() {
         let mut project = Project::default();
-        let (code1, file1) = tempfile(
+        let temp_dir = TempDir::new();
+        let (code1, file1) = temp_dir.add_file(
+            "test-include.dtsi",
             r#"
 / {
     some_node: node_a {
@@ -350,7 +370,8 @@ mod tests {
 };
 "#,
         );
-        let (code2, file2) = tempfile(
+        let (code2, file2) = temp_dir.add_file(
+            "test-file.dts",
             format!(
                 r#"
 /dts-v1/;
@@ -363,31 +384,30 @@ mod tests {
 &{{/node_a}} {{
 }};
 "#,
-                file1.path().display()
-            )
-            .as_str(),
+                file1.display()
+            ),
         );
 
         project
-            .add_file(file2.path().to_path_buf())
+            .add_file(file2.to_path_buf())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
 
         let substr = code2.s1("&some_node");
         let item = project
-            .find_at_pos(file2.path(), &substr.span().start())
+            .find_at_pos(&file2, &substr.span().start())
             .expect("Found no item");
         let ItemAtCursor::Reference(reference) = item else {
             panic!("Found non-node at cursor")
         };
         assert_eq!(reference, &ast::Reference::Label("some_node".to_owned()));
-        match project.get_node_position(file2.path(), reference) {
+        match project.get_node_position(&file2, reference) {
             Some((span, path)) => {
                 assert_eq!(span, code1.s1("node_a").span());
                 assert_eq!(
                     path.to_path_buf(),
-                    dunce::canonicalize(file1.path()).expect("File does not exist")
+                    dunce::canonicalize(&file1).expect("File does not exist")
                 );
             }
             None => panic!("References does not reference nodes"),
@@ -395,18 +415,18 @@ mod tests {
 
         let substr = code2.s1("&{/node_a}");
         let item = project
-            .find_at_pos(file2.path(), &substr.span().start())
+            .find_at_pos(&file2, &substr.span().start())
             .expect("Found no item");
         let ItemAtCursor::Reference(reference) = item else {
             panic!("Found non-node at cursor")
         };
         assert_eq!(reference, &ast::Reference::Path("/node_a".into()));
-        match project.get_node_position(file2.path(), reference) {
+        match project.get_node_position(&file2, reference) {
             Some((span, path)) => {
                 assert_eq!(span, code1.s1("node_a").span());
                 assert_eq!(
                     path.to_path_buf(),
-                    dunce::canonicalize(file1.path()).expect("File does not exist")
+                    dunce::canonicalize(&file1).expect("File does not exist")
                 );
             }
             None => panic!("References does not reference nodes"),
@@ -415,33 +435,28 @@ mod tests {
 
     #[test]
     pub fn cyclic_import_error() {
-        let mut file1 = NamedTempFile::new().expect("cannot create temporary file");
-        let mut file2 = NamedTempFile::new().expect("cannot create temporary file");
+        let temp_dir = TempDir::new();
+        let (mut file1, path1) = temp_dir.new_file("test.dts");
+        let (mut file2, path2) = temp_dir.new_file("test-include.dtsi");
 
-        write!(file2, r#"/dts-v1/; /include/ "{}""#, file1.path().display())
+        write!(file2, r#"/dts-v1/; /include/ "{}""#, path1.display())
             .expect("Cannot write to file 2");
-        write!(file1, r#"/include/ "{}""#, file2.path().display()).expect("Cannot write to file1");
+        write!(file1, r#"/include/ "{}""#, path2.display()).expect("Cannot write to file1");
 
         let mut project = Project::default();
-        project
-            .add_file(file2.path().to_path_buf())
-            .expect("Cannot add file to project");
+        project.add_file(path2).expect("Cannot add file to project");
     }
 
     #[test]
     pub fn file_with_multiple_includes() {
         let mut project = Project::default();
-        let (_, file1) = tempfile("");
-        project
-            .add_file(file1.path().to_path_buf())
-            .expect("Unexpected IO error");
-
-        let (_, file2) = tempfile("");
-        project
-            .add_file(file2.path().to_path_buf())
-            .expect("Unexpected IO error");
-
-        let (_, file3) = tempfile(
+        let temp_dir = TempDir::new();
+        let (_, file1) = temp_dir.add_file("test1.dtsi", "");
+        project.add_file(file1.clone()).expect("Cannot add file");
+        let (_, file2) = temp_dir.add_file("test2.dtsi", "");
+        project.add_file(file2.clone()).expect("Cannot add file");
+        let (_, file3) = temp_dir.add_file(
+            "test.dts",
             format!(
                 r#"
 /dts-v1/;
@@ -449,85 +464,86 @@ mod tests {
 /include/ "{}"
 /include/ "{}"
 "#,
-                file1.path().display(),
-                file2.path().display()
-            )
-            .as_str(),
+                file1.display(),
+                file2.display()
+            ),
         );
 
-        project
-            .add_file(file3.path().to_path_buf())
-            .expect("Unexpected IO error");
-
+        project.add_file(file3).expect("Unexpected IO error");
         project.assert_no_diagnostics();
     }
 
     #[test]
     pub fn file_with_nested_includes() {
         let mut project = Project::default();
-        let (_, file1) = tempfile("");
-        let (_, file2) = tempfile(format!(r#"/include/ "{}""#, file1.path().display()).as_str());
-        let (_, file3) = tempfile(
+        let temp_dir = TempDir::new();
+        let (_, file1) = temp_dir.add_file("test-include1.dtsi", "");
+        let (_, file2) = temp_dir.add_file(
+            "test-include2.dtsi",
+            format!(r#"/include/ "{}""#, file1.display()).as_str(),
+        );
+        let (_, file3) = temp_dir.add_file(
+            "test.dts",
             format!(
                 r#"
 /dts-v1/;
 
 /include/ "{}"
 "#,
-                file2.path().display()
-            )
-            .as_str(),
+                file2.display()
+            ),
         );
 
         project
-            .add_file(file3.path().to_path_buf())
+            .add_file(file3.clone())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
 
-        assert!(project.get_file(file1.path()).is_some());
-        assert!(project.get_file(file2.path()).is_some());
-        assert!(project.get_file(file3.path()).is_some());
+        assert!(project.get_file(&file1).is_some());
+        assert!(project.get_file(&file2).is_some());
+        assert!(project.get_file(&file3).is_some());
     }
 
     #[test]
     pub fn error_in_included_file_add_include_before_dts() {
         let mut project = Project::default();
-        let (code1, file1) = tempfile("/ {}"); // missing semicolon
-        let (code2, file2) = tempfile(
+        let temp_dir = TempDir::new();
+        let (code1, file1) = temp_dir.add_file("error.dtsi", "/ {}"); // missing semicolon
+        let (code2, file2) = temp_dir.add_file(
+            "test.dts",
             format!(
                 r#"
 /dts-v1/;
 
 /include/ "{}"
 "#,
-                file1.path().display()
-            )
-            .as_str(),
+                file1.display()
+            ),
         );
         project
-            .add_file(file2.path().to_path_buf())
+            .add_file(file2.clone())
             .expect("Cannot add file to project");
 
-        assert!(project.get_file(file1.path()).is_some());
-        assert!(project.get_file(file2.path()).is_some());
+        assert!(project.get_file(&file1).is_some());
+        assert!(project.get_file(&file2).is_some());
         assert_eq!(
-            project.get_diagnostics(file1.path()).cloned().collect_vec(),
+            project.get_diagnostics(&file1).cloned().collect_vec(),
             vec![Diagnostic::new(
                 code1.s1("}").end().as_span(),
-                dunce::canonicalize(file1.path())
+                dunce::canonicalize(&file1)
                     .expect("Cannot canonicalize")
                     .into(),
                 DiagnosticKind::Expected(vec![TokenKind::Semicolon])
             )]
         );
         assert_eq!(
-            project.get_diagnostics(file2.path()).cloned().collect_vec(),
+            project.get_diagnostics(&file2).cloned().collect_vec(),
             vec![Diagnostic::new(
                 code2
-                    .s1(format!(r#"/include/ "{}""#, file1.path().display()).as_str())
+                    .s1(format!(r#"/include/ "{}""#, file1.display()).as_str())
                     .span(),
-                dunce::canonicalize(file2.path())
+                dunce::canonicalize(file2)
                     .expect("Cannot canonicalize")
                     .into(),
                 DiagnosticKind::ErrorsInInclude
