@@ -408,6 +408,31 @@ where
         Ok(values)
     }
 
+    pub fn property_name(&mut self) -> Result<WithToken<String>> {
+        let tok = self.lexer.expect_next()?;
+        if let TokenKind::Ident(value) = tok.kind.clone() {
+            self.check_is_property_name(tok.span(), &value);
+            return Ok(WithToken::new(value, tok));
+        }
+        Err(Diagnostic::from_token(
+            tok,
+            Expected(vec![TokenKind::Ident("".to_string())]),
+        ))
+    }
+
+    pub fn node_name(&mut self) -> Result<WithToken<NodeName>> {
+        let tok = self.lexer.expect_next()?;
+        if let TokenKind::Ident(value) = tok.kind.clone() {
+            let node_name = NodeName::from(value);
+            self.check_is_node_name(tok.span(), &node_name);
+            return Ok(WithToken::new(node_name, tok));
+        }
+        Err(Diagnostic::from_token(
+            tok,
+            Expected(vec![TokenKind::Ident("".to_string())]),
+        ))
+    }
+
     pub fn node_payload(&mut self) -> Result<NodePayload> {
         let end: Token;
         self.lexer.expect(TokenKind::OpenBrace)?;
@@ -415,6 +440,18 @@ where
         let mut node_discovered = false;
         loop {
             let tok = self.lexer.expect_next()?;
+            if tok.kind == TokenKind::Directive(CompilerDirective::DeleteNode) {
+                let node_name = self.node_name()?;
+                self.expect_semicolon()?;
+                items.push(NodeItem::DeletedNode(tok, node_name));
+                continue;
+            }
+            if tok.kind == TokenKind::Directive(CompilerDirective::DeleteProperty) {
+                let property_name = self.property_name()?;
+                self.expect_semicolon()?;
+                items.push(NodeItem::DeletedProperty(tok, property_name));
+                continue;
+            }
             let (tok, label) = match &tok.kind {
                 TokenKind::Label(string) => {
                     self.check_is_label(tok.span(), string);
@@ -1211,7 +1248,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("node-2"), code.s1("node-2").token()),
                         payload: NodePayload {
-                            end: code.s(";", 1).token(),
+                            end: code.s(";", 2).token(),
                             items: vec![NodeItem::DeletedProperty(
                                 code.s1("/delete-property/").token(),
                                 WithToken::new(
@@ -1221,7 +1258,7 @@ mod test {
                             )]
                         }
                     }))],
-                    end: code.s(";", 2).token()
+                    end: code.s(";", 3).token()
                 }
             }))
         );
