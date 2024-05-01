@@ -16,8 +16,12 @@ fn check_no_diagnostics(project: &Project) {
 #[test]
 fn no_diagnostics_for_file_with_delete_node() {
     let mut project = Project::default();
-    let mut file_name = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut file_name = path.clone();
     file_name.push("tests/test_delete_syntax_A.dts");
+    project.add_file(file_name).expect("File should be present");
+    let mut file_name = path.clone();
+    file_name.push("tests/test_delete_syntax_B.dts");
     project.add_file(file_name).expect("File should be present");
     check_no_diagnostics(&project);
 }

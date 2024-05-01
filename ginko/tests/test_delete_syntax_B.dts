@@ -1,0 +1,52 @@
+/dts-v1/;
+
+/ {
+
+	node-1@1 {
+		node-1-pa = "abc";
+	};
+
+	node-2@2 {
+		node-2-pa = "def";
+	};
+
+
+	node-3@3 {
+		node-3-pa = "ghi";
+		node-3-pb = "jkl";
+	};
+
+	node-4@4 {
+		node-4-pa = "mno";
+	};
+
+	node_5_label: node-5@5 {
+		node-5-pa = "pqr";
+	};
+
+};
+
+/ {
+
+	node-2@2 {
+		/delete-property/ node-2-pa;
+	};
+
+	node-3@3 {
+		/delete-property/ node-3-pa;
+	};
+
+	/delete-node/ node-4@4;
+
+};
+
+/delete-node/ &node_5_label;
+
+/ {
+
+	node-4@4 {
+		node-4-pc = "stu";
+		node-4-pd = "vwx";
+	};
+
+};

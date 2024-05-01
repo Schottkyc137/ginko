@@ -31,6 +31,7 @@ impl Primary {
             Primary::Root(root) => root.item_at_cursor(cursor),
             Primary::ReferencedNode(node) => node.item_at_cursor(cursor),
             Primary::CStyleInclude(_) => None,
+            Primary::DeletedNode(..) => None,
         }
     }
 }

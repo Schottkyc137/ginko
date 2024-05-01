@@ -602,6 +602,18 @@ where
         })
     }
 
+    pub fn parse_reference(&mut self) -> Result<WithToken<crate::dts::ast::Reference>> {
+        let token = self.lexer.expect_next()?;
+        if let TokenKind::Ref(reference) = token.kind.clone() {
+            Ok(self.reference(token, &reference))
+        } else {
+            Err(Diagnostic::from_token(
+                token,
+                Expected(vec![TokenKind::Ref(Reference::Simple("".to_string()))]),
+            ))
+        }
+    }
+
     pub fn primary(&mut self) -> Result<Primary> {
         let token = self.lexer.expect_next()?;
         match &token.kind {
@@ -676,12 +688,18 @@ where
                     payload: root_payload,
                 }))
             }
+            TokenKind::Directive(CompilerDirective::DeleteNode) => {
+                let reference = self.parse_reference()?;
+                self.expect_semicolon()?;
+                Ok(Primary::DeletedNode(token, reference))
+            }
             _ => Err(Diagnostic::from_token(
                 token,
                 Expected(vec![
                     TokenKind::Directive(CompilerDirective::DTSVersionHeader),
                     TokenKind::Directive(CompilerDirective::MemReserve),
                     TokenKind::Directive(CompilerDirective::Include),
+                    TokenKind::Directive(CompilerDirective::DeleteNode),
                     TokenKind::Slash,
                     TokenKind::Ref(Reference::Simple("".to_string())),
                 ]),
@@ -1234,9 +1252,7 @@ mod test {
 };
         ",
         );
-        let (primary, diag) = code.parse_ok(Parser::primary);
-
-        assert!(diag.is_empty());
+        let primary = code.parse_ok_no_diagnostics(Parser::primary);
 
         assert_eq!(
             primary,
@@ -1261,6 +1277,43 @@ mod test {
                     end: code.s(";", 3).token()
                 }
             }))
+        );
+    }
+
+    #[test]
+    pub fn delete_node_primary() {
+        let code = Code::new(
+            "
+/dts-v1/;
+
+/delete-node/ &some_node;
+/delete-node/ &{/path/to/node};
+        ",
+        );
+        let file = code.parse_ok_no_diagnostics(Parser::file);
+
+        assert_eq!(
+            file,
+            DtsFile {
+                source: code.source(),
+                elements: vec![
+                    Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
+                    Primary::DeletedNode(
+                        code.s("/delete-node/", 1).token(),
+                        WithToken::new(
+                            Reference::Label("some_node".to_string()),
+                            code.s1("&some_node").token()
+                        )
+                    ),
+                    Primary::DeletedNode(
+                        code.s("/delete-node/", 2).token(),
+                        WithToken::new(
+                            Reference::Path("/path/to/node".into()),
+                            code.s1("&{/path/to/node}").token()
+                        )
+                    )
+                ]
+            }
         );
     }
 }
