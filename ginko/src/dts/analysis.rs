@@ -71,7 +71,6 @@ pub struct FileContext<'a> {
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
     file_type: FileType,
-    includes: HashMap<PathBuf, AnalysisContext>,
     is_plugin: bool,
     first_non_include: bool,
     dts_header_seen: bool,
@@ -83,24 +82,9 @@ impl FileContext<'_> {
     }
 
     pub fn resolve_reference(&self, label: &String) -> Option<(&Path, &Arc<Node>)> {
-        if let Some(node) = self
-            .flat_nodes
+        self.flat_nodes
             .iter()
             .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label))
-        {
-            Some(node)
-        } else {
-            for result in self.includes.values() {
-                if let Some(reference) = result
-                    .flat_nodes
-                    .iter()
-                    .find(|(_, value)| value.label.as_ref().map(|node| node.item()) == Some(label))
-                {
-                    return Some(reference);
-                }
-            }
-            None
-        }
     }
 }
 
@@ -129,7 +113,6 @@ impl Analysis {
             diagnostics: Vec::default(),
             flat_nodes: HashMap::default(),
             unresolved_references: Vec::default(),
-            includes: HashMap::default(),
             project,
             is_plugin: file_type == FileType::DtSourceOverlay,
             dts_header_seen: false,

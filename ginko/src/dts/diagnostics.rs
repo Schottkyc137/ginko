@@ -188,10 +188,10 @@ impl Display for DiagnosticKind {
                 write!(f, "{msg}")
             }
             DiagnosticKind::ErrorsInInclude => {
-                write!(f, "Included file contains non-recoverable errors")
+                write!(f, "Included file contains errors")
             }
             DiagnosticKind::CyclicDependencyError(str) => {
-                write!(f, "Cyclic import: {str}")
+                write!(f, "Cyclic include: {str}")
             }
         }
     }

@@ -293,7 +293,6 @@ mod tests {
     use crate::dts::{ast, Diagnostic, FileType, HasSpan, ItemAtCursor, Project};
     use itertools::Itertools;
     use std::io::{Seek, Write};
-    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     fn tempfile(code: &str) -> (Code, NamedTempFile) {
@@ -492,42 +491,49 @@ mod tests {
     }
 
     #[test]
-    // We don't push an 'errors in include' anymore. Maybe later.
-    #[ignore]
     pub fn error_in_included_file_add_include_before_dts() {
         let mut project = Project::default();
-        let code = Code::new("/ {}"); // missing semicolon
-        let path: PathBuf = "path/to/file.dtsi".into();
-        project.add_file_with_text(
-            path.clone(),
-            code.code().to_owned(),
-            FileType::DtSourceInclude,
-        );
-        let code2 = Code::new(
-            r#"
+        let (code1, file1) = tempfile("/ {}"); // missing semicolon
+        let (code2, file2) = tempfile(
+            format!(
+                r#"
 /dts-v1/;
 
-/include/ "path/to/file.dtsi"
+/include/ "{}"
 "#,
+                file1.path().display()
+            )
+            .as_str(),
         );
-        let path2: PathBuf = "path/to/other/file.dts".into();
-        project.add_file_with_text(path2.clone(), code2.code().to_owned(), FileType::DtSource);
+        project
+            .add_file(file2.path().to_path_buf())
+            .expect("Cannot add file to project");
 
-        assert!(project.get_file(&path).is_some());
-        assert!(project.get_file(&path2).is_some());
+        assert!(project.get_file(file1.path()).is_some());
+        assert!(project.get_file(file2.path()).is_some());
         assert_eq!(
-            project.get_diagnostics(&path).cloned().collect_vec(),
+            project.get_diagnostics(file1.path()).cloned().collect_vec(),
             vec![Diagnostic::new(
-                code.s1("}").end().as_span(),
-                path.clone().into(),
+                code1.s1("}").end().as_span(),
+                file1
+                    .path()
+                    .canonicalize()
+                    .expect("Cannot canonicalize")
+                    .into(),
                 DiagnosticKind::Expected(vec![TokenKind::Semicolon])
             )]
         );
         assert_eq!(
-            project.get_diagnostics(&path2).cloned().collect_vec(),
+            project.get_diagnostics(file2.path()).cloned().collect_vec(),
             vec![Diagnostic::new(
-                code2.s1(r#"/include/ "path/to/file.dtsi""#).span(),
-                path2.clone().into(),
+                code2
+                    .s1(format!(r#"/include/ "{}""#, file1.path().display()).as_str())
+                    .span(),
+                file2
+                    .path()
+                    .canonicalize()
+                    .expect("Cannot canonicalize")
+                    .into(),
                 DiagnosticKind::ErrorsInInclude
             )]
         );
