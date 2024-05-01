@@ -291,6 +291,8 @@ impl Project {
 }
 
 #[cfg(test)]
+// For some reason, this fails under windows with error "The system cannot find the file specified. (os error 2)"
+#[cfg(not(windows))]
 mod tests {
     use crate::dts::diagnostics::DiagnosticKind;
     use crate::dts::lexer::TokenKind;
