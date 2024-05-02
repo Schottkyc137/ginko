@@ -1,8 +1,7 @@
 use crate::dts::ast::CompilerDirective;
 use crate::dts::data::{HasSource, Position, Span};
-use crate::dts::diagnostics::DiagnosticKind;
-use crate::dts::reader::ByteReader;
-use crate::dts::reader::Reader;
+use crate::dts::error_codes::ErrorCode;
+use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{Diagnostic, HasSpan};
 use std::path::Path;
 use std::sync::Arc;
@@ -487,7 +486,8 @@ where
             None => Err(Diagnostic::new(
                 eof_pos.as_span(),
                 source,
-                DiagnosticKind::UnexpectedEOF,
+                ErrorCode::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(tok) => Ok(tok),
         }
@@ -500,16 +500,17 @@ where
             None => Err(Diagnostic::new(
                 prev_pos.as_span(),
                 self.source(),
-                DiagnosticKind::UnexpectedEOF,
+                ErrorCode::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(token) => {
                 if token.kind == kind {
                     Ok(token)
                 } else {
-                    Err(Diagnostic::new(
+                    Err(Diagnostic::expected(
                         prev_pos.as_span(),
                         self.source(),
-                        DiagnosticKind::Expected(vec![token.kind]),
+                        &[token.kind],
                     ))
                 }
             }
@@ -523,7 +524,8 @@ where
             None => Err(Diagnostic::new(
                 eof_pos.as_span(),
                 self.source(),
-                DiagnosticKind::UnexpectedEOF,
+                ErrorCode::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(token) => Ok(token),
         }

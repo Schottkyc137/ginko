@@ -78,6 +78,7 @@ impl Display for Position {
     }
 }
 
+// Better debug information for positions
 impl Debug for Position {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self}")
@@ -106,7 +107,7 @@ impl Position {
 
     /// Returns a `Span` that is formed by going from this position to another position.
     ///
-    /// # Exceptions
+    /// # Panics
     /// The given position may not be greater than this position.
     /// If this is the case in debug builds, this function will panic. However, since most
     /// applications can gracefully handle this condition, this function will not panic
@@ -200,6 +201,7 @@ impl Span {
     }
 }
 
+/// Trait for elements that have source code information associated.
 pub trait HasSpan {
     fn span(&self) -> Span;
 
