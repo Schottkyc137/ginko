@@ -3,7 +3,7 @@ use crate::dts::ast::{
     PropertyValue, Reference, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, HasSpan, Span};
-use crate::dts::diagnostics::DiagnosticKind;
+use crate::dts::error_codes::ErrorCode;
 use crate::dts::import_guard::ImportGuard;
 use crate::dts::{Diagnostic, FileType, Position, Project};
 use std::collections::HashMap;
@@ -125,13 +125,13 @@ impl Analysis {
                         if ctx.dts_header_seen {
                             ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
-                                DiagnosticKind::DuplicateDirective,
+                                ErrorCode::DuplicateDirective,
                                 "Duplicate dts-v1 version header",
                             ))
                         } else if ctx.first_non_include {
                             ctx.add_diagnostic(Diagnostic::from_token(
                                 tok.clone(),
-                                DiagnosticKind::MisplacedDtsHeader,
+                                ErrorCode::MisplacedDtsHeader,
                                 "dts-v1 header must be placed on top of the file",
                             ))
                         }
@@ -159,7 +159,7 @@ impl Analysis {
             ctx.add_diagnostic(Diagnostic::new(
                 Position::zero().as_span(),
                 file.source(),
-                DiagnosticKind::NonDtsV1,
+                ErrorCode::NonDtsV1,
                 "Files without the '/dts-v1/' Header are not supported",
             ))
         }
@@ -193,7 +193,7 @@ impl Analysis {
             ctx.add_diagnostic(Diagnostic::new(
                 include.span(),
                 include.source(),
-                DiagnosticKind::ErrorsInInclude,
+                ErrorCode::ErrorsInInclude,
                 "Included file contains errors",
             ));
         }
@@ -211,7 +211,7 @@ impl Analysis {
             ctx.add_diagnostic(Diagnostic::new(
                 span,
                 source,
-                DiagnosticKind::UnresolvedReference,
+                ErrorCode::UnresolvedReference,
                 "Reference cannot be resolved",
             ));
         }
@@ -294,7 +294,7 @@ impl Analysis {
                 ctx.add_diagnostic(Diagnostic::new(
                     value.span(),
                     value.source(),
-                    DiagnosticKind::NonStringInCompatible,
+                    ErrorCode::NonStringInCompatible,
                     "compatible property should only contain strings",
                 ))
             }
@@ -356,7 +356,7 @@ impl Analysis {
 mod test {
     use crate::dts::ast::Path;
     use crate::dts::data::{HasSource, HasSpan, Position};
-    use crate::dts::diagnostics::DiagnosticKind;
+    use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
     use crate::dts::Diagnostic;
     use assert_unordered::assert_eq_unordered;
@@ -383,25 +383,25 @@ mod test {
                 Diagnostic::new(
                     Position::new(8, 21).as_char_span(),
                     code.source(),
-                    DiagnosticKind::IllegalChar,
+                    ErrorCode::IllegalChar,
                     "Illegal char '#' in node name"
                 ),
                 Diagnostic::new(
                     Position::new(3, 8).as_char_span(),
                     code.source(),
-                    DiagnosticKind::IllegalChar,
+                    ErrorCode::IllegalChar,
                     "Illegal char '?' in label"
                 ),
                 Diagnostic::new(
                     Position::new(4, 4).char_to(46),
                     code.source(),
-                    DiagnosticKind::NameTooLong,
+                    ErrorCode::NameTooLong,
                     "label should only have 31 characters but has 41 characters"
                 ),
                 Diagnostic::new(
                     Position::new(6, 19).as_char_span(),
                     code.source(),
-                    DiagnosticKind::IllegalChar,
+                    ErrorCode::IllegalChar,
                     "Illegal char '#' in label"
                 ),
             ]
@@ -437,13 +437,13 @@ mod test {
                 Diagnostic::new(
                     code.s1("&node3").span(),
                     code.source(),
-                    DiagnosticKind::UnresolvedReference,
+                    ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 ),
                 Diagnostic::new(
                     code.s1("&{/node3}").span(),
                     code.source(),
-                    DiagnosticKind::UnresolvedReference,
+                    ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 ),
             ]
@@ -534,7 +534,7 @@ mod test {
             vec![Diagnostic::new(
                 Position::zero().as_span(),
                 code.source(),
-                DiagnosticKind::NonDtsV1,
+                ErrorCode::NonDtsV1,
                 "Files without the '/dts-v1/' Header are not supported"
             )]
         )
@@ -567,13 +567,13 @@ mod test {
                 Diagnostic::new(
                     code.s1("&some_other_node").span(),
                     code.source(),
-                    DiagnosticKind::UnresolvedReference,
+                    ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 ),
                 Diagnostic::new(
                     code.s1("&{/some_other_node}").span(),
                     code.source(),
-                    DiagnosticKind::UnresolvedReference,
+                    ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 )
             ]

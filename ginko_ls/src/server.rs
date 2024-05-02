@@ -1,6 +1,6 @@
 use ginko::dts::{
-    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project,
-    SeverityLevel, Span,
+    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project, Severity,
+    Span,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -24,11 +24,11 @@ impl Backend {
     }
 }
 
-fn lsp_severity_from_severity(severity_level: SeverityLevel) -> DiagnosticSeverity {
+fn lsp_severity_from_severity(severity_level: Severity) -> DiagnosticSeverity {
     match severity_level {
-        SeverityLevel::Error => DiagnosticSeverity::ERROR,
-        SeverityLevel::Warning => DiagnosticSeverity::WARNING,
-        SeverityLevel::Hint => DiagnosticSeverity::HINT,
+        Severity::Error => DiagnosticSeverity::ERROR,
+        Severity::Warning => DiagnosticSeverity::WARNING,
+        Severity::Hint => DiagnosticSeverity::HINT,
     }
 }
 
@@ -37,7 +37,9 @@ fn lsp_diag_from_diag(diagnostic: &ginko::dts::Diagnostic) -> Diagnostic {
     Diagnostic {
         range: lsp_range_from_span(span),
         message: diagnostic.message.clone(),
+        code: Some(NumberOrString::String(diagnostic.kind.as_ref().to_string())),
         severity: Some(lsp_severity_from_severity(diagnostic.default_severity())),
+        source: Some("ginko_ls".to_string()),
         ..Default::default()
     }
 }

@@ -4,7 +4,7 @@ use crate::dts::data::HasSource;
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Severity, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::empty;
@@ -62,7 +62,7 @@ impl ProjectFile {
 
     pub fn has_errors(&self) -> bool {
         self.diagnostics()
-            .any(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
+            .any(|diagnostic| diagnostic.default_severity() == Severity::Error)
     }
 
     pub fn source(&self) -> &String {
@@ -287,7 +287,7 @@ impl Project {
 // For some reason, this fails under windows with error "The system cannot find the file specified. (os error 2)"
 #[cfg(not(windows))]
 mod tests {
-    use crate::dts::diagnostics::DiagnosticKind;
+    use crate::dts::error_codes::ErrorCode;
     use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
     use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
@@ -457,7 +457,7 @@ mod tests {
         assert_matches!(
             &diag[..],
             &[Diagnostic {
-                kind: DiagnosticKind::CyclicDependencyError,
+                kind: ErrorCode::CyclicDependencyError,
                 ..
             }]
         );
@@ -562,7 +562,7 @@ mod tests {
                 dunce::canonicalize(file2)
                     .expect("Cannot canonicalize")
                     .into(),
-                DiagnosticKind::ErrorsInInclude,
+                ErrorCode::ErrorsInInclude,
                 "Included file contains errors"
             )]
         );

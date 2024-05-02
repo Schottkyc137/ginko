@@ -3,7 +3,8 @@ use crate::dts::ast::{
     Property, PropertyValue, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, Span};
-use crate::dts::diagnostics::{Diagnostic, DiagnosticKind, NameContext};
+use crate::dts::diagnostics::{Diagnostic, NameContext};
+use crate::dts::error_codes::ErrorCode;
 use crate::dts::lexer::{Lexer, PeekingLexer, Reference, Token, TokenKind};
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::{CompilerDirective, HasSpan};
@@ -70,14 +71,14 @@ where
             self.diagnostics.push(Diagnostic::new(
                 span.start().offset_by_char(pos as i32).as_char_span(),
                 self.lexer.source(),
-                DiagnosticKind::IllegalChar,
+                ErrorCode::IllegalChar,
                 format!("Illegal char '{ch}' in {name_context}"),
             ));
         } else if str.len() > 31 {
             self.diagnostics.push(Diagnostic::new(
                 span,
                 self.lexer.source(),
-                DiagnosticKind::NameTooLong,
+                ErrorCode::NameTooLong,
                 format!(
                     "{name_context} should only have 31 characters but has {} characters",
                     str.len()
@@ -87,14 +88,14 @@ where
             self.diagnostics.push(Diagnostic::new(
                 span,
                 self.lexer.source(),
-                DiagnosticKind::ExpectedName,
+                ErrorCode::ExpectedName,
                 format!("Expected {name_context}"),
             ))
         } else if !str.starts_with(starting_chars) {
             self.diagnostics.push(Diagnostic::new(
                 span,
                 self.lexer.source(),
-                DiagnosticKind::IllegalStart,
+                ErrorCode::IllegalStart,
                 format!(
                     "{name_context} may not start with {}",
                     str.chars().next().unwrap()
@@ -159,7 +160,7 @@ where
                 if path.is_empty() {
                     self.diagnostics.push(Diagnostic::from_token(
                         token.clone(),
-                        DiagnosticKind::PathCannotBeEmpty,
+                        ErrorCode::PathCannotBeEmpty,
                         "Path cannot be empty",
                     ));
                 }
@@ -205,7 +206,7 @@ where
                 if self.lexer.peek().is_none() {
                     self.diagnostics.push(Diagnostic::from_token(
                         tok,
-                        DiagnosticKind::UnbalancedParentheses,
+                        ErrorCode::UnbalancedParentheses,
                         "Unbalanced parentheses",
                     ));
                 }
@@ -263,7 +264,7 @@ where
                 if raw_str.len() % 2 != 0 {
                     self.diagnostics.push(Diagnostic::from_token(
                         tok.clone(),
-                        DiagnosticKind::OddNumberOfBytestringElements,
+                        ErrorCode::OddNumberOfBytestringElements,
                         "Number of elements in byte string must be even",
                     ));
                     return Ok(WithToken::new(vec![], tok));
@@ -490,7 +491,7 @@ where
                         self.diagnostics.push(Diagnostic::new(
                             prop.span(),
                             self.lexer.source(),
-                            DiagnosticKind::PropertyAfterNode,
+                            ErrorCode::PropertyAfterNode,
                             "Properties must be placed before nodes",
                         ))
                     }
@@ -504,7 +505,7 @@ where
                         self.diagnostics.push(Diagnostic::new(
                             prop.span(),
                             self.lexer.source(),
-                            DiagnosticKind::PropertyAfterNode,
+                            ErrorCode::PropertyAfterNode,
                             "Properties must be placed before nodes",
                         ))
                     }
@@ -633,7 +634,7 @@ where
                     let tok = self.lexer.expect_next()?;
                     self.diagnostics.push(Diagnostic::from_token(
                         tok,
-                        DiagnosticKind::ParserError,
+                        ErrorCode::ParserError,
                         "Include directive must not end with a semicolon",
                     ))
                 }
@@ -682,7 +683,8 @@ mod test {
         Reference, WithToken,
     };
     use crate::dts::data::HasSource;
-    use crate::dts::diagnostics::{Diagnostic, DiagnosticKind};
+    use crate::dts::diagnostics::Diagnostic;
+    use crate::dts::error_codes::ErrorCode;
     use crate::dts::lexer::TokenKind::{Equal, OpenBrace, Semicolon};
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
@@ -1071,13 +1073,13 @@ mod test {
                 Diagnostic::new(
                     code.s1("bar;").span(),
                     code.source(),
-                    DiagnosticKind::PropertyAfterNode,
+                    ErrorCode::PropertyAfterNode,
                     "Properties must be placed before nodes"
                 ),
                 Diagnostic::new(
                     code.s1("some_prop = <0x1>;").span(),
                     code.source(),
-                    DiagnosticKind::PropertyAfterNode,
+                    ErrorCode::PropertyAfterNode,
                     "Properties must be placed before nodes"
                 ),
             ]
