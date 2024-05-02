@@ -1,7 +1,6 @@
 use crate::dts::analysis::{Analysis, AnalysisContext};
 use crate::dts::ast::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
-use crate::dts::diagnostics::DiagnosticKind;
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
@@ -257,11 +256,7 @@ impl Project {
         let canonicalized_path = match include.path() {
             Ok(path) => path,
             Err(err) => {
-                diagnostics.push(Diagnostic::new(
-                    include.span(),
-                    include.source(),
-                    DiagnosticKind::from(err),
-                ));
+                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err));
                 return;
             }
         };
@@ -274,11 +269,9 @@ impl Project {
                 let typ = FileType::from(canonicalized_path.as_path());
                 self.parse_file(canonicalized_path, text, typ);
             }
-            Err(err) => diagnostics.push(Diagnostic::new(
-                include.span(),
-                include.source(),
-                DiagnosticKind::from(err),
-            )),
+            Err(err) => {
+                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err))
+            }
         }
     }
 
@@ -464,7 +457,7 @@ mod tests {
         assert_matches!(
             &diag[..],
             &[Diagnostic {
-                kind: DiagnosticKind::CyclicDependencyError(_),
+                kind: DiagnosticKind::CyclicDependencyError,
                 ..
             }]
         );
@@ -552,12 +545,12 @@ mod tests {
         assert!(project.get_file(&file2).is_some());
         assert_eq!(
             project.get_diagnostics(&file1).cloned().collect_vec(),
-            vec![Diagnostic::new(
+            vec![Diagnostic::expected(
                 code1.s1("}").end().as_span(),
                 dunce::canonicalize(&file1)
                     .expect("Cannot canonicalize")
                     .into(),
-                DiagnosticKind::Expected(vec![TokenKind::Semicolon])
+                &[TokenKind::Semicolon]
             )]
         );
         assert_eq!(
@@ -569,7 +562,8 @@ mod tests {
                 dunce::canonicalize(file2)
                     .expect("Cannot canonicalize")
                     .into(),
-                DiagnosticKind::ErrorsInInclude
+                DiagnosticKind::ErrorsInInclude,
+                "Included file contains errors"
             )]
         );
     }

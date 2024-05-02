@@ -1,10 +1,9 @@
-use crate::dts::ast::CompilerDirective;
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
-use std::io::Error;
+use std::io;
 use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,20 +13,19 @@ pub enum NameContext {
     Label,
     NodeName,
     PropertyName,
-    UnitAddress,
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum DiagnosticKind {
     UnexpectedEOF,
-    Expected(Vec<TokenKind>),
-    ExpectedName(NameContext),
+    Expected,
+    ExpectedName,
     OddNumberOfBytestringElements,
-    IntError(ParseIntError),
+    IntError,
     NonDtsV1,
-    NameTooLong(usize, NameContext),
-    IllegalChar(char, NameContext),
-    IllegalStart(char, NameContext),
+    NameTooLong,
+    IllegalChar,
+    IllegalStart,
     UnresolvedReference,
     PropertyReferencedByNode,
     NonStringInCompatible,
@@ -35,11 +33,11 @@ pub enum DiagnosticKind {
     PropertyAfterNode,
     UnbalancedParentheses,
     MisplacedDtsHeader,
-    DuplicateDirective(CompilerDirective),
-    ParserError(String),
-    IOError(String),
+    DuplicateDirective,
+    ParserError,
+    IOError,
     ErrorsInInclude,
-    CyclicDependencyError(String),
+    CyclicDependencyError,
 }
 
 #[derive(Eq, PartialEq)]
@@ -64,26 +62,26 @@ impl DiagnosticKind {
     pub fn default_severity_level(&self) -> SeverityLevel {
         match self {
             DiagnosticKind::UnexpectedEOF => SeverityLevel::Error,
-            DiagnosticKind::Expected(_) => SeverityLevel::Error,
-            DiagnosticKind::ExpectedName(_) => SeverityLevel::Error,
+            DiagnosticKind::Expected => SeverityLevel::Error,
+            DiagnosticKind::ExpectedName => SeverityLevel::Error,
             DiagnosticKind::OddNumberOfBytestringElements => SeverityLevel::Error,
-            DiagnosticKind::IntError(_) => SeverityLevel::Error,
+            DiagnosticKind::IntError => SeverityLevel::Error,
             DiagnosticKind::NonDtsV1 => SeverityLevel::Error,
-            DiagnosticKind::NameTooLong(_, _) => SeverityLevel::Warning,
-            DiagnosticKind::IllegalChar(_, _) => SeverityLevel::Error,
-            DiagnosticKind::IllegalStart(_, _) => SeverityLevel::Error,
+            DiagnosticKind::NameTooLong => SeverityLevel::Warning,
+            DiagnosticKind::IllegalChar => SeverityLevel::Error,
+            DiagnosticKind::IllegalStart => SeverityLevel::Error,
             DiagnosticKind::PathCannotBeEmpty => SeverityLevel::Error,
             DiagnosticKind::PropertyAfterNode => SeverityLevel::Error,
-            DiagnosticKind::DuplicateDirective(_) => SeverityLevel::Warning,
+            DiagnosticKind::DuplicateDirective => SeverityLevel::Warning,
             DiagnosticKind::UnbalancedParentheses => SeverityLevel::Error,
             DiagnosticKind::MisplacedDtsHeader => SeverityLevel::Error,
             DiagnosticKind::NonStringInCompatible => SeverityLevel::Warning,
             DiagnosticKind::UnresolvedReference => SeverityLevel::Error,
             DiagnosticKind::PropertyReferencedByNode => SeverityLevel::Error,
-            DiagnosticKind::ParserError(_) => SeverityLevel::Error,
-            DiagnosticKind::IOError(_) => SeverityLevel::Error,
+            DiagnosticKind::ParserError => SeverityLevel::Error,
+            DiagnosticKind::IOError => SeverityLevel::Error,
             DiagnosticKind::ErrorsInInclude => SeverityLevel::Error,
-            DiagnosticKind::CyclicDependencyError(..) => SeverityLevel::Error,
+            DiagnosticKind::CyclicDependencyError => SeverityLevel::Error,
         }
     }
 }
@@ -94,7 +92,6 @@ impl Display for NameContext {
             NameContext::Label => write!(f, "label"),
             NameContext::NodeName => write!(f, "node name"),
             NameContext::PropertyName => write!(f, "property"),
-            NameContext::UnitAddress => write!(f, "unit address"),
         }
     }
 }
@@ -126,7 +123,7 @@ impl Display for TokenKind {
     }
 }
 
-impl Display for DiagnosticKind {
+/* impl Display for DiagnosticKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DiagnosticKind::NonDtsV1 => {
@@ -218,30 +215,80 @@ impl From<ParseIntError> for DiagnosticKind {
     fn from(value: ParseIntError) -> Self {
         DiagnosticKind::IntError(value)
     }
-}
+} */
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Diagnostic {
     pub kind: DiagnosticKind,
     pub span: Span,
     pub source: Arc<Path>,
+    pub message: String,
 }
 
 impl Diagnostic {
-    pub fn new(span: Span, source: Arc<Path>, kind: impl Into<DiagnosticKind>) -> Diagnostic {
+    pub fn new(
+        span: Span,
+        source: Arc<Path>,
+        kind: DiagnosticKind,
+        message: impl Into<String>,
+    ) -> Diagnostic {
         Diagnostic {
-            kind: kind.into(),
+            kind,
             source,
             span,
+            message: message.into(),
         }
     }
 
-    pub fn from_token(token: Token, kind: impl Into<DiagnosticKind>) -> Diagnostic {
+    pub fn io_error(span: Span, source: Arc<Path>, err: io::Error) -> Diagnostic {
+        Diagnostic::new(span, source, DiagnosticKind::IOError, format!("{}", err))
+    }
+
+    pub fn from_token(
+        token: Token,
+        kind: DiagnosticKind,
+        message: impl Into<String>,
+    ) -> Diagnostic {
         Diagnostic {
-            kind: kind.into(),
+            kind,
             source: token.source(),
             span: token.span,
+            message: message.into(),
         }
+    }
+
+    pub fn parse_int_error(span: Span, source: Arc<Path>, err: ParseIntError) -> Diagnostic {
+        Diagnostic::new(span, source, DiagnosticKind::IntError, format!("{err}"))
+    }
+
+    pub fn cyclic_dependency_error(
+        span: Span,
+        source: Arc<Path>,
+        err: CyclicDependencyError<PathBuf>,
+    ) -> Diagnostic {
+        let str = err
+            .cycle()
+            .iter()
+            .map(|element| format!("{}", element.display()))
+            .join(" -> ");
+        Diagnostic::new(
+            span,
+            source,
+            DiagnosticKind::CyclicDependencyError,
+            format!("Cyclic include: {str}"),
+        )
+    }
+
+    pub fn expected(span: Span, source: Arc<Path>, kinds: &[TokenKind]) -> Diagnostic {
+        let msg = if kinds.len() == 1 {
+            format!("Expected {}", kinds[0])
+        } else {
+            format!(
+                "Expected one of {}",
+                kinds.iter().map(|kind| format!("{kind}")).join(", ")
+            )
+        };
+        Diagnostic::new(span, source, DiagnosticKind::Expected, msg)
     }
 
     pub fn kind(&self) -> &DiagnosticKind {
@@ -312,7 +359,7 @@ impl<'a> DiagnosticPrinter<'a> {
             line_empty,
             "^".repeat(len as usize)
         )?;
-        write!(f, " {}", diagnostic.kind)?;
+        write!(f, " {}", diagnostic.message)?;
         Ok(())
     }
 }
@@ -332,7 +379,6 @@ impl<'a> Display for DiagnosticPrinter<'a> {
 mod tests {
     use crate::dts::data::{HasSource, HasSpan};
     use crate::dts::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticPrinter};
-    use crate::dts::lexer::TokenKind;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
     use itertools::Itertools;
@@ -346,7 +392,8 @@ mod tests {
             vec![Diagnostic::new(
                 code.s1("}").end().as_span(),
                 code.source(),
-                DiagnosticKind::Expected(vec![TokenKind::Semicolon]),
+                DiagnosticKind::Expected,
+                "Expected ';'"
             )]
         );
         let printer = DiagnosticPrinter {

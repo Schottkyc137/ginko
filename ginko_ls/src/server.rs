@@ -36,7 +36,7 @@ fn lsp_diag_from_diag(diagnostic: &ginko::dts::Diagnostic) -> Diagnostic {
     let span = diagnostic.span();
     Diagnostic {
         range: lsp_range_from_span(span),
-        message: format!("{}", diagnostic.kind()),
+        message: diagnostic.message.clone(),
         severity: Some(lsp_severity_from_severity(diagnostic.default_severity())),
         ..Default::default()
     }

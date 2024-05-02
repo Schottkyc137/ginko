@@ -488,6 +488,7 @@ where
                 eof_pos.as_span(),
                 source,
                 DiagnosticKind::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(tok) => Ok(tok),
         }
@@ -501,15 +502,16 @@ where
                 prev_pos.as_span(),
                 self.source(),
                 DiagnosticKind::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(token) => {
                 if token.kind == kind {
                     Ok(token)
                 } else {
-                    Err(Diagnostic::new(
+                    Err(Diagnostic::expected(
                         prev_pos.as_span(),
                         self.source(),
-                        DiagnosticKind::Expected(vec![token.kind]),
+                        &[token.kind],
                     ))
                 }
             }
@@ -524,6 +526,7 @@ where
                 eof_pos.as_span(),
                 self.source(),
                 DiagnosticKind::UnexpectedEOF,
+                "Unexpected End of File",
             )),
             Some(token) => Ok(token),
         }
