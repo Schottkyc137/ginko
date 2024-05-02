@@ -1,5 +1,5 @@
 use clap::Parser;
-use ginko::dts::{DiagnosticPrinter, Project};
+use ginko::dts::{DiagnosticPrinter, Project, SeverityMap};
 use itertools::Itertools;
 use std::error::Error;
 use std::path::PathBuf;
@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let printer = DiagnosticPrinter {
             code,
             diagnostics: &diag,
+            severity_map: SeverityMap::default(),
         };
         println!("{}", printer);
     }

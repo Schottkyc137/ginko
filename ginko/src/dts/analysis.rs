@@ -189,7 +189,7 @@ impl Analysis {
         let Some(proj_file) = ctx.project.get_file(&path) else {
             return;
         };
-        if proj_file.has_errors() {
+        if proj_file.has_errors(&ctx.project.severities) {
             ctx.add_diagnostic(Diagnostic::new(
                 include.span(),
                 include.source(),

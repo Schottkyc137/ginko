@@ -1,6 +1,7 @@
 use crate::dts::analysis::{Analysis, AnalysisContext};
 use crate::dts::ast::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
+use crate::dts::error_codes::SeverityMap;
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
@@ -60,9 +61,9 @@ impl ProjectFile {
             .chain(&self.analysis_diagnostics)
     }
 
-    pub fn has_errors(&self) -> bool {
+    pub fn has_errors(&self, severity_map: &SeverityMap) -> bool {
         self.diagnostics()
-            .any(|diagnostic| diagnostic.default_severity() == Severity::Error)
+            .any(|diagnostic| diagnostic.severity(severity_map) == Severity::Error)
     }
 
     pub fn source(&self) -> &String {
@@ -73,6 +74,7 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
+    pub severities: SeverityMap,
 }
 
 impl Project {

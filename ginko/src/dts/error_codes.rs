@@ -1,9 +1,9 @@
 use crate::dts::Severity;
 use enum_map::{enum_map, Enum, EnumMap};
-use std::ops::{Index, IndexMut};
+use std::ops::Index;
 use strum::{AsRefStr, EnumString};
 
-#[derive(PartialEq, Debug, Clone, EnumString, AsRefStr, Enum)]
+#[derive(PartialEq, Debug, Copy, Clone, EnumString, AsRefStr, Enum)]
 #[strum(serialize_all = "snake_case")]
 pub enum ErrorCode {
     UnexpectedEOF,
@@ -31,12 +31,8 @@ pub enum ErrorCode {
 
 /// The `SeverityMap` maps error codes to severities.
 ///
-/// Implementations for `Index` and `IndexMut` are provided, so elements within the map can
+/// Implementation for `Index` is provided, so elements within the map can
 /// be accessed using the `[]` operator.
-/// The value returned by indexing into the severity map has the following meaning:
-/// * If the value is `Some(Severity)`,
-///   a diagnostic with the given error code should be displayed with that severity
-/// * If the value is `None`, a diagnostic with that severity should not be displayed
 #[derive(Clone, PartialEq, Eq, Debug, Copy)]
 pub struct SeverityMap {
     // Using an `EnumMap` ensures that each error code is mapped to exactly one severity.
@@ -79,11 +75,5 @@ impl Index<ErrorCode> for SeverityMap {
 
     fn index(&self, key: ErrorCode) -> &Self::Output {
         self.inner.index(key)
-    }
-}
-
-impl IndexMut<ErrorCode> for SeverityMap {
-    fn index_mut(&mut self, key: ErrorCode) -> &mut Self::Output {
-        self.inner.index_mut(key)
     }
 }

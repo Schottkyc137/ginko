@@ -1,6 +1,6 @@
 use ginko::dts::{
     AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project, Severity,
-    Span,
+    SeverityMap, Span,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -13,6 +13,7 @@ use url::Url;
 pub(crate) struct Backend {
     client: Client,
     project: RwLock<Project>,
+    severities: SeverityMap,
 }
 
 impl Backend {
@@ -20,6 +21,7 @@ impl Backend {
         Backend {
             client,
             project: RwLock::new(Project::default()),
+            severities: SeverityMap::default(),
         }
     }
 }
@@ -32,18 +34,6 @@ fn lsp_severity_from_severity(severity_level: Severity) -> DiagnosticSeverity {
     }
 }
 
-fn lsp_diag_from_diag(diagnostic: &ginko::dts::Diagnostic) -> Diagnostic {
-    let span = diagnostic.span();
-    Diagnostic {
-        range: lsp_range_from_span(span),
-        message: diagnostic.message.clone(),
-        code: Some(NumberOrString::String(diagnostic.kind.as_ref().to_string())),
-        severity: Some(lsp_severity_from_severity(diagnostic.default_severity())),
-        source: Some("ginko_ls".to_string()),
-        ..Default::default()
-    }
-}
-
 fn lsp_range_from_span(span: Span) -> Range {
     Range::new(lsp_pos_from_pos(span.start()), lsp_pos_from_pos(span.end()))
 }
@@ -53,6 +43,20 @@ fn lsp_pos_from_pos(pos: ginko::dts::Position) -> Position {
 }
 
 impl Backend {
+    fn lsp_diag_from_diag(&self, diagnostic: &ginko::dts::Diagnostic) -> Diagnostic {
+        let span = diagnostic.span();
+        Diagnostic {
+            range: lsp_range_from_span(span),
+            message: diagnostic.message.clone(),
+            code: Some(NumberOrString::String(diagnostic.kind.as_ref().to_string())),
+            severity: Some(lsp_severity_from_severity(
+                diagnostic.severity(&self.severities),
+            )),
+            source: Some("ginko_ls".to_string()),
+            ..Default::default()
+        }
+    }
+
     async fn url_to_file_path(&self, url: Url) -> Option<PathBuf> {
         match url.to_file_path() {
             Ok(path) => Some(path),
@@ -80,7 +84,7 @@ impl Backend {
                 .project
                 .read()
                 .get_diagnostics(&file)
-                .map(lsp_diag_from_diag)
+                .map(|diag| self.lsp_diag_from_diag(diag))
                 .collect_vec();
             self.client
                 .publish_diagnostics(Url::from_file_path(&file).unwrap(), diagnostics, None)

@@ -1,5 +1,5 @@
 use crate::dts::data::{HasSource, HasSpan, Span};
-use crate::dts::error_codes::ErrorCode;
+use crate::dts::error_codes::{ErrorCode, SeverityMap};
 use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::lexer::{Token, TokenKind};
 use itertools::Itertools;
@@ -30,34 +30,6 @@ impl Display for Severity {
             Error => write!(f, "error"),
             Warning => write!(f, "warning"),
             Hint => write!(f, "hint"),
-        }
-    }
-}
-
-impl ErrorCode {
-    pub fn default_severity_level(&self) -> Severity {
-        match self {
-            ErrorCode::UnexpectedEOF => Severity::Error,
-            ErrorCode::Expected => Severity::Error,
-            ErrorCode::ExpectedName => Severity::Error,
-            ErrorCode::OddNumberOfBytestringElements => Severity::Error,
-            ErrorCode::IntError => Severity::Error,
-            ErrorCode::NonDtsV1 => Severity::Error,
-            ErrorCode::NameTooLong => Severity::Warning,
-            ErrorCode::IllegalChar => Severity::Error,
-            ErrorCode::IllegalStart => Severity::Error,
-            ErrorCode::PathCannotBeEmpty => Severity::Error,
-            ErrorCode::PropertyAfterNode => Severity::Error,
-            ErrorCode::DuplicateDirective => Severity::Warning,
-            ErrorCode::UnbalancedParentheses => Severity::Error,
-            ErrorCode::MisplacedDtsHeader => Severity::Error,
-            ErrorCode::NonStringInCompatible => Severity::Warning,
-            ErrorCode::UnresolvedReference => Severity::Error,
-            ErrorCode::PropertyReferencedByNode => Severity::Error,
-            ErrorCode::ParserError => Severity::Error,
-            ErrorCode::IOError => Severity::Error,
-            ErrorCode::ErrorsInInclude => Severity::Error,
-            ErrorCode::CyclicDependencyError => Severity::Error,
         }
     }
 }
@@ -173,8 +145,8 @@ impl Diagnostic {
         &self.kind
     }
 
-    pub fn default_severity(&self) -> Severity {
-        self.kind().default_severity_level()
+    pub fn severity(&self, map: &SeverityMap) -> Severity {
+        map[self.kind]
     }
 }
 
@@ -193,6 +165,7 @@ impl HasSource for Diagnostic {
 pub struct DiagnosticPrinter<'a> {
     pub diagnostics: &'a [Diagnostic],
     pub code: Vec<String>,
+    pub severity_map: SeverityMap,
 }
 
 impl<'a> DiagnosticPrinter<'a> {
@@ -218,7 +191,7 @@ impl<'a> DiagnosticPrinter<'a> {
         writeln!(
             f,
             "{} --> {}:{}:{}",
-            diagnostic.default_severity(),
+            diagnostic.severity(&self.severity_map),
             diagnostic.source.to_string_lossy(),
             start.line() + 1,
             start.character() + 1
@@ -257,6 +230,7 @@ impl<'a> Display for DiagnosticPrinter<'a> {
 mod tests {
     use crate::dts::data::{HasSource, HasSpan};
     use crate::dts::diagnostics::{Diagnostic, DiagnosticPrinter, ErrorCode};
+    use crate::dts::error_codes::SeverityMap;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
     use itertools::Itertools;
@@ -277,6 +251,7 @@ mod tests {
         let printer = DiagnosticPrinter {
             diagnostics: &diag,
             code: vec!["/ {}".into()],
+            severity_map: SeverityMap::default(),
         };
         let formatter_err = "\
 error --> fname:1:5
@@ -308,6 +283,7 @@ error --> fname:1:5
                 .lines()
                 .map(|line| line.to_string())
                 .collect_vec(),
+            severity_map: SeverityMap::default(),
         };
         let formatter_err = "\
 warning --> fname:4:13
