@@ -1,11 +1,11 @@
 use crate::dts::analysis::{Analysis, AnalysisContext};
 use crate::dts::ast::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
-use crate::dts::diagnostics::DiagnosticKind;
+use crate::dts::error_codes::SeverityMap;
 use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, SeverityLevel, Span};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Severity, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::empty;
@@ -61,9 +61,9 @@ impl ProjectFile {
             .chain(&self.analysis_diagnostics)
     }
 
-    pub fn has_errors(&self) -> bool {
+    pub fn has_errors(&self, severity_map: &SeverityMap) -> bool {
         self.diagnostics()
-            .any(|diagnostic| diagnostic.default_severity() == SeverityLevel::Error)
+            .any(|diagnostic| diagnostic.severity(severity_map) == Severity::Error)
     }
 
     pub fn source(&self) -> &String {
@@ -74,6 +74,7 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
+    pub severities: SeverityMap,
 }
 
 impl Project {
@@ -256,11 +257,7 @@ impl Project {
         let canonicalized_path = match include.path() {
             Ok(path) => path,
             Err(err) => {
-                diagnostics.push(Diagnostic::new(
-                    include.span(),
-                    include.source(),
-                    DiagnosticKind::from(err),
-                ));
+                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err));
                 return;
             }
         };
@@ -273,11 +270,9 @@ impl Project {
                 let typ = FileType::from(canonicalized_path.as_path());
                 self.parse_file(canonicalized_path, text, typ);
             }
-            Err(err) => diagnostics.push(Diagnostic::new(
-                include.span(),
-                include.source(),
-                DiagnosticKind::from(err),
-            )),
+            Err(err) => {
+                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err))
+            }
         }
     }
 
@@ -293,7 +288,7 @@ impl Project {
 // For some reason, this fails under windows with error "The system cannot find the file specified. (os error 2)"
 #[cfg(not(windows))]
 mod tests {
-    use crate::dts::diagnostics::DiagnosticKind;
+    use crate::dts::error_codes::ErrorCode;
     use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
     use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
@@ -463,7 +458,7 @@ mod tests {
         assert_matches!(
             &diag[..],
             &[Diagnostic {
-                kind: DiagnosticKind::CyclicDependencyError(_),
+                kind: ErrorCode::CyclicDependencyError,
                 ..
             }]
         );
@@ -551,12 +546,12 @@ mod tests {
         assert!(project.get_file(&file2).is_some());
         assert_eq!(
             project.get_diagnostics(&file1).cloned().collect_vec(),
-            vec![Diagnostic::new(
+            vec![Diagnostic::expected(
                 code1.s1("}").end().as_span(),
                 dunce::canonicalize(&file1)
                     .expect("Cannot canonicalize")
                     .into(),
-                DiagnosticKind::Expected(vec![TokenKind::Semicolon])
+                &[TokenKind::Semicolon]
             )]
         );
         assert_eq!(
@@ -568,7 +563,8 @@ mod tests {
                 dunce::canonicalize(file2)
                     .expect("Cannot canonicalize")
                     .into(),
-                DiagnosticKind::ErrorsInInclude
+                ErrorCode::ErrorsInInclude,
+                "Included file contains errors"
             )]
         );
     }
