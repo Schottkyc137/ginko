@@ -170,7 +170,7 @@ impl Analysis {
         ctx.into_result()
     }
 
-    fn analyze_include(&mut self, ctx: &mut FileContext, parent: &DtsFile, include: &Include) {
+    fn analyze_include(&mut self, ctx: &mut FileContext<'_>, parent: &DtsFile, include: &Include) {
         let path = match include.path() {
             Ok(path) => path,
             Err(err) => {
@@ -206,7 +206,12 @@ impl Analysis {
         }
     }
 
-    fn unresolved_reference_error(&self, ctx: &mut FileContext, span: Span, source: Arc<StdPath>) {
+    fn unresolved_reference_error(
+        &self,
+        ctx: &mut FileContext<'_>,
+        span: Span,
+        source: Arc<StdPath>,
+    ) {
         // Do not emit unresolved reference errors when we are not a plugin.
         // This will emit false positives as references can only be resolved with the full
         // device-tree information.
@@ -222,7 +227,7 @@ impl Analysis {
 
     fn resolve_reference(
         &mut self,
-        ctx: &mut FileContext,
+        ctx: &mut FileContext<'_>,
         reference: &WithToken<Reference>,
     ) -> Path {
         match reference.item() {
@@ -242,7 +247,7 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_referenced_node(&mut self, ctx: &mut FileContext, node: &ReferencedNode) {
+    pub fn analyze_referenced_node(&mut self, ctx: &mut FileContext<'_>, node: &ReferencedNode) {
         let path = if ctx.file_type == FileType::DtSource {
             self.resolve_reference(ctx, &node.reference)
         } else {
@@ -252,7 +257,7 @@ impl Analysis {
         self.analyze_node_payload(ctx, &node.payload, path);
     }
 
-    pub fn resolve_references(&self, ctx: &mut FileContext) {
+    pub fn resolve_references(&self, ctx: &mut FileContext<'_>) {
         for reference in ctx.unresolved_references.clone() {
             let span = reference.span();
             let source = reference.source();
@@ -273,7 +278,7 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_node(&mut self, ctx: &mut FileContext, node: Arc<Node>, path: Path) {
+    pub fn analyze_node(&mut self, ctx: &mut FileContext<'_>, node: Arc<Node>, path: Path) {
         if let Some(label) = &node.label {
             ctx.labels
                 .insert(label.item().clone(), Labeled::Node(node.clone()));
@@ -282,7 +287,12 @@ impl Analysis {
         self.analyze_node_payload(ctx, &node.payload, path)
     }
 
-    fn analyze_node_payload(&mut self, ctx: &mut FileContext, payload: &NodePayload, path: Path) {
+    fn analyze_node_payload(
+        &mut self,
+        ctx: &mut FileContext<'_>,
+        payload: &NodePayload,
+        path: Path,
+    ) {
         for item in &payload.items {
             match item {
                 NodeItem::Property(property) => self.analyze_property(ctx, property.clone()),
@@ -295,7 +305,7 @@ impl Analysis {
         }
     }
 
-    fn check_is_string_list(&mut self, ctx: &mut FileContext, values: &Vec<PropertyValue>) {
+    fn check_is_string_list(&mut self, ctx: &mut FileContext<'_>, values: &Vec<PropertyValue>) {
         for value in values {
             if !matches!(value, PropertyValue::String(_)) {
                 ctx.add_diagnostic(Diagnostic::new(
@@ -308,15 +318,15 @@ impl Analysis {
         }
     }
 
-    fn check_is_single_string(&mut self, _ctx: &mut FileContext, values: &[PropertyValue]) {
+    fn check_is_single_string(&mut self, _ctx: &mut FileContext<'_>, values: &[PropertyValue]) {
         if values.len() != 1 {}
     }
 
-    fn check_is_single_u32(&mut self, _ctx: &mut FileContext, values: &[PropertyValue]) {
+    fn check_is_single_u32(&mut self, _ctx: &mut FileContext<'_>, values: &[PropertyValue]) {
         if values.len() != 1 {}
     }
 
-    pub fn analyze_property(&mut self, ctx: &mut FileContext, property: Arc<Property>) {
+    pub fn analyze_property(&mut self, ctx: &mut FileContext<'_>, property: Arc<Property>) {
         if let Some(label) = &property.label {
             ctx.labels
                 .insert(label.item().clone(), Labeled::Property(property.clone()));
@@ -333,7 +343,7 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_property_value(&mut self, ctx: &mut FileContext, value: &PropertyValue) {
+    pub fn analyze_property_value(&mut self, ctx: &mut FileContext<'_>, value: &PropertyValue) {
         match value {
             PropertyValue::String(_) => {}
             PropertyValue::ByteStrings(..) => {}
@@ -346,7 +356,7 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_cell(&mut self, ctx: &mut FileContext, value: &Cell) {
+    pub fn analyze_cell(&mut self, ctx: &mut FileContext<'_>, value: &Cell) {
         match value {
             Cell::Number(_) => {}
             Cell::Reference(reference) => self.analyze_reference(ctx, reference),
@@ -354,7 +364,11 @@ impl Analysis {
         }
     }
 
-    pub fn analyze_reference(&mut self, ctx: &mut FileContext, reference: &WithToken<Reference>) {
+    pub fn analyze_reference(
+        &mut self,
+        ctx: &mut FileContext<'_>,
+        reference: &WithToken<Reference>,
+    ) {
         ctx.unresolved_references.push(reference.clone())
     }
 }

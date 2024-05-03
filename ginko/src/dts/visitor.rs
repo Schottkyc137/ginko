@@ -14,7 +14,7 @@ pub enum ItemAtCursor<'a> {
 }
 
 impl DtsFile {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         for element in &self.elements {
             if let Some(item) = element.item_at_cursor(cursor) {
                 return Some(item);
@@ -25,7 +25,7 @@ impl DtsFile {
 }
 
 impl Primary {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         match self {
             Primary::Directive(directive) => directive.item_at_cursor(cursor),
             Primary::Root(root) => root.item_at_cursor(cursor),
@@ -37,7 +37,7 @@ impl Primary {
 }
 
 impl AnyDirective {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         match self {
             AnyDirective::Include(include) => {
                 if include.span().contains(cursor) {
@@ -52,7 +52,7 @@ impl AnyDirective {
 }
 
 impl ReferencedNode {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         if self.reference.span().contains(cursor) {
             return Some(ItemAtCursor::Reference(self.reference.item()));
         }
@@ -61,7 +61,7 @@ impl ReferencedNode {
 }
 
 impl Node {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         if let Some(label) = &self.label {
             if label.span().contains(cursor) {
                 return Some(ItemAtCursor::Label(label));
@@ -72,7 +72,7 @@ impl Node {
 }
 
 impl NodePayload {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         for node in &self.items {
             if let Some(item) = node.item_at_cursor(cursor) {
                 return Some(item);
@@ -83,7 +83,7 @@ impl NodePayload {
 }
 
 impl NodeItem {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         match self {
             NodeItem::Property(property) => property.item_at_cursor(cursor),
             NodeItem::Node(node) => node.item_at_cursor(cursor),
@@ -94,7 +94,7 @@ impl NodeItem {
 }
 
 impl Property {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         if let Some(label) = &self.label {
             if label.span().contains(cursor) {
                 return Some(ItemAtCursor::Label(label));
@@ -110,7 +110,7 @@ impl Property {
 }
 
 impl PropertyValue {
-    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor> {
+    pub fn item_at_cursor(&self, cursor: &Position) -> Option<ItemAtCursor<'_>> {
         match self {
             PropertyValue::String(_) => None,
             PropertyValue::Cells(_, cells, _) => {
