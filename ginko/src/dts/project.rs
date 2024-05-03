@@ -163,7 +163,6 @@ impl Project {
         Box::new(file.diagnostics())
     }
 
-    #[cfg(test)]
     pub fn all_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
         self.files.values().flat_map(|file| file.diagnostics())
     }
@@ -335,11 +334,11 @@ mod tests {
     pub fn file_with_includes() {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
-        let (_, path1) = temp_dir.add_file("test-include.dtsi", "");
+        let (_, path1) = temp_dir.add_file("tests-include.dtsi", "");
         project.add_file(path1.clone()).expect("Cannot add file");
 
         let (_, file2) = temp_dir.add_file(
-            "test-file.dts",
+            "tests-file.dts",
             format!(
                 r#"
 /dts-v1/;
@@ -364,7 +363,7 @@ mod tests {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
         let (code1, file1) = temp_dir.add_file(
-            "test-include.dtsi",
+            "tests-include.dtsi",
             r#"
 / {
     some_node: node_a {
@@ -374,7 +373,7 @@ mod tests {
 "#,
         );
         let (code2, file2) = temp_dir.add_file(
-            "test-file.dts",
+            "tests-file.dts",
             format!(
                 r#"
 /dts-v1/;
@@ -440,7 +439,7 @@ mod tests {
     pub fn cyclic_import_error() {
         let temp_dir = TempDir::new();
         let (mut file1, path1) = temp_dir.new_file("test.dts");
-        let (mut file2, path2) = temp_dir.new_file("test-include.dtsi");
+        let (mut file2, path2) = temp_dir.new_file("tests-include.dtsi");
 
         write!(file1, r#"/dts-v1/; /include/ "{}""#, path2.display())
             .expect("Cannot write to file 2");
@@ -495,9 +494,9 @@ mod tests {
     pub fn file_with_nested_includes() {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
-        let (_, file1) = temp_dir.add_file("test-include1.dtsi", "");
+        let (_, file1) = temp_dir.add_file("tests-include1.dtsi", "");
         let (_, file2) = temp_dir.add_file(
-            "test-include2.dtsi",
+            "tests-include2.dtsi",
             format!(r#"/include/ "{}""#, file1.display()).as_str(),
         );
         let (_, file3) = temp_dir.add_file(

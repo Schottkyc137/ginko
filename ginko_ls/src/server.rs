@@ -1,6 +1,6 @@
 use ginko::dts::{
-    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodePayload, Primary, Project, Severity,
-    SeverityMap, Span,
+    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodeItem, NodePayload, Primary, Project,
+    Severity, SeverityMap, Span,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -237,20 +237,47 @@ impl LanguageServer for Backend {
         #[allow(deprecated)]
         fn node_payload_to_symbol(payload: &NodePayload) -> Vec<DocumentSymbol> {
             let mut children: Vec<DocumentSymbol> = Vec::new();
-            for prop in &payload.properties {
-                children.push(DocumentSymbol {
-                    name: prop.name.item().clone(),
-                    detail: None,
-                    kind: SymbolKind::PROPERTY,
-                    tags: None,
-                    deprecated: None,
-                    range: ginko_span_to_range(prop.span()),
-                    selection_range: ginko_span_to_range(prop.name.span()),
-                    children: None,
-                })
-            }
-            for node in &payload.child_nodes {
-                children.push(node_to_symbol(node))
+            for el in &payload.items {
+                let document_symbol = match el {
+                    NodeItem::Property(prop) => DocumentSymbol {
+                        name: prop.name.item().clone(),
+                        detail: None,
+                        kind: SymbolKind::PROPERTY,
+                        tags: None,
+                        deprecated: None,
+                        range: ginko_span_to_range(prop.span()),
+                        selection_range: ginko_span_to_range(prop.name.span()),
+                        children: None,
+                    },
+                    NodeItem::Node(node) => node_to_symbol(node),
+                    NodeItem::DeletedNode(start_tok, deleted_node) => DocumentSymbol {
+                        name: format!("{}", deleted_node.item()),
+                        detail: None,
+                        kind: SymbolKind::MODULE,
+                        tags: Some(vec![SymbolTag::DEPRECATED]),
+                        deprecated: None,
+                        range: ginko_span_to_range(Span::new(
+                            start_tok.start(),
+                            deleted_node.end(),
+                        )),
+                        selection_range: ginko_span_to_range(deleted_node.span()),
+                        children: None,
+                    },
+                    NodeItem::DeletedProperty(start_tok, deleted_property) => DocumentSymbol {
+                        name: deleted_property.item().to_string(),
+                        detail: None,
+                        kind: SymbolKind::PROPERTY,
+                        tags: Some(vec![SymbolTag::DEPRECATED]),
+                        deprecated: None,
+                        range: ginko_span_to_range(Span::new(
+                            start_tok.start(),
+                            deleted_property.end(),
+                        )),
+                        selection_range: ginko_span_to_range(deleted_property.span()),
+                        children: None,
+                    },
+                };
+                children.push(document_symbol);
             }
             children
         }
@@ -291,6 +318,16 @@ impl LanguageServer for Backend {
                     deprecated: None,
                     range: ginko_span_to_range(include.span()),
                     selection_range: ginko_span_to_range(include.file_name.span()),
+                    children: None,
+                }),
+                Primary::DeletedNode(token, ref_node) => Some(DocumentSymbol {
+                    name: format!("{}", ref_node),
+                    detail: None,
+                    kind: SymbolKind::MODULE,
+                    tags: Some(vec![SymbolTag::DEPRECATED]),
+                    deprecated: None,
+                    range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
+                    selection_range: ginko_span_to_range(ref_node.span()),
                     children: None,
                 }),
                 _ => None,

@@ -1,6 +1,6 @@
 use crate::dts::ast::{
-    AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeName, NodePayload, Path, Primary,
-    Property, PropertyValue, ReferencedNode, WithToken,
+    AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeItem, NodeName, NodePayload, Path,
+    Primary, Property, PropertyValue, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, Span};
 use crate::dts::diagnostics::{Diagnostic, NameContext};
@@ -12,6 +12,8 @@ use itertools::Itertools;
 use std::path::Path as StdPath;
 use std::sync::Arc;
 
+/// The `Parser` class is responsible for syntactical analysis,
+/// transforming the input token stream into an AST.
 pub struct Parser<R>
 where
     R: Reader + Sized,
@@ -430,14 +432,52 @@ where
         Ok(values)
     }
 
+    pub fn property_name(&mut self) -> Result<WithToken<String>> {
+        let tok = self.lexer.expect_next()?;
+        if let TokenKind::Ident(value) = tok.kind.clone() {
+            self.check_is_property_name(tok.span(), &value);
+            return Ok(WithToken::new(value, tok));
+        }
+        Err(Diagnostic::expected(
+            tok.span(),
+            tok.source(),
+            &[TokenKind::Ident("".to_string())],
+        ))
+    }
+
+    pub fn node_name(&mut self) -> Result<WithToken<NodeName>> {
+        let tok = self.lexer.expect_next()?;
+        if let TokenKind::Ident(value) = tok.kind.clone() {
+            let node_name = NodeName::from(value);
+            self.check_is_node_name(tok.span(), &node_name);
+            return Ok(WithToken::new(node_name, tok));
+        }
+        Err(Diagnostic::expected(
+            tok.span(),
+            tok.source(),
+            &[TokenKind::Ident("".to_string())],
+        ))
+    }
+
     pub fn node_payload(&mut self) -> Result<NodePayload> {
         let end: Token;
         self.lexer.expect(TokenKind::OpenBrace)?;
-        let mut properties: Vec<Arc<Property>> = vec![];
-        let mut child_nodes: Vec<Arc<Node>> = vec![];
+        let mut items: Vec<NodeItem> = vec![];
         let mut node_discovered = false;
         loop {
             let tok = self.lexer.expect_next()?;
+            if tok.kind == TokenKind::Directive(CompilerDirective::DeleteNode) {
+                let node_name = self.node_name()?;
+                self.expect_semicolon()?;
+                items.push(NodeItem::DeletedNode(tok, node_name));
+                continue;
+            }
+            if tok.kind == TokenKind::Directive(CompilerDirective::DeleteProperty) {
+                let property_name = self.property_name()?;
+                self.expect_semicolon()?;
+                items.push(NodeItem::DeletedProperty(tok, property_name));
+                continue;
+            }
             let (tok, label) = match &tok.kind {
                 TokenKind::Label(string) => {
                     self.check_is_label(tok.span(), string);
@@ -470,11 +510,11 @@ where
                     let node_name: WithToken<NodeName> = From::from(ident);
                     self.check_is_node_name(node_name.span(), &node_name);
                     let payload = self.node_payload()?;
-                    child_nodes.push(Arc::new(Node {
+                    items.push(NodeItem::Node(Arc::new(Node {
                         name: node_name,
                         label,
                         payload,
-                    }))
+                    })));
                 }
                 TokenKind::Equal => {
                     self.skip_tok();
@@ -495,7 +535,7 @@ where
                             "Properties must be placed before nodes",
                         ))
                     }
-                    properties.push(Arc::new(prop));
+                    items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 TokenKind::Semicolon => {
                     self.skip_tok();
@@ -509,7 +549,7 @@ where
                             "Properties must be placed before nodes",
                         ))
                     }
-                    properties.push(Arc::new(prop));
+                    items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 _ => {
                     return Err(Diagnostic::expected(
@@ -520,13 +560,11 @@ where
                 }
             }
         }
-        Ok(NodePayload {
-            child_nodes,
-            properties,
-            end,
-        })
+        Ok(NodePayload { items, end })
     }
 
+    /// Special function to expect a semicolon, but recover in common circumstances
+    /// such as forgetting the semicolon after a closing brace ('}') char.
     fn expect_semicolon(&mut self) -> Result<Option<Token>> {
         let tok = self.lexer.peek();
         let Some(tok) = tok else {
@@ -584,6 +622,19 @@ where
             elements,
             source: self.lexer.source(),
         })
+    }
+
+    pub fn parse_reference(&mut self) -> Result<WithToken<crate::dts::ast::Reference>> {
+        let token = self.lexer.expect_next()?;
+        if let TokenKind::Ref(reference) = token.kind.clone() {
+            Ok(self.reference(token, &reference))
+        } else {
+            Err(Diagnostic::expected(
+                token.span(),
+                token.source(),
+                &[TokenKind::Ref(Reference::Simple("".to_string()))],
+            ))
+        }
     }
 
     pub fn primary(&mut self) -> Result<Primary> {
@@ -661,6 +712,11 @@ where
                     payload: root_payload,
                 }))
             }
+            TokenKind::Directive(CompilerDirective::DeleteNode) => {
+                let reference = self.parse_reference()?;
+                self.expect_semicolon()?;
+                Ok(Primary::DeletedNode(token, reference))
+            }
             _ => Err(Diagnostic::expected(
                 token.span(),
                 token.source(),
@@ -668,6 +724,7 @@ where
                     TokenKind::Directive(CompilerDirective::DTSVersionHeader),
                     TokenKind::Directive(CompilerDirective::MemReserve),
                     TokenKind::Directive(CompilerDirective::Include),
+                    TokenKind::Directive(CompilerDirective::DeleteNode),
                     TokenKind::Slash,
                     TokenKind::Ref(Reference::Simple("".to_string())),
                 ],
@@ -679,8 +736,8 @@ where
 #[cfg(test)]
 mod test {
     use crate::dts::ast::{
-        Cell, DtsFile, Memreserve, Node, NodeName, NodePayload, Path, Property, PropertyValue,
-        Reference, WithToken,
+        Cell, DtsFile, Memreserve, Node, NodeItem, NodeName, NodePayload, Path, Property,
+        PropertyValue, Reference, WithToken,
     };
     use crate::dts::data::HasSource;
     use crate::dts::diagnostics::Diagnostic;
@@ -886,8 +943,7 @@ mod test {
                     label: None,
                     name: WithToken::new(NodeName::simple("/"), code.s1("/").token()),
                     payload: NodePayload {
-                        child_nodes: vec![],
-                        properties: vec![],
+                        items: vec![],
                         end: code.s1(";").token(),
                     },
                 }))],
@@ -914,8 +970,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![],
-                            properties: vec![],
+                            items: vec![],
                             end: code.s(";", 2).token(),
                         },
                     })),
@@ -947,7 +1002,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![Arc::new(Node {
+                            items: vec![NodeItem::Node(Arc::new(Node {
                                 label: Some(WithToken::new(
                                     "my_node".into(),
                                     code.s1("my_node:").token(),
@@ -957,12 +1012,10 @@ mod test {
                                     code.s1("sub_node@200").token(),
                                 ),
                                 payload: NodePayload {
-                                    child_nodes: vec![],
-                                    properties: vec![],
+                                    items: vec![],
                                     end: code.s(";", 2).token(),
                                 },
-                            })],
-                            properties: vec![],
+                            }))],
                             end: code.s(";", 3).token(),
                         },
                     })),
@@ -996,16 +1049,15 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
-                            child_nodes: vec![Arc::new(Node {
+                            items: vec![NodeItem::Node(Arc::new(Node {
                                 label: None,
                                 name: WithToken::new(
                                     NodeName::with_address("pic", "10000000"),
                                     code.s1("pic@10000000").token(),
                                 ),
                                 payload: NodePayload {
-                                    child_nodes: vec![],
-                                    properties: vec![
-                                        Arc::new(Property {
+                                    items: vec![
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "phandle".into(),
@@ -1015,8 +1067,8 @@ mod test {
                                                 .s1("<1>")
                                                 .parse_ok_no_diagnostics(Parser::property_values),
                                             end: code.s(";", 2).token(),
-                                        }),
-                                        Arc::new(Property {
+                                        })),
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "interrupt-controller".into(),
@@ -1024,8 +1076,8 @@ mod test {
                                             ),
                                             values: vec![],
                                             end: code.s(";", 3).token(),
-                                        }),
-                                        Arc::new(Property {
+                                        })),
+                                        NodeItem::Property(Arc::new(Property {
                                             label: None,
                                             name: WithToken::new(
                                                 "reg".into(),
@@ -1035,12 +1087,11 @@ mod test {
                                                 .s1("<0x10000000 0x100>")
                                                 .parse_ok_no_diagnostics(Parser::property_values),
                                             end: code.s(";", 4).token(),
-                                        }),
+                                        })),
                                     ],
                                     end: code.s(";", 5).token(),
                                 },
-                            })],
-                            properties: vec![],
+                            }))],
                             end: code.s(";", 6).token(),
                         },
                     })),
@@ -1110,8 +1161,7 @@ mod test {
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 5).token()),
                         payload: NodePayload {
-                            child_nodes: vec![],
-                            properties: vec![],
+                            items: vec![],
                             end: code.s(";", 3).token(),
                         },
                     })),
@@ -1212,6 +1262,82 @@ mod test {
                 code.source(),
                 &[Semicolon],
             )]
+        );
+    }
+
+    #[test]
+    fn delete_property_syntax() {
+        let code = Code::new(
+            "
+/ {
+    node-2 {
+        /delete-property/ node-2-pa;
+    };
+};
+        ",
+        );
+        let primary = code.parse_ok_no_diagnostics(Parser::primary);
+
+        assert_eq!(
+            primary,
+            Primary::Root(Arc::new(Node {
+                label: None,
+                name: WithToken::new(NodeName::simple("/"), code.s1("/").token()),
+                payload: NodePayload {
+                    items: vec![NodeItem::Node(Arc::new(Node {
+                        label: None,
+                        name: WithToken::new(NodeName::simple("node-2"), code.s1("node-2").token()),
+                        payload: NodePayload {
+                            end: code.s(";", 2).token(),
+                            items: vec![NodeItem::DeletedProperty(
+                                code.s1("/delete-property/").token(),
+                                WithToken::new(
+                                    "node-2-pa".to_string(),
+                                    code.s1("node-2-pa").token()
+                                )
+                            )]
+                        }
+                    }))],
+                    end: code.s(";", 3).token()
+                }
+            }))
+        );
+    }
+
+    #[test]
+    pub fn delete_node_primary() {
+        let code = Code::new(
+            "
+/dts-v1/;
+
+/delete-node/ &some_node;
+/delete-node/ &{/path/to/node};
+        ",
+        );
+        let file = code.parse_ok_no_diagnostics(Parser::file);
+
+        assert_eq!(
+            file,
+            DtsFile {
+                source: code.source(),
+                elements: vec![
+                    Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
+                    Primary::DeletedNode(
+                        code.s("/delete-node/", 1).token(),
+                        WithToken::new(
+                            Reference::Label("some_node".to_string()),
+                            code.s1("&some_node").token()
+                        )
+                    ),
+                    Primary::DeletedNode(
+                        code.s("/delete-node/", 2).token(),
+                        WithToken::new(
+                            Reference::Path("/path/to/node".into()),
+                            code.s1("&{/path/to/node}").token()
+                        )
+                    )
+                ]
+            }
         );
     }
 }
