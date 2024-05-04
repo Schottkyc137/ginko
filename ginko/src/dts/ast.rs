@@ -511,6 +511,7 @@ pub enum AnyDirective {
     Plugin(Token),
     Memreserve(Memreserve),
     Include(Include),
+    OmitIfNoRef(Token, WithToken<Reference>),
 }
 
 impl Display for AnyDirective {
@@ -520,6 +521,7 @@ impl Display for AnyDirective {
             AnyDirective::Memreserve(memreserve) => write!(f, "{memreserve};"),
             AnyDirective::Include(include) => write!(f, "{include}"),
             AnyDirective::Plugin(_) => write!(f, "/plugin/;"),
+            AnyDirective::OmitIfNoRef(_, reference) => write!(f, "/omit-if-no-ref/ {};", reference),
         }
     }
 }

@@ -143,6 +143,7 @@ impl Analysis {
                         ctx.first_non_include = true;
                         ctx.is_plugin = true
                     }
+                    AnyDirective::OmitIfNoRef(..) => ctx.first_non_include = true,
                 },
                 Primary::Root(root_node) => {
                     self.analyze_node(&mut ctx, root_node.clone(), Path::empty());

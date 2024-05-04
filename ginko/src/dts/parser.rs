@@ -746,6 +746,13 @@ where
                 self.expect_semicolon()?;
                 Ok(Primary::DeletedNode(token, reference))
             }
+            TokenKind::Directive(CompilerDirective::OmitIfNoRef) => {
+                let reference = self.parse_reference()?;
+                self.expect_semicolon()?;
+                Ok(Primary::Directive(AnyDirective::OmitIfNoRef(
+                    token, reference,
+                )))
+            }
             _ => Err(Diagnostic::expected(
                 token.span(),
                 token.source(),
@@ -754,6 +761,7 @@ where
                     TokenKind::Directive(CompilerDirective::MemReserve),
                     TokenKind::Directive(CompilerDirective::Include),
                     TokenKind::Directive(CompilerDirective::DeleteNode),
+                    TokenKind::Directive(CompilerDirective::OmitIfNoRef),
                     TokenKind::Slash,
                     TokenKind::Ref(Reference::Simple("".to_string())),
                 ],
@@ -1434,5 +1442,21 @@ mod test {
         ",
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
+        assert_eq!(
+            file,
+            DtsFile {
+                source: code.source(),
+                elements: vec![
+                    Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
+                    Primary::Directive(AnyDirective::OmitIfNoRef(
+                        code.s1("/omit-if-no-ref/").token(),
+                        WithToken::new(
+                            Reference::Label("node2".to_string()),
+                            code.s1("&node2").token()
+                        )
+                    ))
+                ]
+            }
+        );
     }
 }
