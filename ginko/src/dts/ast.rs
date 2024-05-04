@@ -342,6 +342,7 @@ pub struct Node {
     pub label: Option<WithToken<String>>,
     pub name: WithToken<NodeName>,
     pub payload: NodePayload,
+    pub omit_if_no_ref: Option<Token>,
 }
 
 #[derive(Eq, PartialEq, Debug)]

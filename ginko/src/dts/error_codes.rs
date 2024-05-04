@@ -23,6 +23,7 @@ pub enum ErrorCode {
     UnbalancedParentheses,
     MisplacedDtsHeader,
     DuplicateDirective,
+    IncorrectDirective,
     ParserError,
     IOError,
     ErrorsInInclude,
@@ -61,7 +62,8 @@ impl Default for SeverityMap {
             | ParserError
             | IOError
             | ErrorsInInclude
-            | CyclicDependencyError => Severity::Error,
+            | CyclicDependencyError
+            | IncorrectDirective => Severity::Error,
             NameTooLong
             | NonStringInCompatible
             | DuplicateDirective => Severity::Warning
