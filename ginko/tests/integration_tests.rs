@@ -14,6 +14,16 @@ fn check_no_diagnostics(project: &Project) {
 }
 
 #[test]
+fn no_diagnostics_for_simple_file() {
+    let mut project = Project::default();
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut file_name = path.clone();
+    file_name.push("tests/simple.dts");
+    project.add_file(file_name).expect("File should be present");
+    check_no_diagnostics(&project);
+}
+
+#[test]
 fn no_diagnostics_for_file_with_delete_node() {
     let mut project = Project::default();
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
