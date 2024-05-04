@@ -744,7 +744,9 @@ where
             TokenKind::Directive(CompilerDirective::DeleteNode) => {
                 let reference = self.parse_reference()?;
                 self.expect_semicolon()?;
-                Ok(Primary::DeletedNode(token, reference))
+                Ok(Primary::Directive(AnyDirective::DeletedNode(
+                    token, reference,
+                )))
             }
             TokenKind::Directive(CompilerDirective::OmitIfNoRef) => {
                 let reference = self.parse_reference()?;
@@ -1369,20 +1371,20 @@ mod test {
                 source: code.source(),
                 elements: vec![
                     Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
-                    Primary::DeletedNode(
+                    Primary::Directive(AnyDirective::DeletedNode(
                         code.s("/delete-node/", 1).token(),
                         WithToken::new(
                             Reference::Label("some_node".to_string()),
                             code.s1("&some_node").token()
                         )
-                    ),
-                    Primary::DeletedNode(
+                    )),
+                    Primary::Directive(AnyDirective::DeletedNode(
                         code.s("/delete-node/", 2).token(),
                         WithToken::new(
                             Reference::Path("/path/to/node".into()),
                             code.s1("&{/path/to/node}").token()
                         )
-                    )
+                    ))
                 ]
             }
         );

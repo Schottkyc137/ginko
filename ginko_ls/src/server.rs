@@ -320,16 +320,30 @@ impl LanguageServer for Backend {
                     selection_range: ginko_span_to_range(include.file_name.span()),
                     children: None,
                 }),
-                Primary::DeletedNode(token, ref_node) => Some(DocumentSymbol {
-                    name: format!("{}", ref_node),
-                    detail: None,
-                    kind: SymbolKind::MODULE,
-                    tags: Some(vec![SymbolTag::DEPRECATED]),
-                    deprecated: None,
-                    range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
-                    selection_range: ginko_span_to_range(ref_node.span()),
-                    children: None,
-                }),
+                Primary::Directive(AnyDirective::DeletedNode(token, ref_node)) => {
+                    Some(DocumentSymbol {
+                        name: format!("{}", ref_node),
+                        detail: None,
+                        kind: SymbolKind::MODULE,
+                        tags: Some(vec![SymbolTag::DEPRECATED]),
+                        deprecated: None,
+                        range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
+                        selection_range: ginko_span_to_range(ref_node.span()),
+                        children: None,
+                    })
+                }
+                Primary::Directive(AnyDirective::OmitIfNoRef(token, ref_node)) => {
+                    Some(DocumentSymbol {
+                        name: format!("{}", ref_node),
+                        detail: None,
+                        kind: SymbolKind::FIELD,
+                        tags: None,
+                        deprecated: None,
+                        range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
+                        selection_range: ginko_span_to_range(ref_node.span()),
+                        children: None,
+                    })
+                }
                 _ => None,
             })
             .collect_vec();
