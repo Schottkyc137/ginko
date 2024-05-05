@@ -478,6 +478,12 @@ where
                 items.push(NodeItem::DeletedProperty(tok, property_name));
                 continue;
             }
+            let (tok, omit_if_no_ref) =
+                if tok.kind == TokenKind::Directive(CompilerDirective::OmitIfNoRef) {
+                    (self.lexer.expect_next()?, Some(tok))
+                } else {
+                    (tok, None)
+                };
             let (tok, label) = match &tok.kind {
                 TokenKind::Label(string) => {
                     self.check_is_label(tok.span(), string);
@@ -511,6 +517,7 @@ where
                     self.check_is_node_name(node_name.span(), &node_name);
                     let payload = self.node_payload()?;
                     items.push(NodeItem::Node(Arc::new(Node {
+                        omit_if_no_ref,
                         name: node_name,
                         label,
                         payload,
@@ -521,6 +528,14 @@ where
                     self.check_is_property_name(ident.span(), &ident);
                     let values = self.property_values()?;
                     let end_tok = self.expect_semicolon()?.unwrap_or(cloned_tok);
+                    if let Some(omit_if_no_ref) = omit_if_no_ref {
+                        self.diagnostics.push(Diagnostic::new(
+                            omit_if_no_ref.span,
+                            self.lexer.source(),
+                            ErrorCode::IncorrectDirective,
+                            "The /omit-if-no-ref/ directive can only be used on nodes",
+                        ));
+                    }
                     let prop = Property {
                         label,
                         name: ident,
@@ -549,13 +564,26 @@ where
                             "Properties must be placed before nodes",
                         ))
                     }
+                    if let Some(omit_if_no_ref) = omit_if_no_ref {
+                        self.diagnostics.push(Diagnostic::new(
+                            omit_if_no_ref.span,
+                            self.lexer.source(),
+                            ErrorCode::IncorrectDirective,
+                            "The /omit-if-no-ref/ directive can only be used on nodes",
+                        ));
+                    }
                     items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 _ => {
                     return Err(Diagnostic::expected(
                         self.lexer.last_pos().as_span(),
                         self.lexer.source(),
-                        &[TokenKind::Semicolon, TokenKind::Equal, TokenKind::OpenBrace],
+                        &[
+                            TokenKind::Semicolon,
+                            TokenKind::Equal,
+                            TokenKind::OpenBrace,
+                            TokenKind::Directive(CompilerDirective::OmitIfNoRef),
+                        ],
                     ));
                 }
             }
@@ -702,6 +730,7 @@ where
                     name: root_name,
                     label: None,
                     payload: root_payload,
+                    omit_if_no_ref: None,
                 })))
             }
             TokenKind::Ref(reference) => {
@@ -715,7 +744,16 @@ where
             TokenKind::Directive(CompilerDirective::DeleteNode) => {
                 let reference = self.parse_reference()?;
                 self.expect_semicolon()?;
-                Ok(Primary::DeletedNode(token, reference))
+                Ok(Primary::Directive(AnyDirective::DeletedNode(
+                    token, reference,
+                )))
+            }
+            TokenKind::Directive(CompilerDirective::OmitIfNoRef) => {
+                let reference = self.parse_reference()?;
+                self.expect_semicolon()?;
+                Ok(Primary::Directive(AnyDirective::OmitIfNoRef(
+                    token, reference,
+                )))
             }
             _ => Err(Diagnostic::expected(
                 token.span(),
@@ -725,6 +763,7 @@ where
                     TokenKind::Directive(CompilerDirective::MemReserve),
                     TokenKind::Directive(CompilerDirective::Include),
                     TokenKind::Directive(CompilerDirective::DeleteNode),
+                    TokenKind::Directive(CompilerDirective::OmitIfNoRef),
                     TokenKind::Slash,
                     TokenKind::Ref(Reference::Simple("".to_string())),
                 ],
@@ -742,9 +781,10 @@ mod test {
     use crate::dts::data::HasSource;
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::error_codes::ErrorCode;
-    use crate::dts::lexer::TokenKind::{Equal, OpenBrace, Semicolon};
+    use crate::dts::lexer::TokenKind::{Directive, Equal, OpenBrace, Semicolon};
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
+    use crate::dts::CompilerDirective::OmitIfNoRef;
     use crate::dts::{AnyDirective, HasSpan, Position, Primary};
     use std::sync::Arc;
     use std::vec;
@@ -946,6 +986,7 @@ mod test {
                         items: vec![],
                         end: code.s1(";").token(),
                     },
+                    omit_if_no_ref: None
                 }))],
                 source: code.source(),
             }
@@ -973,6 +1014,7 @@ mod test {
                             items: vec![],
                             end: code.s(";", 2).token(),
                         },
+                        omit_if_no_ref: None
                     })),
                 ],
                 source: code.source(),
@@ -1015,9 +1057,11 @@ mod test {
                                     items: vec![],
                                     end: code.s(";", 2).token(),
                                 },
+                                omit_if_no_ref: None
                             }))],
                             end: code.s(";", 3).token(),
                         },
+                        omit_if_no_ref: None
                     })),
                 ],
                 source: code.source(),
@@ -1046,10 +1090,12 @@ mod test {
                 elements: vec![
                     Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
                     Primary::Root(Arc::new(Node {
+                        omit_if_no_ref: None,
                         label: None,
                         name: WithToken::new(NodeName::simple("/"), code.s("/", 3).token()),
                         payload: NodePayload {
                             items: vec![NodeItem::Node(Arc::new(Node {
+                                omit_if_no_ref: None,
                                 label: None,
                                 name: WithToken::new(
                                     NodeName::with_address("pic", "10000000"),
@@ -1164,6 +1210,7 @@ mod test {
                             items: vec![],
                             end: code.s(";", 3).token(),
                         },
+                        omit_if_no_ref: None,
                     })),
                 ],
                 source: code.source(),
@@ -1237,7 +1284,7 @@ mod test {
             Err(Diagnostic::expected(
                 code.s1("prop_a").end().as_span(),
                 code.source(),
-                &[Semicolon, Equal, OpenBrace],
+                &[Semicolon, Equal, OpenBrace, Directive(OmitIfNoRef)],
             ))
         )
     }
@@ -1285,6 +1332,7 @@ mod test {
                 name: WithToken::new(NodeName::simple("/"), code.s1("/").token()),
                 payload: NodePayload {
                     items: vec![NodeItem::Node(Arc::new(Node {
+                        omit_if_no_ref: None,
                         label: None,
                         name: WithToken::new(NodeName::simple("node-2"), code.s1("node-2").token()),
                         payload: NodePayload {
@@ -1299,7 +1347,8 @@ mod test {
                         }
                     }))],
                     end: code.s(";", 3).token()
-                }
+                },
+                omit_if_no_ref: None,
             }))
         );
     }
@@ -1322,20 +1371,92 @@ mod test {
                 source: code.source(),
                 elements: vec![
                     Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
-                    Primary::DeletedNode(
+                    Primary::Directive(AnyDirective::DeletedNode(
                         code.s("/delete-node/", 1).token(),
                         WithToken::new(
                             Reference::Label("some_node".to_string()),
                             code.s1("&some_node").token()
                         )
-                    ),
-                    Primary::DeletedNode(
+                    )),
+                    Primary::Directive(AnyDirective::DeletedNode(
                         code.s("/delete-node/", 2).token(),
                         WithToken::new(
                             Reference::Path("/path/to/node".into()),
                             code.s1("&{/path/to/node}").token()
                         )
-                    )
+                    ))
+                ]
+            }
+        );
+    }
+
+    #[test]
+    pub fn omit_if_no_ref_property() {
+        let code = Code::new(
+            "
+/dts-v1/;
+
+/ {
+    /omit-if-no-ref/ node1_lbl: node1 {};
+};
+        ",
+        );
+        let file = code.parse_ok_no_diagnostics(Parser::file);
+
+        assert_eq!(
+            file,
+            DtsFile {
+                source: code.source(),
+                elements: vec![
+                    Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
+                    Primary::Root(Arc::new(Node {
+                        omit_if_no_ref: None,
+                        name: WithToken::new(NodeName::from("/"), code.s("/", 3).token()),
+                        payload: NodePayload {
+                            items: vec![NodeItem::Node(Arc::new(Node {
+                                omit_if_no_ref: Some(code.s1("/omit-if-no-ref/").token()),
+                                name: WithToken::new(
+                                    NodeName::from("node1"),
+                                    code.s("node1", 2).token()
+                                ),
+                                label: Some(WithToken::new(
+                                    "node1_lbl".to_string(),
+                                    code.s1("node1_lbl").token()
+                                )),
+                                payload: NodePayload {
+                                    items: vec![],
+                                    end: code.s(";", 2).token(),
+                                },
+                            }))],
+                            end: code.s(";", 3).token()
+                        },
+                        label: None
+                    }))
+                ]
+            }
+        );
+
+        let code = Code::new(
+            "
+/dts-v1/;
+
+/omit-if-no-ref/ &node2;
+        ",
+        );
+        let file = code.parse_ok_no_diagnostics(Parser::file);
+        assert_eq!(
+            file,
+            DtsFile {
+                source: code.source(),
+                elements: vec![
+                    Primary::Directive(AnyDirective::DtsHeader(code.s1("/dts-v1/").token())),
+                    Primary::Directive(AnyDirective::OmitIfNoRef(
+                        code.s1("/omit-if-no-ref/").token(),
+                        WithToken::new(
+                            Reference::Label("node2".to_string()),
+                            code.s1("&node2").token()
+                        )
+                    ))
                 ]
             }
         );

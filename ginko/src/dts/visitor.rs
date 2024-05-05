@@ -31,7 +31,6 @@ impl Primary {
             Primary::Root(root) => root.item_at_cursor(cursor),
             Primary::ReferencedNode(node) => node.item_at_cursor(cursor),
             Primary::CStyleInclude(_) => None,
-            Primary::DeletedNode(_, node_ref) => Some(ItemAtCursor::Reference(node_ref.item())),
         }
     }
 }
@@ -45,6 +44,12 @@ impl AnyDirective {
                 } else {
                     None
                 }
+            }
+            AnyDirective::DeletedNode(_, node_ref) => {
+                Some(ItemAtCursor::Reference(node_ref.item()))
+            }
+            AnyDirective::OmitIfNoRef(_, node_ref) => {
+                Some(ItemAtCursor::Reference(node_ref.item()))
             }
             _ => None,
         }

@@ -226,7 +226,7 @@ where
         }
     }
 
-    // precondition: cursor is past last slash
+    // precondition: cursor is past first slash
     // /* comment */
     //  ^~~ cursor is here
     fn multi_line_comment(&mut self, pos: Position) -> Option<Token> {

@@ -342,6 +342,7 @@ pub struct Node {
     pub label: Option<WithToken<String>>,
     pub name: WithToken<NodeName>,
     pub payload: NodePayload,
+    pub omit_if_no_ref: Option<Token>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -510,6 +511,8 @@ pub enum AnyDirective {
     Plugin(Token),
     Memreserve(Memreserve),
     Include(Include),
+    DeletedNode(Token, WithToken<Reference>),
+    OmitIfNoRef(Token, WithToken<Reference>),
 }
 
 impl Display for AnyDirective {
@@ -519,6 +522,8 @@ impl Display for AnyDirective {
             AnyDirective::Memreserve(memreserve) => write!(f, "{memreserve};"),
             AnyDirective::Include(include) => write!(f, "{include}"),
             AnyDirective::Plugin(_) => write!(f, "/plugin/;"),
+            AnyDirective::DeletedNode(_, reference) => write!(f, "/delete-node/ {reference};"),
+            AnyDirective::OmitIfNoRef(_, reference) => write!(f, "/omit-if-no-ref/ {reference};"),
         }
     }
 }
@@ -548,7 +553,6 @@ pub enum Primary {
     ReferencedNode(ReferencedNode),
     // C-style includes should be put into a separate pass
     CStyleInclude(String),
-    DeletedNode(Token, WithToken<Reference>),
 }
 
 impl Primary {
@@ -567,7 +571,6 @@ impl Display for Primary {
             Primary::Root(node) => write!(f, "{node}"),
             Primary::ReferencedNode(node) => write!(f, "{node}"),
             Primary::CStyleInclude(include) => write!(f, "#include {include}"),
-            Primary::DeletedNode(_, reference) => write!(f, "/delete-node/ {reference}"),
         }
     }
 }

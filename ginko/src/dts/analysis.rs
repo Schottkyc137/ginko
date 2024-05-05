@@ -143,6 +143,10 @@ impl Analysis {
                         ctx.first_non_include = true;
                         ctx.is_plugin = true
                     }
+                    AnyDirective::OmitIfNoRef(..) => ctx.first_non_include = true,
+                    AnyDirective::DeletedNode(_, reference) => {
+                        self.resolve_reference(&mut ctx, reference);
+                    }
                 },
                 Primary::Root(root_node) => {
                     self.analyze_node(&mut ctx, root_node.clone(), Path::empty());
@@ -153,9 +157,6 @@ impl Analysis {
                     ctx.first_non_include = true
                 }
                 Primary::CStyleInclude(_) => {}
-                Primary::DeletedNode(_, reference) => {
-                    self.resolve_reference(&mut ctx, reference);
-                }
             }
         }
         if !ctx.dts_header_seen && ctx.file_type == FileType::DtSource {
