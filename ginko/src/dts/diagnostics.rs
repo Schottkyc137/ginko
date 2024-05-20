@@ -1,7 +1,7 @@
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::error_codes::{ErrorCode, SeverityMap};
 use crate::dts::import_guard::CyclicDependencyError;
-use crate::dts::lexer::{Token, TokenKind};
+use crate::dts::tokens::{Token, TokenKind};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::io;

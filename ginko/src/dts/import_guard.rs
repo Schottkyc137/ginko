@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn cylic_dependency_spanning_multiple_files() {
+    fn cyclic_dependency_spanning_multiple_files() {
         let mut checker = ImportGuard::default();
 
         assert_eq!(checker.add(1, &[2]), Ok(()));

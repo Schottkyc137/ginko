@@ -2,8 +2,8 @@ use crate::dts::analysis::{Analysis, AnalysisContext};
 use crate::dts::ast::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::error_codes::SeverityMap;
-use crate::dts::lexer::Lexer;
 use crate::dts::reader::ByteReader;
+use crate::dts::tokens::Lexer;
 use crate::dts::visitor::ItemAtCursor;
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Severity, Span};
 use itertools::Itertools;
@@ -289,8 +289,8 @@ impl Project {
 #[cfg(not(windows))]
 mod tests {
     use crate::dts::error_codes::ErrorCode;
-    use crate::dts::lexer::TokenKind;
     use crate::dts::test::Code;
+    use crate::dts::tokens::TokenKind;
     use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
     use assert_matches::assert_matches;
     use itertools::Itertools;

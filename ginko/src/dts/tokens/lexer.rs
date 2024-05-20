@@ -1,8 +1,9 @@
-use crate::dts::ast::CompilerDirective;
-use crate::dts::data::{HasSource, Position, Span};
+use crate::dts::data::{HasSource, Position};
 use crate::dts::error_codes::ErrorCode;
 use crate::dts::reader::{ByteReader, Reader};
-use crate::dts::{Diagnostic, HasSpan};
+use crate::dts::tokens::token::{Token, TokenKind};
+use crate::dts::tokens::Reference;
+use crate::dts::Diagnostic;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -41,79 +42,11 @@ where
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub enum Reference {
-    // &some_label
-    Simple(String),
-    // &{/path/to/some/label}
-    // Verification happens at the parser / analysis site
-    Path(String),
-}
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub enum TokenKind {
-    Semicolon,
-    // ;
-    Slash,
-    // /
-    Equal,
-    // =
-    OpenBracket,
-    // [
-    CloseBracket,
-    // ]
-    OpenParen,
-    // (
-    CloseParen,
-    // )
-    ChevronLeft,
-    // <
-    ChevronRight,
-    // >
-    Comma,
-    // ,
-    OpenBrace,
-    // {
-    CloseBrace,
-    // }
-    Ident(String),
-    // The most basic identifier, representing everything from node-name to byte string
-    Label(String),
-    String(String),
-    // Since numbers can appear in various circumstances,
-    // this simply represents a string starting with a number.
-    // Verifying this number is done by the parser when more context is available.
-    UnparsedNumber(String),
-    Directive(CompilerDirective),
-    Ref(Reference),
-    Comment(String),
-    Unknown(u8),
-}
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct Token {
-    pub kind: TokenKind,
-    pub span: Span,
-    pub source: Arc<Path>,
-}
-
-impl HasSpan for Token {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
-impl HasSource for Token {
-    fn source(&self) -> Arc<Path> {
-        self.source.clone()
-    }
-}
-
 impl<R> HasSource for Lexer<R>
 where
     R: Reader + Sized,
 {
-    fn source(&self) -> Arc<std::path::Path> {
+    fn source(&self) -> Arc<Path> {
         self.source.clone()
     }
 }
@@ -256,19 +189,20 @@ where
     // /directive/;
     //  ^~~ cursor is here
     fn compiler_directive(&mut self, pos: Position) -> Token {
+        use crate::dts::tokens::CompilerDirective::*;
         let directive = self.read_while(|ch| ch != b'/');
         self.reader.skip();
         let directive_string = String::from_utf8(directive).unwrap();
         let directive = match directive_string.as_str() {
-            "dts-v1" => CompilerDirective::DTSVersionHeader,
-            "plugin" => CompilerDirective::Plugin,
-            "memreserve" => CompilerDirective::MemReserve,
-            "bits" => CompilerDirective::Bits,
-            "delete-property" => CompilerDirective::DeleteProperty,
-            "delete-node" => CompilerDirective::DeleteNode,
-            "omit-if-no-ref" => CompilerDirective::OmitIfNoRef,
-            "include" => CompilerDirective::Include,
-            other => CompilerDirective::Other(other.into()),
+            "dts-v1" => DTSVersionHeader,
+            "plugin" => Plugin,
+            "memreserve" => MemReserve,
+            "bits" => Bits,
+            "delete-property" => DeleteProperty,
+            "delete-node" => DeleteNode,
+            "omit-if-no-ref" => OmitIfNoRef,
+            "include" => Include,
+            other => Other(other.into()),
         };
         Token {
             span: pos.to(self.reader.pos()),
@@ -582,9 +516,11 @@ where
 #[cfg(test)]
 mod test {
     use crate::dts::data::Position;
-    use crate::dts::lexer::TokenKind::*;
-    use crate::dts::lexer::{CompilerDirective, Lexer, Reference, Token};
     use crate::dts::reader::ByteReader;
+    use crate::dts::tokens::lexer::Reference;
+    use crate::dts::tokens::CompilerDirective;
+    use crate::dts::tokens::TokenKind::*;
+    use crate::dts::tokens::{Lexer, Token};
     use itertools::Itertools;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;

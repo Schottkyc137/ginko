@@ -5,9 +5,9 @@ use crate::dts::ast::{
 use crate::dts::data::{HasSource, Span};
 use crate::dts::diagnostics::{Diagnostic, NameContext};
 use crate::dts::error_codes::ErrorCode;
-use crate::dts::lexer::{Lexer, PeekingLexer, Reference, Token, TokenKind};
 use crate::dts::reader::{ByteReader, Reader};
-use crate::dts::{CompilerDirective, HasSpan};
+use crate::dts::tokens::{CompilerDirective, Lexer, PeekingLexer, Reference, Token, TokenKind};
+use crate::dts::HasSpan;
 use itertools::Itertools;
 use std::path::Path as StdPath;
 use std::sync::Arc;
@@ -781,10 +781,10 @@ mod test {
     use crate::dts::data::HasSource;
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::error_codes::ErrorCode;
-    use crate::dts::lexer::TokenKind::{Directive, Equal, OpenBrace, Semicolon};
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
-    use crate::dts::CompilerDirective::OmitIfNoRef;
+    use crate::dts::tokens::CompilerDirective::OmitIfNoRef;
+    use crate::dts::tokens::TokenKind::{Directive, Equal, OpenBrace, Semicolon};
     use crate::dts::{AnyDirective, HasSpan, Position, Primary};
     use std::sync::Arc;
     use std::vec;

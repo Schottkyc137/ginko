@@ -1,7 +1,7 @@
 use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::data::HasSource;
-use crate::dts::lexer::{Lexer, Token};
 use crate::dts::reader::{ByteReader, Reader};
+use crate::dts::tokens::{Lexer, Token};
 use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Project, Span};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

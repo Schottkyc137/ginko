@@ -1,5 +1,5 @@
 use crate::dts::data::HasSource;
-use crate::dts::lexer::Token;
+use crate::dts::tokens::Token;
 use crate::dts::{HasSpan, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter, LowerHex};
@@ -442,36 +442,6 @@ impl Display for DtsFile {
             writeln!(f, "{primary}")?;
         }
         Ok(())
-    }
-}
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-#[allow(unused)]
-pub enum CompilerDirective {
-    DTSVersionHeader,
-    MemReserve,
-    DeleteNode,
-    DeleteProperty,
-    Plugin,
-    Bits,
-    OmitIfNoRef,
-    Include,
-    Other(String),
-}
-
-impl Display for CompilerDirective {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CompilerDirective::DTSVersionHeader => write!(f, "/dts-v1/"),
-            CompilerDirective::MemReserve => write!(f, "/memreserve/"),
-            CompilerDirective::DeleteNode => write!(f, "/delete-node/"),
-            CompilerDirective::DeleteProperty => write!(f, "/delete-property/"),
-            CompilerDirective::Plugin => write!(f, "/plugin/"),
-            CompilerDirective::Bits => write!(f, "/bits/"),
-            CompilerDirective::OmitIfNoRef => write!(f, "/omit-if-no-ref/"),
-            CompilerDirective::Include => write!(f, "/include/"),
-            CompilerDirective::Other(other) => write!(f, "/{other}/"),
-        }
     }
 }
 
