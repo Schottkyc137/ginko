@@ -10,6 +10,10 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use url::Url;
 
+pub struct BackendOptions {
+    pub include_paths: Option<Vec<String>>,
+}
+
 pub(crate) struct Backend {
     client: Client,
     project: RwLock<Project>,
@@ -17,10 +21,13 @@ pub(crate) struct Backend {
 }
 
 impl Backend {
-    pub fn new(client: Client) -> Backend {
+    pub fn new(client: Client, options: BackendOptions) -> Backend {
+        let mut project = Project::default();
+        let _ = project.set_include_paths(options.include_paths);
+
         Backend {
             client,
-            project: RwLock::new(Project::default()),
+            project: RwLock::new(project),
             severities: SeverityMap::default(),
         }
     }

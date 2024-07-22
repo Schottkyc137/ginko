@@ -5,7 +5,7 @@ use crate::dts::error_codes::SeverityMap;
 use crate::dts::reader::ByteReader;
 use crate::dts::tokens::Lexer;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Severity, Span};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, ParserContext, Position, Severity, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::empty;
@@ -74,11 +74,29 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
+    pub include_paths: Vec<PathBuf>,
     pub severities: SeverityMap,
 }
 
 impl Project {
-    pub fn add_file(&mut self, file_name: PathBuf) -> Result<(), io::Error> {
+    pub fn set_include_paths(
+        &mut self,
+        include_paths: Option<Vec<String>>,
+    ) -> Result<(), io::Error> {
+        self.include_paths = Vec::new();
+
+        if include_paths.is_none() {
+            return Ok(());
+        }
+
+        for path in include_paths.unwrap().iter_mut() {
+            self.include_paths.push(dunce::canonicalize(path)?);
+        }
+
+        Ok(())
+    }
+
+    pub fn add_file(&mut self, file_name: String) -> Result<(), io::Error> {
         let file_name = dunce::canonicalize(file_name)?;
         let content = fs::read_to_string(file_name.clone())?;
         let file_ending = FileType::from(file_name.as_path());
@@ -232,7 +250,12 @@ impl Project {
     fn parse_file(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
         let reader = ByteReader::from_string(text.clone());
         let lexer = Lexer::new(reader, file_name.clone().into());
-        let mut parser = Parser::new(lexer);
+        let mut parser = Parser::new(
+            lexer,
+            ParserContext {
+                include_paths: self.include_paths.clone(),
+            },
+        );
         match parser.file() {
             Ok(file) => {
                 // insert dummy file to be defined so that no cyclic dependency can occur.
@@ -291,7 +314,7 @@ mod tests {
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
     use crate::dts::tokens::TokenKind;
-    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
+    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, ParserContext, Project};
     use assert_matches::assert_matches;
     use itertools::Itertools;
     use std::fs;
@@ -315,7 +338,12 @@ mod tests {
             name: impl AsRef<Path>,
             content: impl AsRef<str>,
         ) -> (Code, PathBuf) {
-            let code = Code::new(content.as_ref());
+            let code = Code::new(
+                content.as_ref(),
+                ParserContext {
+                    include_paths: Vec::new(),
+                },
+            );
             let file_path = self.inner.path().join(name);
             fs::write(&file_path, code.code()).expect("Cannot write to file");
             (code, file_path)
@@ -335,7 +363,9 @@ mod tests {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
         let (_, path1) = temp_dir.add_file("tests-include.dtsi", "");
-        project.add_file(path1.clone()).expect("Cannot add file");
+        project
+            .add_file(path1.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
 
         let (_, file2) = temp_dir.add_file(
             "tests-file.dts",
@@ -348,7 +378,9 @@ mod tests {
                 path1.display()
             ),
         );
-        project.add_file(file2.clone()).expect("Cannot add file");
+        project
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         assert!(project.get_file(&path1).is_some());
         assert!(project.get_file(&file2).is_some());
         assert_eq!(project.get_diagnostics(&path1).next(), None);
@@ -391,7 +423,7 @@ mod tests {
         );
 
         project
-            .add_file(file2.to_path_buf())
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
@@ -447,7 +479,7 @@ mod tests {
 
         let mut project = Project::default();
         project
-            .add_file(path1.clone())
+            .add_file(path1.into_os_string().into_string().unwrap())
             .expect("Cannot add file to project");
 
         let diag = project.all_diagnostics().cloned().collect_vec();
@@ -469,9 +501,13 @@ mod tests {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
         let (_, file1) = temp_dir.add_file("test1.dtsi", "");
-        project.add_file(file1.clone()).expect("Cannot add file");
+        project
+            .add_file(file1.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         let (_, file2) = temp_dir.add_file("test2.dtsi", "");
-        project.add_file(file2.clone()).expect("Cannot add file");
+        project
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         let (_, file3) = temp_dir.add_file(
             "test.dts",
             format!(
@@ -486,7 +522,9 @@ mod tests {
             ),
         );
 
-        project.add_file(file3).expect("Unexpected IO error");
+        project
+            .add_file(file3.into_os_string().into_string().unwrap())
+            .expect("Unexpected IO error");
         project.assert_no_diagnostics();
     }
 
@@ -512,7 +550,7 @@ mod tests {
         );
 
         project
-            .add_file(file3.clone())
+            .add_file(file3.clone().into_os_string().into_string().unwrap())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
@@ -539,7 +577,7 @@ mod tests {
             ),
         );
         project
-            .add_file(file2.clone())
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
             .expect("Cannot add file to project");
 
         assert!(project.get_file(&file1).is_some());

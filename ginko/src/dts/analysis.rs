@@ -380,7 +380,7 @@ mod test {
     use crate::dts::data::{HasSource, HasSpan, Position};
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
-    use crate::dts::Diagnostic;
+    use crate::dts::{Diagnostic, ParserContext};
     use assert_unordered::assert_eq_unordered;
 
     #[test]
@@ -389,14 +389,16 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
-    my_l?abel: some_node {}; 
+/{
+    my_l?abel: some_node {};
     my_label_that_has_more_than_31_characters: other_node {};
     some_other_node {
         another_ill#gal_label: sub_node {};
     };
     illegal_node_name#s {};
-};",
+};", ParserContext {
+  include_paths: Vec::new(),
+},
         );
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq_unordered!(
@@ -436,7 +438,7 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
+/{
     node1: some_node {
         ref-to-node2 = &node2;
         ref-to-node3 = <&node3>;
@@ -450,7 +452,9 @@ mod test {
             self-reference = &node4;
         };
     };
-};",
+};", ParserContext {
+  include_paths: Vec::new(),
+},
         );
         let (diagnostics, context) = code.get_analyzed_file();
         assert_eq_unordered!(
@@ -503,7 +507,7 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
+/{
     node1: some_node {
         ref-to-node2 = &node2;
     };
@@ -513,7 +517,9 @@ mod test {
             self-reference = &node4;
         };
     };
-};",
+};", ParserContext {
+  include_paths: Vec::new(),
+},
         );
         let (diag, context) = code.get_analyzed_file();
         assert!(diag.is_empty());
@@ -549,7 +555,9 @@ mod test {
 
     #[test]
     pub fn test_does_not_accept_non_dtsv1_sources() {
-        let code = Code::new("/ {};");
+        let code = Code::new("/ {};", ParserContext {
+          include_paths: Vec::new(),
+      },);
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq!(
             diagnostics,
@@ -580,7 +588,9 @@ mod test {
 
 &{/some_other_node} {};
 
-",
+", ParserContext {
+  include_paths: Vec::new(),
+},
         );
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq_unordered!(
