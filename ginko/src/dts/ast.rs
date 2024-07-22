@@ -472,7 +472,7 @@ impl Display for Include {
 
 impl Include {
     pub fn path(&self) -> Result<PathBuf, io::Error> {
-        for include_path in self.include_paths.clone().iter_mut() {
+        for include_path in self.include_paths.iter() {
             let mut path = PathBuf::new();
             path.push(include_path);
             path.push(self.file_name.to_string());

@@ -12,16 +12,9 @@ use itertools::Itertools;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
+#[derive(Clone, Default)]
 pub struct ParserContext {
     pub include_paths: Vec<PathBuf>,
-}
-
-impl Clone for ParserContext {
-    fn clone(&self) -> Self {
-        ParserContext {
-            include_paths: self.include_paths.clone(),
-        }
-    }
 }
 
 /// The `Parser` class is responsible for syntactical analysis,
@@ -813,9 +806,7 @@ mod test {
     pub fn string_properties() {
         let code = Code::new(
             "\"\"",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -823,9 +814,7 @@ mod test {
         );
         let code = Code::new(
             "\"bar\"",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -842,9 +831,7 @@ mod test {
 / {
     some_prop = <5>
 }",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let (_, diagnostics) = code.parse_ok(Parser::file);
         assert_eq!(
@@ -869,9 +856,7 @@ mod test {
     pub fn cell_properties() {
         let code = Code::new(
             "<>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -879,9 +864,7 @@ mod test {
         );
         let code = Code::new(
             "<0>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -893,9 +876,7 @@ mod test {
         );
         let code = Code::new(
             "<4>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -907,9 +888,7 @@ mod test {
         );
         let code = Code::new(
             "<4 17>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -924,9 +903,7 @@ mod test {
         );
         let code = Code::new(
             "<17 0xC>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -941,9 +918,7 @@ mod test {
         );
         let code = Code::new(
             "<17 &label>",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -965,9 +940,7 @@ mod test {
     pub fn reference_properties() {
         let code = Code::new(
             "&my_ref",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -978,9 +951,7 @@ mod test {
         );
         let code = Code::new(
             "&{/path/to/somewhere@2000}",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -999,9 +970,7 @@ mod test {
     pub fn byte_strings() {
         let code = Code::new(
             "[]",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -1009,9 +978,7 @@ mod test {
         );
         let code = Code::new(
             "[000012345678]",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -1026,9 +993,7 @@ mod test {
         );
         let code = Code::new(
             "[00 00 12 34 56 78]",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -1047,9 +1012,7 @@ mod test {
         );
         let code = Code::new(
             "[AB CD]",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
@@ -1068,9 +1031,7 @@ mod test {
     pub fn simple_file() {
         let code = Code::new(
             "/ {};",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         code.s1(";");
@@ -1098,9 +1059,7 @@ mod test {
 /dts-v1/;
 
 /{};",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1134,9 +1093,7 @@ mod test {
         // my sub node
     };
 };",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1186,9 +1143,7 @@ mod test {
             reg = <0x10000000 0x100>;
         };
     };",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1269,9 +1224,7 @@ mod test {
         };
         some_prop = <0x1>;
     };",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let (_, diag) = code.parse_ok(Parser::file);
         assert_eq!(
@@ -1302,9 +1255,7 @@ mod test {
 
     / {};
     ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1345,9 +1296,7 @@ mod test {
         str = start: \"string value\" end: ;
     };
     ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1363,9 +1312,7 @@ mod test {
         some_prop = <(1 + 1) (2 || (3 - 4)) ()>;
     };
     ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1380,9 +1327,7 @@ mod test {
 
     / {};
     ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1398,9 +1343,7 @@ mod test {
         prop_b;
     };
     ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let (res, _) = code.parse(Parser::file);
 
@@ -1424,9 +1367,7 @@ mod test {
         }
 
         ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let (_, diag) = code.parse_ok(Parser::file);
 
@@ -1450,9 +1391,7 @@ mod test {
     };
 };
         ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let primary = code.parse_ok_no_diagnostics(Parser::primary);
 
@@ -1493,9 +1432,7 @@ mod test {
 /delete-node/ &some_node;
 /delete-node/ &{/path/to/node};
         ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
 
@@ -1534,9 +1471,7 @@ mod test {
     /omit-if-no-ref/ node1_lbl: node1 {};
 };
         ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
 
@@ -1579,9 +1514,7 @@ mod test {
 
 /omit-if-no-ref/ &node2;
         ",
-            ParserContext {
-                include_paths: Vec::new(),
-            },
+            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(

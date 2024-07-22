@@ -83,16 +83,11 @@ impl Project {
         &mut self,
         include_paths: Option<Vec<String>>,
     ) -> Result<(), io::Error> {
-        self.include_paths = Vec::new();
-
-        if include_paths.is_none() {
-            return Ok(());
-        }
-
-        for path in include_paths.unwrap().iter_mut() {
-            self.include_paths.push(dunce::canonicalize(path)?);
-        }
-
+        self.include_paths = include_paths
+            .unwrap_or_default()
+            .iter()
+            .map(|path| dunce::canonicalize(path))
+            .collect::<Result<Vec<_>, io::Error>>()?;
         Ok(())
     }
 
