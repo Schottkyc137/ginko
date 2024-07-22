@@ -335,9 +335,7 @@ mod tests {
         ) -> (Code, PathBuf) {
             let code = Code::new(
                 content.as_ref(),
-                ParserContext {
-                    include_paths: Vec::new(),
-                },
+                ParserContext::default(),
             );
             let file_path = self.inner.path().join(name);
 

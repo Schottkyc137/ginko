@@ -396,9 +396,7 @@ mod test {
         another_ill#gal_label: sub_node {};
     };
     illegal_node_name#s {};
-};", ParserContext {
-  include_paths: Vec::new(),
-},
+};", ParserContext::default(),
         );
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq_unordered!(
@@ -452,9 +450,7 @@ mod test {
             self-reference = &node4;
         };
     };
-};", ParserContext {
-  include_paths: Vec::new(),
-},
+};", ParserContext::default(),
         );
         let (diagnostics, context) = code.get_analyzed_file();
         assert_eq_unordered!(
@@ -517,9 +513,7 @@ mod test {
             self-reference = &node4;
         };
     };
-};", ParserContext {
-  include_paths: Vec::new(),
-},
+};", ParserContext::default(),
         );
         let (diag, context) = code.get_analyzed_file();
         assert!(diag.is_empty());
@@ -555,9 +549,7 @@ mod test {
 
     #[test]
     pub fn test_does_not_accept_non_dtsv1_sources() {
-        let code = Code::new("/ {};", ParserContext {
-          include_paths: Vec::new(),
-      },);
+        let code = Code::new("/ {};", ParserContext::default());
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq!(
             diagnostics,
@@ -588,9 +580,7 @@ mod test {
 
 &{/some_other_node} {};
 
-", ParserContext {
-  include_paths: Vec::new(),
-},
+", ParserContext::default()
         );
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq_unordered!(

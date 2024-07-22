@@ -238,9 +238,7 @@ mod tests {
 
     #[test]
     fn display_missing_semicolon() {
-        let code = Code::with_file_name("/ {}", "fname", ParserContext {
-          include_paths: Vec::new(),
-      },);
+        let code = Code::with_file_name("/ {}", "fname", ParserContext::default());
         let (_, diag) = code.parse(
             Parser::file
         );
@@ -278,9 +276,7 @@ error --> fname:1:5
         / {
             very-long-company,very-long-name;
         };",
-            "fname", ParserContext {
-              include_paths: Vec::new(),
-          },
+            "fname", ParserContext::default(),
         );
         let (_, diag) = code.parse(
             Parser::file
