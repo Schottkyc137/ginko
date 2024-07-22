@@ -319,7 +319,7 @@ mod tests {
     use tempfile::tempdir;
 
     struct TempDir {
-        inner: tempfile::TempDir,
+        pub inner: tempfile::TempDir,
     }
 
     impl TempDir {
@@ -340,6 +340,7 @@ mod tests {
                 },
             );
             let file_path = self.inner.path().join(name);
+
             fs::write(&file_path, code.code()).expect("Cannot write to file");
             (code, file_path)
         }
@@ -600,5 +601,44 @@ mod tests {
                 "Included file contains errors"
             )]
         );
+    }
+
+    #[test]
+    pub fn file_with_include_paths_includes() {
+        let includes_dir = TempDir::new();
+        let (_, file1) = includes_dir.add_file("tests-include1.dtsi", "");
+        let another_includes_dir = TempDir::new();
+        let (_, file2) = another_includes_dir.add_file("tests-include2.dtsi", "");
+
+        let temp_dir = TempDir::new();
+        let (_, file3) = temp_dir.add_file(
+            "test.dts",
+            format!(
+                r#"
+/dts-v1/;
+
+/include/ "tests-include1.dtsi"
+/include/ "tests-include2.dtsi"
+"#,
+            ),
+        );
+
+        let mut project = Project::default();
+        let include_paths = Some(vec![
+            includes_dir.inner.path().display().to_string(),
+            another_includes_dir.inner.path().display().to_string(),
+        ]);
+
+        let _ = project.set_include_paths(include_paths);
+
+        project
+            .add_file(file3.clone().into_os_string().into_string().unwrap())
+            .expect("Unexpected IO error");
+
+        project.assert_no_diagnostics();
+
+        assert!(project.get_file(&file1).is_some());
+        assert!(project.get_file(&file2).is_some());
+        assert!(project.get_file(&file3).is_some());
     }
 }

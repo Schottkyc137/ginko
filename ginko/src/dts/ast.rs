@@ -472,19 +472,16 @@ impl Display for Include {
 
 impl Include {
     pub fn path(&self) -> Result<PathBuf, io::Error> {
-        for include_path in self.include_paths.iter() {
-            let mut path = PathBuf::new();
-            path.push(include_path);
-            path.push(self.file_name.to_string());
+        let include_resolved = self.include_paths.iter().find_map(|include_path| {
+            let path = include_path.join(self.file_name.to_string());
+            dunce::canonicalize(path).ok()
+        });
 
-            let result = dunce::canonicalize(path);
-
-            if result.is_ok() {
-              return result;
-            }
+        if let Some(include_resolved) = include_resolved {
+            Ok(include_resolved)
+        } else {
+            dunce::canonicalize(self.file_name.to_string())
         }
-
-        dunce::canonicalize(self.file_name.to_string())
     }
 }
 
