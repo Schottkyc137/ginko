@@ -10,7 +10,11 @@ struct Args {}
 #[tokio::main]
 pub async fn main() {
     Args::parse();
-    tracing_subscriber::fmt().init();
+    // Log to stderr instead of stdout since communication with the language server client
+    // happens through stdout
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let (stdin, stdout) = (tokio::io::stdin(), tokio::io::stdout());
 

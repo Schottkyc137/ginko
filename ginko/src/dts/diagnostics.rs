@@ -292,7 +292,6 @@ warning --> fname:4:13
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ property should only have 31 characters but has 32 characters
 
 ".to_string();
-        println!("{printer}");
         assert_eq!(formatter_err, format!("{printer}"));
     }
 }
