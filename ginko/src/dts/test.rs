@@ -2,7 +2,7 @@ use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::data::HasSource;
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::{Lexer, Token};
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Project, Span, ParserContext};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, ParserContext, Position, Project, Span};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ pub struct Code {
     pos: Span,
     code: String,
     source: Arc<Path>,
-    parser_context: ParserContext
+    parser_context: ParserContext,
 }
 
 impl HasSpan for Code {
@@ -53,7 +53,11 @@ impl HasSource for Code {
 }
 
 impl Code {
-    pub fn new(code: &str, context: ParserContext) -> Code {
+    pub fn new(code: &str) -> Code {
+        Code::with_file_name(code, "inline source", ParserContext::default())
+    }
+
+    pub fn with_context(code: &str, context: ParserContext) -> Code {
         Code::with_file_name(code, "inline source", context)
     }
 
@@ -68,7 +72,7 @@ impl Code {
             pos: Span::new(Position::zero(), last_pos),
             code: code.into(),
             source: Arc::from(PathBuf::from(file_name)),
-            parser_context: context
+            parser_context: context,
         }
     }
 
@@ -83,10 +87,7 @@ impl Code {
         let mut reader = ByteReader::from_string(self.code.clone());
         reader.seek(self.pos.start());
         let lexer = Lexer::new(reader, self.source.clone());
-        let mut parser = Parser::new(
-            lexer,
-            self.parser_context.clone()
-        );
+        let mut parser = Parser::new(lexer, self.parser_context.clone());
         (parse_fn(&mut parser), parser.diagnostics)
     }
 
@@ -128,7 +129,7 @@ impl Code {
             code: self.code.clone(),
             pos: span,
             source: self.source.clone(),
-            parser_context: self.parser_context.clone()
+            parser_context: self.parser_context.clone(),
         }
     }
 

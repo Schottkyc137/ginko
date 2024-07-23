@@ -81,14 +81,12 @@ pub struct Project {
 impl Project {
     pub fn set_include_paths(
         &mut self,
-        include_paths: Option<Vec<String>>,
-    ) -> Result<(), io::Error> {
+        include_paths: Vec<String>,
+    ) {
         self.include_paths = include_paths
-            .unwrap_or_default()
             .iter()
-            .map(|path| dunce::canonicalize(path))
-            .collect::<Result<Vec<_>, io::Error>>()?;
-        Ok(())
+            .map(|path| dunce::canonicalize(path).unwrap_or_default())
+            .collect::<Vec<PathBuf>>();
     }
 
     pub fn add_file(&mut self, file_name: String) -> Result<(), io::Error> {
@@ -309,7 +307,7 @@ mod tests {
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
     use crate::dts::tokens::TokenKind;
-    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, ParserContext, Project};
+    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
     use assert_matches::assert_matches;
     use itertools::Itertools;
     use std::fs;
@@ -335,7 +333,6 @@ mod tests {
         ) -> (Code, PathBuf) {
             let code = Code::new(
                 content.as_ref(),
-                ParserContext::default(),
             );
             let file_path = self.inner.path().join(name);
 
@@ -622,10 +619,10 @@ mod tests {
         );
 
         let mut project = Project::default();
-        let include_paths = Some(vec![
+        let include_paths = vec![
             includes_dir.inner.path().display().to_string(),
             another_includes_dir.inner.path().display().to_string(),
-        ]);
+        ];
 
         let _ = project.set_include_paths(include_paths);
 

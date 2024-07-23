@@ -16,8 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let mut project = Project::default();
 
-    // let include_path =
-    project.set_include_paths(args.include)?;
+    project.set_include_paths(args.include.unwrap_or_default());
     project.add_file(args.file)?;
 
     let mut has_errors = false;

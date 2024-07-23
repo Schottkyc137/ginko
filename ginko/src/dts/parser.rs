@@ -798,24 +798,18 @@ mod test {
     use crate::dts::test::Code;
     use crate::dts::tokens::CompilerDirective::OmitIfNoRef;
     use crate::dts::tokens::TokenKind::{Directive, Equal, OpenBrace, Semicolon};
-    use crate::dts::{AnyDirective, HasSpan, ParserContext, Position, Primary};
+    use crate::dts::{AnyDirective, HasSpan, Position, Primary};
     use std::sync::Arc;
     use std::vec;
 
     #[test]
     pub fn string_properties() {
-        let code = Code::new(
-            "\"\"",
-            ParserContext::default(),
-        );
+        let code = Code::new("\"\"");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::String(WithToken::new("".into(), code.token()))
         );
-        let code = Code::new(
-            "\"bar\"",
-            ParserContext::default(),
-        );
+        let code = Code::new("\"bar\"");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::String(WithToken::new("bar".into(), code.token()))
@@ -831,7 +825,6 @@ mod test {
 / {
     some_prop = <5>
 }",
-            ParserContext::default(),
         );
         let (_, diagnostics) = code.parse_ok(Parser::file);
         assert_eq!(
@@ -854,18 +847,12 @@ mod test {
 
     #[test]
     pub fn cell_properties() {
-        let code = Code::new(
-            "<>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(code.s1("<").token(), vec![], code.s1(">").token())
         );
-        let code = Code::new(
-            "<0>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<0>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(
@@ -874,10 +861,7 @@ mod test {
                 code.s1(">").token(),
             )
         );
-        let code = Code::new(
-            "<4>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<4>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(
@@ -886,10 +870,7 @@ mod test {
                 code.s1(">").token(),
             )
         );
-        let code = Code::new(
-            "<4 17>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<4 17>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(
@@ -901,10 +882,7 @@ mod test {
                 code.s1(">").token(),
             )
         );
-        let code = Code::new(
-            "<17 0xC>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<17 0xC>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(
@@ -916,10 +894,7 @@ mod test {
                 code.s1(">").token(),
             )
         );
-        let code = Code::new(
-            "<17 &label>",
-            ParserContext::default(),
-        );
+        let code = Code::new("<17 &label>");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Cells(
@@ -938,10 +913,7 @@ mod test {
 
     #[test]
     pub fn reference_properties() {
-        let code = Code::new(
-            "&my_ref",
-            ParserContext::default(),
-        );
+        let code = Code::new("&my_ref");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Reference(WithToken::new(
@@ -949,10 +921,7 @@ mod test {
                 code.token(),
             ))
         );
-        let code = Code::new(
-            "&{/path/to/somewhere@2000}",
-            ParserContext::default(),
-        );
+        let code = Code::new("&{/path/to/somewhere@2000}");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::Reference(WithToken::new(
@@ -968,18 +937,12 @@ mod test {
 
     #[test]
     pub fn byte_strings() {
-        let code = Code::new(
-            "[]",
-            ParserContext::default(),
-        );
+        let code = Code::new("[]");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::ByteStrings(code.s1("[").token(), vec![], code.s1("]").token())
         );
-        let code = Code::new(
-            "[000012345678]",
-            ParserContext::default(),
-        );
+        let code = Code::new("[000012345678]");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::ByteStrings(
@@ -991,10 +954,7 @@ mod test {
                 code.s1("]").token(),
             )
         );
-        let code = Code::new(
-            "[00 00 12 34 56 78]",
-            ParserContext::default(),
-        );
+        let code = Code::new("[00 00 12 34 56 78]");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::ByteStrings(
@@ -1010,10 +970,7 @@ mod test {
                 code.s1("]").token(),
             )
         );
-        let code = Code::new(
-            "[AB CD]",
-            ParserContext::default(),
-        );
+        let code = Code::new("[AB CD]");
         assert_eq!(
             code.parse_ok_no_diagnostics(Parser::property_value),
             PropertyValue::ByteStrings(
@@ -1029,10 +986,7 @@ mod test {
 
     #[test]
     pub fn simple_file() {
-        let code = Code::new(
-            "/ {};",
-            ParserContext::default(),
-        );
+        let code = Code::new("/ {};");
         let node = code.parse_ok_no_diagnostics(Parser::file);
         code.s1(";");
         assert_eq!(
@@ -1059,7 +1013,6 @@ mod test {
 /dts-v1/;
 
 /{};",
-            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1093,7 +1046,6 @@ mod test {
         // my sub node
     };
 };",
-            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1143,7 +1095,6 @@ mod test {
             reg = <0x10000000 0x100>;
         };
     };",
-            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1224,7 +1175,6 @@ mod test {
         };
         some_prop = <0x1>;
     };",
-            ParserContext::default(),
         );
         let (_, diag) = code.parse_ok(Parser::file);
         assert_eq!(
@@ -1255,7 +1205,6 @@ mod test {
 
     / {};
     ",
-            ParserContext::default(),
         );
         let node = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
@@ -1296,7 +1245,6 @@ mod test {
         str = start: \"string value\" end: ;
     };
     ",
-            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1312,7 +1260,6 @@ mod test {
         some_prop = <(1 + 1) (2 || (3 - 4)) ()>;
     };
     ",
-            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1327,7 +1274,6 @@ mod test {
 
     / {};
     ",
-            ParserContext::default(),
         )
         .parse_ok_no_diagnostics(Parser::file);
     }
@@ -1343,7 +1289,6 @@ mod test {
         prop_b;
     };
     ",
-            ParserContext::default(),
         );
         let (res, _) = code.parse(Parser::file);
 
@@ -1367,7 +1312,6 @@ mod test {
         }
 
         ",
-            ParserContext::default(),
         );
         let (_, diag) = code.parse_ok(Parser::file);
 
@@ -1391,7 +1335,6 @@ mod test {
     };
 };
         ",
-            ParserContext::default(),
         );
         let primary = code.parse_ok_no_diagnostics(Parser::primary);
 
@@ -1432,7 +1375,6 @@ mod test {
 /delete-node/ &some_node;
 /delete-node/ &{/path/to/node};
         ",
-            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
 
@@ -1471,7 +1413,6 @@ mod test {
     /omit-if-no-ref/ node1_lbl: node1 {};
 };
         ",
-            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
 
@@ -1514,7 +1455,6 @@ mod test {
 
 /omit-if-no-ref/ &node2;
         ",
-            ParserContext::default(),
         );
         let file = code.parse_ok_no_diagnostics(Parser::file);
         assert_eq!(
