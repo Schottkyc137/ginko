@@ -79,10 +79,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn set_include_paths(
-        &mut self,
-        include_paths: Vec<String>,
-    ) {
+    pub fn set_include_paths(&mut self, include_paths: Vec<String>) {
         self.include_paths = include_paths
             .iter()
             .map(|path| dunce::canonicalize(path).unwrap_or_default())
@@ -331,9 +328,7 @@ mod tests {
             name: impl AsRef<Path>,
             content: impl AsRef<str>,
         ) -> (Code, PathBuf) {
-            let code = Code::new(
-                content.as_ref(),
-            );
+            let code = Code::new(content.as_ref());
             let file_path = self.inner.path().join(name);
 
             fs::write(&file_path, code.code()).expect("Cannot write to file");
@@ -608,14 +603,12 @@ mod tests {
         let temp_dir = TempDir::new();
         let (_, file3) = temp_dir.add_file(
             "test.dts",
-            format!(
-                r#"
+            r#"
 /dts-v1/;
 
 /include/ "tests-include1.dtsi"
 /include/ "tests-include2.dtsi"
 "#,
-            ),
         );
 
         let mut project = Project::default();
@@ -624,7 +617,7 @@ mod tests {
             another_includes_dir.inner.path().display().to_string(),
         ];
 
-        let _ = project.set_include_paths(include_paths);
+        project.set_include_paths(include_paths);
 
         project
             .add_file(file3.clone().into_os_string().into_string().unwrap())

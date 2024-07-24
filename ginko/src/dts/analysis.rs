@@ -380,7 +380,7 @@ mod test {
     use crate::dts::data::{HasSource, HasSpan, Position};
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
-    use crate::dts::{Diagnostic, ParserContext};
+    use crate::dts::Diagnostic;
     use assert_unordered::assert_eq_unordered;
 
     #[test]

@@ -57,6 +57,7 @@ impl Code {
         Code::with_file_name(code, "inline source", ParserContext::default())
     }
 
+    #[allow(unused)]
     pub fn with_context(code: &str, context: ParserContext) -> Code {
         Code::with_file_name(code, "inline source", context)
     }
