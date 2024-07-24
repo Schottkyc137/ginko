@@ -8,8 +8,8 @@ use std::process::exit;
 #[command(author, version, about, long_about = None)]
 struct Args {
     file: String,
-    #[arg(short, long, help="Add a path to search for include files")]
-    include: Option<Vec<String>>
+    #[arg(short, long, help = "Add a path to search for include files")]
+    include: Option<Vec<String>>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
