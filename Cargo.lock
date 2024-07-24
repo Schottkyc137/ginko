@@ -364,7 +364,7 @@ checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 
 [[package]]
 name = "ginko"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "assert_matches",
  "assert_unordered",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "ginko_ls"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clap",
  "ginko",
