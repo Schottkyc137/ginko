@@ -449,6 +449,7 @@ impl Display for DtsFile {
 pub struct Include {
     pub include_token: Token,
     pub file_name: WithToken<String>,
+    pub include_paths: Vec<PathBuf>,
 }
 
 impl HasSpan for Include {
@@ -471,7 +472,16 @@ impl Display for Include {
 
 impl Include {
     pub fn path(&self) -> Result<PathBuf, io::Error> {
-        dunce::canonicalize(self.file_name.item())
+        let include_resolved = self.include_paths.iter().find_map(|include_path| {
+            let path = include_path.join(self.file_name.to_string());
+            dunce::canonicalize(path).ok()
+        });
+
+        if let Some(include_resolved) = include_resolved {
+            Ok(include_resolved)
+        } else {
+            dunce::canonicalize(self.file_name.to_string())
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use crate::dts::error_codes::SeverityMap;
 use crate::dts::reader::ByteReader;
 use crate::dts::tokens::Lexer;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, Position, Severity, Span};
+use crate::dts::{Diagnostic, FileType, HasSpan, Parser, ParserContext, Position, Severity, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::empty;
@@ -74,11 +74,19 @@ impl ProjectFile {
 #[derive(Default)]
 pub struct Project {
     files: HashMap<PathBuf, ProjectFile>,
+    pub include_paths: Vec<PathBuf>,
     pub severities: SeverityMap,
 }
 
 impl Project {
-    pub fn add_file(&mut self, file_name: PathBuf) -> Result<(), io::Error> {
+    pub fn set_include_paths(&mut self, include_paths: Vec<String>) {
+        self.include_paths = include_paths
+            .iter()
+            .map(|path| dunce::canonicalize(path).unwrap_or_default())
+            .collect::<Vec<PathBuf>>();
+    }
+
+    pub fn add_file(&mut self, file_name: String) -> Result<(), io::Error> {
         let file_name = dunce::canonicalize(file_name)?;
         let content = fs::read_to_string(file_name.clone())?;
         let file_ending = FileType::from(file_name.as_path());
@@ -232,7 +240,12 @@ impl Project {
     fn parse_file(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
         let reader = ByteReader::from_string(text.clone());
         let lexer = Lexer::new(reader, file_name.clone().into());
-        let mut parser = Parser::new(lexer);
+        let mut parser = Parser::new(
+            lexer,
+            ParserContext {
+                include_paths: self.include_paths.clone(),
+            },
+        );
         match parser.file() {
             Ok(file) => {
                 // insert dummy file to be defined so that no cyclic dependency can occur.
@@ -301,7 +314,7 @@ mod tests {
     use tempfile::tempdir;
 
     struct TempDir {
-        inner: tempfile::TempDir,
+        pub inner: tempfile::TempDir,
     }
 
     impl TempDir {
@@ -317,6 +330,7 @@ mod tests {
         ) -> (Code, PathBuf) {
             let code = Code::new(content.as_ref());
             let file_path = self.inner.path().join(name);
+
             fs::write(&file_path, code.code()).expect("Cannot write to file");
             (code, file_path)
         }
@@ -335,7 +349,9 @@ mod tests {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
         let (_, path1) = temp_dir.add_file("tests-include.dtsi", "");
-        project.add_file(path1.clone()).expect("Cannot add file");
+        project
+            .add_file(path1.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
 
         let (_, file2) = temp_dir.add_file(
             "tests-file.dts",
@@ -348,7 +364,9 @@ mod tests {
                 path1.display()
             ),
         );
-        project.add_file(file2.clone()).expect("Cannot add file");
+        project
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         assert!(project.get_file(&path1).is_some());
         assert!(project.get_file(&file2).is_some());
         assert_eq!(project.get_diagnostics(&path1).next(), None);
@@ -391,7 +409,7 @@ mod tests {
         );
 
         project
-            .add_file(file2.to_path_buf())
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
@@ -447,7 +465,7 @@ mod tests {
 
         let mut project = Project::default();
         project
-            .add_file(path1.clone())
+            .add_file(path1.into_os_string().into_string().unwrap())
             .expect("Cannot add file to project");
 
         let diag = project.all_diagnostics().cloned().collect_vec();
@@ -469,9 +487,13 @@ mod tests {
         let mut project = Project::default();
         let temp_dir = TempDir::new();
         let (_, file1) = temp_dir.add_file("test1.dtsi", "");
-        project.add_file(file1.clone()).expect("Cannot add file");
+        project
+            .add_file(file1.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         let (_, file2) = temp_dir.add_file("test2.dtsi", "");
-        project.add_file(file2.clone()).expect("Cannot add file");
+        project
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
+            .expect("Cannot add file");
         let (_, file3) = temp_dir.add_file(
             "test.dts",
             format!(
@@ -486,7 +508,9 @@ mod tests {
             ),
         );
 
-        project.add_file(file3).expect("Unexpected IO error");
+        project
+            .add_file(file3.into_os_string().into_string().unwrap())
+            .expect("Unexpected IO error");
         project.assert_no_diagnostics();
     }
 
@@ -512,7 +536,7 @@ mod tests {
         );
 
         project
-            .add_file(file3.clone())
+            .add_file(file3.clone().into_os_string().into_string().unwrap())
             .expect("Unexpected IO error");
 
         project.assert_no_diagnostics();
@@ -539,7 +563,7 @@ mod tests {
             ),
         );
         project
-            .add_file(file2.clone())
+            .add_file(file2.clone().into_os_string().into_string().unwrap())
             .expect("Cannot add file to project");
 
         assert!(project.get_file(&file1).is_some());
@@ -567,5 +591,42 @@ mod tests {
                 "Included file contains errors"
             )]
         );
+    }
+
+    #[test]
+    pub fn file_with_include_paths_includes() {
+        let includes_dir = TempDir::new();
+        let (_, file1) = includes_dir.add_file("tests-include1.dtsi", "");
+        let another_includes_dir = TempDir::new();
+        let (_, file2) = another_includes_dir.add_file("tests-include2.dtsi", "");
+
+        let temp_dir = TempDir::new();
+        let (_, file3) = temp_dir.add_file(
+            "test.dts",
+            r#"
+/dts-v1/;
+
+/include/ "tests-include1.dtsi"
+/include/ "tests-include2.dtsi"
+"#,
+        );
+
+        let mut project = Project::default();
+        let include_paths = vec![
+            includes_dir.inner.path().display().to_string(),
+            another_includes_dir.inner.path().display().to_string(),
+        ];
+
+        project.set_include_paths(include_paths);
+
+        project
+            .add_file(file3.clone().into_os_string().into_string().unwrap())
+            .expect("Unexpected IO error");
+
+        project.assert_no_diagnostics();
+
+        assert!(project.get_file(&file1).is_some());
+        assert!(project.get_file(&file2).is_some());
+        assert!(project.get_file(&file3).is_some());
     }
 }

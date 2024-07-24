@@ -5,7 +5,10 @@ mod server;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-struct Args {}
+struct Args {
+    #[arg(short, long, help = "Add a path to search for include files")]
+    include: Option<Vec<String>>,
+}
 
 #[tokio::main]
 pub async fn main() {

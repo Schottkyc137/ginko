@@ -4,6 +4,8 @@ use ginko::dts::{
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -23,6 +25,17 @@ impl Backend {
             project: RwLock::new(Project::default()),
             severities: SeverityMap::default(),
         }
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug)]
+struct ProjectConfig {
+    pub includes: Vec<String>,
+}
+
+impl ProjectConfig {
+    pub fn from_value(value: Value) -> Self {
+        serde_json::from_value(value).unwrap_or_default()
     }
 }
 
@@ -95,7 +108,10 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        let config = ProjectConfig::from_value(params.initialization_options.unwrap_or_default());
+        self.project.write().set_include_paths(config.includes);
+
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -108,6 +124,12 @@ impl LanguageServer for Backend {
                 ..ServerCapabilities::default()
             },
         })
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        let config = ProjectConfig::from_value(params.settings);
+        self.project.write().set_include_paths(config.includes);
+        self.publish_diagnostics().await
     }
 
     async fn initialized(&self, _: InitializedParams) {}

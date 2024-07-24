@@ -233,11 +233,12 @@ mod tests {
     use crate::dts::error_codes::SeverityMap;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
+    use crate::dts::ParserContext;
     use itertools::Itertools;
 
     #[test]
     fn display_missing_semicolon() {
-        let code = Code::with_file_name("/ {}", "fname");
+        let code = Code::with_file_name("/ {}", "fname", ParserContext::default());
         let (_, diag) = code.parse(Parser::file);
         assert_eq!(
             diag,
@@ -271,9 +272,10 @@ error --> fname:1:5
         /dts-v1/;
 
         / {
-            very-long-company,very-long-name;    
+            very-long-company,very-long-name;
         };",
             "fname",
+            ParserContext::default(),
         );
         let (_, diag) = code.parse(Parser::file);
         let printer = DiagnosticPrinter {
@@ -288,7 +290,7 @@ error --> fname:1:5
         let formatter_err = "\
 warning --> fname:4:13
   |
-4 |             very-long-company,very-long-name;    
+4 |             very-long-company,very-long-name;
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ property should only have 31 characters but has 32 characters
 
 ".to_string();

@@ -18,5 +18,6 @@ pub use data::{FileType, HasSpan, Position, Span};
 pub use diagnostics::{Diagnostic, DiagnosticPrinter, Severity};
 pub use error_codes::{ErrorCode, SeverityMap};
 pub use parser::Parser;
+pub use parser::ParserContext;
 pub use project::Project;
 pub use visitor::ItemAtCursor;

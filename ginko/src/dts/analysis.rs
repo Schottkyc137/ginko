@@ -389,8 +389,8 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
-    my_l?abel: some_node {}; 
+/{
+    my_l?abel: some_node {};
     my_label_that_has_more_than_31_characters: other_node {};
     some_other_node {
         another_ill#gal_label: sub_node {};
@@ -436,7 +436,7 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
+/{
     node1: some_node {
         ref-to-node2 = &node2;
         ref-to-node3 = <&node3>;
@@ -503,7 +503,7 @@ mod test {
             "\
 /dts-v1/;
 
-/{ 
+/{
     node1: some_node {
         ref-to-node2 = &node2;
     };

@@ -9,8 +9,13 @@ use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::{CompilerDirective, Lexer, PeekingLexer, Reference, Token, TokenKind};
 use crate::dts::HasSpan;
 use itertools::Itertools;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
+
+#[derive(Clone, Default)]
+pub struct ParserContext {
+    pub include_paths: Vec<PathBuf>,
+}
 
 /// The `Parser` class is responsible for syntactical analysis,
 /// transforming the input token stream into an AST.
@@ -20,6 +25,7 @@ where
 {
     lexer: PeekingLexer<R>,
     pub diagnostics: Vec<Diagnostic>,
+    pub context: ParserContext,
 }
 
 type Result<T> = std::result::Result<T, Diagnostic>;
@@ -28,20 +34,26 @@ impl<R> Parser<R>
 where
     R: Reader + Sized,
 {
-    pub fn new(lexer: Lexer<R>) -> Parser<R> {
+    pub fn new(lexer: Lexer<R>, context: ParserContext) -> Parser<R> {
         Parser {
             lexer: PeekingLexer::from(lexer),
             diagnostics: vec![],
+            context,
         }
     }
 }
 
 impl Parser<ByteReader> {
-    pub fn from_text(text: impl Into<String>, source: Arc<StdPath>) -> Parser<ByteReader> {
+    pub fn from_text(
+        context: ParserContext,
+        text: impl Into<String>,
+        source: Arc<StdPath>,
+    ) -> Parser<ByteReader> {
         let lexer = Lexer::from_text(text, source);
         Parser {
             lexer: lexer.into(),
             diagnostics: vec![],
+            context,
         }
     }
 }
@@ -720,6 +732,7 @@ where
                 Ok(Primary::Directive(AnyDirective::Include(Include {
                     include_token,
                     file_name: WithToken::new(path, string_tok.clone()),
+                    include_paths: self.context.include_paths.clone(),
                 })))
             }
             TokenKind::Slash => {

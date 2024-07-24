@@ -384,6 +384,8 @@ dependencies = [
  "ginko",
  "itertools",
  "parking_lot",
+ "serde",
+ "serde_json",
  "tokio",
  "tower-lsp",
  "tracing-subscriber",
