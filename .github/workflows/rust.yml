@@ -36,6 +36,7 @@ jobs:
           - ginko_ls
         target:
           - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
           - x86_64-pc-windows-msvc
           - aarch64-apple-darwin
         rust:
@@ -45,6 +46,9 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             ext: ""
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            ext: .exe
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             ext: .exe
@@ -128,6 +132,8 @@ jobs:
           chmod +x */bin/ginko*
           zip -r ginko-x86_64-unknown-linux-gnu.zip ginko-x86_64-unknown-linux-gnu
           zip -r ginko_ls-x86_64-unknown-linux-gnu.zip ginko_ls-x86_64-unknown-linux-gnu
+          zip -r ginko-x86_64-pc-windows-gnu.zip ginko-x86_64-pc-windows-gnu
+          zip -r ginko_ls-x86_64-pc-windows-gnu.zip ginko_ls-x86_64-pc-windows-gnu
           zip -r ginko-x86_64-pc-windows-msvc.zip ginko-x86_64-pc-windows-msvc
           zip -r ginko_ls-x86_64-pc-windows-msvc.zip ginko_ls-x86_64-pc-windows-msvc
           zip -r ginko-aarch64-apple-darwin.zip ginko-aarch64-apple-darwin
