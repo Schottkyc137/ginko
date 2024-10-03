@@ -1,7 +1,6 @@
-use crate::dts::expression::lex::lex;
 use crate::dts::expression::token::Token;
 use crate::dts::expression::SyntaxKind::*;
-use crate::dts::expression::{NodeBuilder, SyntaxElement, SyntaxKind, SyntaxNode};
+use crate::dts::expression::{NodeBuilder, SyntaxKind, SyntaxNode};
 use itertools::Itertools;
 use rowan::Checkpoint;
 use std::iter::Peekable;
@@ -46,11 +45,9 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub fn parse(mut self) -> (SyntaxNode, Vec<String>) {
-        self.builder.start_node(ROOT);
         self.parse_expression();
         // eat all trailing whitespaces
         self.skip_ws();
-        self.builder.finish_node();
         (SyntaxNode::new_root(self.builder.finish()), self.errors)
     }
 
@@ -94,9 +91,24 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
     }
 
+    pub fn parse_unary(&mut self) {
+        let mut unary_count = 0;
+        while matches!(self.peek_kind(), Some(TILDE | EXCLAMATION | MINUS)) {
+            self.builder.start_node(UNARY);
+            self.builder.start_node(OP);
+            self.bump();
+            self.builder.finish_node();
+            unary_count += 1;
+        }
+        self.parse_primary();
+        for _ in 0..unary_count {
+            self.builder.finish_node()
+        }
+    }
+
     pub fn parse_expression(&mut self) {
         let lhs = self.builder.checkpoint();
-        self.parse_primary();
+        self.parse_unary();
         self._parse_expression(lhs, 0);
     }
 
@@ -106,11 +118,12 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 break;
             }
             self.builder.start_node_at(lhs, BINARY);
+
             self.builder.start_node(OP);
             self.bump();
             self.builder.finish_node();
             let rhs = self.builder.checkpoint();
-            self.parse_primary();
+            self.parse_unary();
             while self
                 .peek_kind()
                 .and_then(binary_precedence)
@@ -140,125 +153,159 @@ fn binary_precedence(kind: SyntaxKind) -> Option<usize> {
     })
 }
 
-fn str(element: SyntaxElement) -> String {
-    let mut buffer: String = String::new();
-    _str(0, &mut buffer, element);
-    buffer
-}
+#[cfg(test)]
+mod tests {
+    use crate::dts::expression::lex::lex;
+    use crate::dts::expression::parser::Parser;
+    use crate::dts::expression::{SyntaxElement, SyntaxKind};
 
-fn _str(indent: usize, buffer: &mut String, element: SyntaxElement) {
-    let kind: SyntaxKind = element.kind();
-    buffer.push_str(&" ".repeat(indent));
-    match element {
-        SyntaxElement::Node(node) => {
-            buffer.push_str(&format!("{:?}\n", kind));
-            for child in node.children_with_tokens() {
-                _str(indent + 2, buffer, child);
+    fn str(element: SyntaxElement) -> String {
+        let mut buffer: String = String::new();
+        _str(0, &mut buffer, element);
+        buffer
+    }
+
+    fn _str(indent: usize, buffer: &mut String, element: SyntaxElement) {
+        let kind: SyntaxKind = element.kind();
+        buffer.push_str(&" ".repeat(indent));
+        match element {
+            SyntaxElement::Node(node) => {
+                buffer.push_str(&format!("{:?}\n", kind));
+                for child in node.children_with_tokens() {
+                    _str(indent + 2, buffer, child);
+                }
+            }
+
+            SyntaxElement::Token(token) => {
+                buffer.push_str(&format!("{:?} {:?}\n", kind, token.text()))
             }
         }
-
-        SyntaxElement::Token(token) => buffer.push_str(&format!("{:?} {:?}\n", kind, token.text())),
     }
-}
 
-#[cfg(test)]
-fn check(expression: &str, expected: &str) {
-    let ast = Parser::new(lex(expression).into_iter()).parse();
-    let ast_str = str(ast.0.into());
-    let ast_str_trimmed = ast_str.trim();
-    assert_eq!(ast_str_trimmed, expected.trim());
-}
+    fn check(expression: &str, expected: &str) {
+        let ast = Parser::new(lex(expression).into_iter()).parse();
+        let ast_str = str(ast.0.into());
+        let ast_str_trimmed = ast_str.trim();
+        assert_eq!(ast_str_trimmed, expected.trim());
+    }
 
-#[test]
-fn check_primary() {
-    check(
-        "1",
-        r#"
-ROOT
+    #[test]
+    fn check_primary() {
+        check(
+            "1",
+            r#"
+INT
+  NUMBER "1"
+"#,
+        );
+    }
+
+    #[test]
+    fn check_inner_expression() {
+        check(
+            "1+(2)",
+            r#"
+BINARY
   INT
     NUMBER "1"
-"#,
-    );
-}
-
-#[test]
-fn check_inner_expression() {
-    check(
-        "1+(2)",
-        r#"
-ROOT
-  BINARY
-    INT
-      NUMBER "1"
-    OP
-      PLUS "+"
-    PAREN_EXPRESSION
-      L_PAR "("
-      INT
-        NUMBER "2"
-      R_PAR ")"
-"#,
-    );
-}
-
-#[test]
-fn check_simple_binary() {
-    check(
-        "1+2",
-        r#"
-ROOT
-  BINARY
-    INT
-      NUMBER "1"
-    OP
-      PLUS "+"
+  OP
+    PLUS "+"
+  PAREN_EXPRESSION
+    L_PAR "("
     INT
       NUMBER "2"
+    R_PAR ")"
 "#,
-    );
-}
+        );
+    }
 
-#[test]
-fn check_nested_binary() {
-    check(
-        "1+2*3",
-        r#"
-ROOT
+    #[test]
+    fn check_simple_binary() {
+        check(
+            "1+2",
+            r#"
+BINARY
+  INT
+    NUMBER "1"
+  OP
+    PLUS "+"
+  INT
+    NUMBER "2"
+"#,
+        );
+    }
+
+    #[test]
+    fn check_nested_binary() {
+        check(
+            "1+2*3",
+            r#"
+BINARY
+  INT
+    NUMBER "1"
+  OP
+    PLUS "+"
   BINARY
     INT
-      NUMBER "1"
+      NUMBER "2"
+    OP
+      STAR "*"
+    INT
+      NUMBER "3"
+"#,
+        );
+        check(
+            "2+3*4+5",
+            r#"
+BINARY
+  BINARY
+    INT
+      NUMBER "2"
     OP
       PLUS "+"
     BINARY
       INT
-        NUMBER "2"
+        NUMBER "3"
       OP
         STAR "*"
       INT
-        NUMBER "3"
+        NUMBER "4"
+  OP
+    PLUS "+"
+  INT
+    NUMBER "5"
 "#,
-    );
-    check(
-        "2+3*4+5",
-        r#"
-ROOT
-  BINARY
-    BINARY
-      INT
-        NUMBER "2"
-      OP
-        PLUS "+"
-      BINARY
-        INT
-          NUMBER "3"
-        OP
-          STAR "*"
-        INT
-          NUMBER "4"
+        );
+    }
+
+    #[test]
+    fn check_simple_unary() {
+        check(
+            "!1",
+            r#"
+UNARY
+  OP
+    EXCLAMATION "!"
+  INT
+    NUMBER "1"
+"#,
+        );
+    }
+
+    #[test]
+    fn check_double_unary() {
+        check(
+            "~!1",
+            r#"
+UNARY
+  OP
+    TILDE "~"
+  UNARY
     OP
-      PLUS "+"
+      EXCLAMATION "!"
     INT
-      NUMBER "5"
+      NUMBER "1"
 "#,
-    );
+        );
+    }
 }

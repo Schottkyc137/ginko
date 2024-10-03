@@ -1,27 +1,36 @@
 use crate::dts::expression::ast::{
     BinaryExpression, BinaryOp, Constant, ConstantKind, Expression, ExpressionKind, IntConstant,
-    ParenExpression, Primary, PrimaryKind,
+    ParenExpression, Primary, PrimaryKind, UnaryExpression, UnaryOp,
 };
 use rowan::TextRange;
 use std::num::ParseIntError;
 
 #[derive(Debug, Eq, PartialEq)]
+pub enum IntEvalError {
+    ParseError(ParseIntError),
+    DivideByZero,
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct EvalError {
-    pub cause: ParseIntError,
+    pub cause: IntEvalError,
     pub pos: TextRange,
 }
 
-pub type Result<T = u32> = std::result::Result<T, EvalError>;
+pub type Result<T = u64> = std::result::Result<T, EvalError>;
 
 pub trait IntoEvalResult {
     fn into_eval_result(self, pos: TextRange) -> Result;
 }
 
-impl IntoEvalResult for std::result::Result<u32, ParseIntError> {
+impl IntoEvalResult for std::result::Result<u64, ParseIntError> {
     fn into_eval_result(self, pos: TextRange) -> Result {
         match self {
             Ok(res) => Ok(res),
-            Err(err) => Err(EvalError { cause: err, pos }),
+            Err(err) => Err(EvalError {
+                cause: IntEvalError::ParseError(err),
+                pos,
+            }),
         }
     }
 }
@@ -38,11 +47,11 @@ impl Eval for IntConstant {
         if text == "0" {
             Ok(0)
         } else if let Some(digits) = text.to_ascii_lowercase().strip_prefix("0x") {
-            u32::from_str_radix(digits, 16).into_eval_result(self.range())
+            u64::from_str_radix(digits, 16).into_eval_result(self.range())
         } else if let Some(digits) = text.strip_prefix("0") {
-            u32::from_str_radix(digits, 8).into_eval_result(self.range())
+            u64::from_str_radix(digits, 8).into_eval_result(self.range())
         } else {
-            text.parse::<u32>().into_eval_result(self.range())
+            text.parse::<u64>().into_eval_result(self.range())
         }
     }
 }
@@ -59,7 +68,7 @@ impl Eval for Primary {
     fn eval(&self) -> Result {
         match self.kind() {
             PrimaryKind::Constant(c) => c.eval(),
-            PrimaryKind::Expression(expr) => expr.eval(),
+            PrimaryKind::ParenExpression(expr) => expr.eval(),
         }
     }
 }
@@ -68,12 +77,28 @@ impl Eval for BinaryExpression {
     fn eval(&self) -> Result {
         let lhs = self.lhs().eval()?;
         let rhs = self.rhs().eval()?;
-        Ok(match self.op() {
-            BinaryOp::Plus => lhs + rhs,
-            BinaryOp::Minus => lhs - rhs,
-            BinaryOp::Mult => lhs * rhs,
-            BinaryOp::Div => lhs / rhs,
-            BinaryOp::Mod => lhs % rhs,
+        Ok(match self.bin_op() {
+            BinaryOp::Plus => lhs.wrapping_add(rhs),
+            BinaryOp::Minus => lhs.wrapping_sub(rhs),
+            BinaryOp::Mult => lhs.wrapping_mul(rhs),
+            BinaryOp::Div => {
+                if rhs == 0 {
+                    return Err(EvalError {
+                        pos: self.rhs().range(),
+                        cause: IntEvalError::DivideByZero,
+                    });
+                }
+                lhs.wrapping_div(rhs)
+            }
+            BinaryOp::Mod => {
+                if rhs == 0 {
+                    return Err(EvalError {
+                        pos: self.rhs().range(),
+                        cause: IntEvalError::DivideByZero,
+                    });
+                }
+                lhs.wrapping_rem(rhs)
+            }
             BinaryOp::LShift => lhs << rhs,
             BinaryOp::RShift => lhs >> rhs,
             BinaryOp::Gt => {
@@ -139,6 +164,23 @@ impl Eval for BinaryExpression {
     }
 }
 
+impl Eval for UnaryExpression {
+    fn eval(&self) -> Result {
+        let result = self.expr().eval()?;
+        Ok(match self.unary_op() {
+            UnaryOp::Minus => 0_u64.wrapping_sub(result),
+            UnaryOp::LNot => {
+                if result == 0 {
+                    1
+                } else {
+                    0
+                }
+            }
+            UnaryOp::BitNot => !result,
+        })
+    }
+}
+
 impl Eval for ParenExpression {
     fn eval(&self) -> Result {
         self.expr().eval()
@@ -149,6 +191,7 @@ impl Eval for Expression {
     fn eval(&self) -> Result {
         match self.kind() {
             ExpressionKind::Binary(binary) => binary.eval(),
+            ExpressionKind::Unary(unary) => unary.eval(),
             ExpressionKind::Primary(primary) => primary.eval(),
         }
     }
@@ -156,14 +199,15 @@ impl Eval for Expression {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::expression::ast::Root;
+    use crate::dts::expression::ast::Expression;
     use crate::dts::expression::eval::Eval;
     use crate::dts::expression::lex::lex;
     use crate::dts::expression::parser::Parser;
 
-    fn check_equal(expression: &str, result: u32) {
-        let (ast, _) = Parser::new(lex(expression).into_iter()).parse();
-        let expr = Root::cast(ast).unwrap().expr();
+    fn check_equal(expression: &str, result: u64) {
+        let (ast, diag) = Parser::new(lex(expression).into_iter()).parse();
+        assert!(diag.is_empty());
+        let expr = Expression::cast(ast).unwrap();
         assert_eq!(expr.eval(), Ok(result))
     }
 
@@ -231,5 +275,26 @@ mod tests {
         check_equal("3 * (4 + 2)", 18);
 
         check_equal("123456790 - 4/2 + 17%4", 123456789);
+    }
+
+    #[test]
+    fn eval_unary_expression() {
+        check_equal("~0xAB", 0xFFFFFFFFFFFFFF54);
+        check_equal("!0", 1);
+        check_equal("!1", 0);
+        check_equal("!!42", 1);
+        check_equal("!!!42", 0);
+        check_equal("~0xFFFFFFFFFFFFFFFF", 0);
+    }
+
+    #[test]
+    fn unary_expressions_associativity() {
+        check_equal("~!0xFFFFFFF", 0xFFFFFFFFFFFFFFFF);
+        check_equal("!~0xFFFFFFF", 0);
+    }
+
+    #[test]
+    fn unary_ops_in_binary_ops() {
+        check_equal("4 + -3", 1);
     }
 }

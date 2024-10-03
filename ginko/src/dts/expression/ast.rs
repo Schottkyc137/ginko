@@ -1,10 +1,11 @@
 use crate::dts::expression::SyntaxKind::*;
 use crate::dts::expression::{SyntaxNode, SyntaxToken};
 use rowan::TextRange;
+use std::fmt::Formatter;
 
 macro_rules! ast_node {
-    ($ast:ident, $kind:pat) => {
-        #[derive(PartialEq, Eq, Hash)]
+    (struct $ast:ident($kind:pat);) => {
+        #[derive(PartialEq, Eq, Hash, Debug)]
         #[repr(transparent)]
         pub struct $ast(SyntaxNode);
         impl $ast {
@@ -27,21 +28,33 @@ macro_rules! ast_node {
                 self.0.text_range()
             }
         }
+
+        impl std::fmt::Display for $ast {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+
+    (terminal struct $ast:ident($kind:pat);) => {
+        ast_node!(
+            struct $ast($kind);
+        );
+        impl $ast {
+            pub fn text(&self) -> String {
+                self.0.first_token().unwrap().text().to_string()
+            }
+        }
     };
 }
 
-ast_node!(IntConstant, INT);
-
-impl IntConstant {
-    pub fn text(&self) -> String {
-        match self.0.green().children().next() {
-            Some(rowan::NodeOrToken::Token(token)) => token.text().to_string(),
-            _ => unreachable!(),
-        }
-    }
+ast_node! {
+    terminal struct IntConstant(INT);
 }
 
-ast_node!(Constant, INT);
+ast_node! {
+    struct Constant(INT);
+}
 
 pub enum ConstantKind {
     Int(IntConstant),
@@ -56,11 +69,13 @@ impl Constant {
     }
 }
 
-ast_node!(Primary, INT | PAREN_EXPRESSION);
+ast_node! {
+    struct Primary(INT | PAREN_EXPRESSION);
+}
 
 pub enum PrimaryKind {
     Constant(Constant),
-    Expression(ParenExpression),
+    ParenExpression(ParenExpression),
 }
 
 impl Primary {
@@ -68,10 +83,49 @@ impl Primary {
         match self.0.kind() {
             INT => PrimaryKind::Constant(Constant::cast_unchecked(self.0.clone())),
             PAREN_EXPRESSION => {
-                PrimaryKind::Expression(ParenExpression::cast_unchecked(self.0.clone()))
+                PrimaryKind::ParenExpression(ParenExpression::cast_unchecked(self.0.clone()))
             }
             _ => unreachable!(),
         }
+    }
+}
+
+ast_node! {
+    terminal struct Op(OP);
+}
+
+impl Op {
+    pub fn binary_op(&self) -> Option<BinaryOp> {
+        Some(match self.0.first_token().unwrap().kind() {
+            PLUS => BinaryOp::Plus,
+            MINUS => BinaryOp::Minus,
+            STAR => BinaryOp::Mult,
+            SLASH => BinaryOp::Div,
+            PERCENT => BinaryOp::Mod,
+            DOUBLE_LT => BinaryOp::LShift,
+            DOUBLE_GT => BinaryOp::RShift,
+            GT => BinaryOp::Gt,
+            GTE => BinaryOp::Gte,
+            LT => BinaryOp::Lt,
+            LTE => BinaryOp::Lte,
+            EQ => BinaryOp::Eq,
+            NEQ => BinaryOp::Neq,
+            BAR => BinaryOp::Or,
+            AMP => BinaryOp::And,
+            CIRC => BinaryOp::Xor,
+            DOUBLE_BAR => BinaryOp::Lor,
+            DOUBLE_AMP => BinaryOp::LAnd,
+            _ => return None,
+        })
+    }
+
+    pub fn unary_op(&self) -> Option<UnaryOp> {
+        Some(match self.0.first_token().unwrap().kind() {
+            MINUS => UnaryOp::Minus,
+            EXCLAMATION => UnaryOp::LNot,
+            TILDE => UnaryOp::BitNot,
+            _ => return None,
+        })
     }
 }
 
@@ -96,36 +150,21 @@ pub enum BinaryOp {
     Lor,
 }
 
-ast_node!(BinaryExpression, BINARY);
+ast_node! {
+    struct BinaryExpression(BINARY);
+}
 
 impl BinaryExpression {
     pub fn lhs(&self) -> Expression {
         Expression::cast_unchecked(self.0.children().nth(0).unwrap())
     }
 
-    pub fn op(&self) -> BinaryOp {
-        let op = self.0.children().nth(1).unwrap();
-        match op.first_token().unwrap().kind() {
-            PLUS => BinaryOp::Plus,
-            MINUS => BinaryOp::Minus,
-            STAR => BinaryOp::Mult,
-            SLASH => BinaryOp::Div,
-            PERCENT => BinaryOp::Mod,
-            DOUBLE_LT => BinaryOp::LShift,
-            DOUBLE_GT => BinaryOp::RShift,
-            GT => BinaryOp::Gt,
-            GTE => BinaryOp::Gte,
-            LT => BinaryOp::Lt,
-            LTE => BinaryOp::Lte,
-            EQ => BinaryOp::Eq,
-            NEQ => BinaryOp::Neq,
-            BAR => BinaryOp::Or,
-            AMP => BinaryOp::And,
-            CIRC => BinaryOp::Xor,
-            DOUBLE_BAR => BinaryOp::Lor,
-            DOUBLE_AMP => BinaryOp::LAnd,
-            _ => unreachable!(),
-        }
+    pub fn op(&self) -> Op {
+        Op::cast_unchecked(self.0.children().nth(1).unwrap())
+    }
+
+    pub fn bin_op(&self) -> BinaryOp {
+        self.op().binary_op().unwrap()
     }
 
     pub fn rhs(&self) -> Expression {
@@ -133,7 +172,33 @@ impl BinaryExpression {
     }
 }
 
-ast_node!(ParenExpression, PAREN_EXPRESSION);
+pub enum UnaryOp {
+    Minus,
+    LNot,
+    BitNot,
+}
+
+ast_node! {
+    struct UnaryExpression(UNARY);
+}
+
+impl UnaryExpression {
+    pub fn expr(&self) -> Expression {
+        Expression::cast_unchecked(self.0.children().nth(1).unwrap())
+    }
+
+    pub fn op(&self) -> Op {
+        Op::cast_unchecked(self.0.children().nth(0).unwrap())
+    }
+
+    pub fn unary_op(&self) -> UnaryOp {
+        self.op().unary_op().unwrap()
+    }
+}
+
+ast_node! {
+    struct ParenExpression(PAREN_EXPRESSION);
+}
 
 impl ParenExpression {
     pub fn l_par(&self) -> SyntaxToken {
@@ -149,10 +214,13 @@ impl ParenExpression {
     }
 }
 
-ast_node!(Expression, BINARY | INT | PAREN_EXPRESSION);
+ast_node! {
+    struct Expression(UNARY | BINARY | INT | PAREN_EXPRESSION);
+}
 
 pub enum ExpressionKind {
     Binary(BinaryExpression),
+    Unary(UnaryExpression),
     Primary(Primary),
 }
 
@@ -162,16 +230,9 @@ impl Expression {
             INT | PAREN_EXPRESSION => {
                 ExpressionKind::Primary(Primary::cast_unchecked(self.0.clone()))
             }
+            UNARY => ExpressionKind::Unary(UnaryExpression::cast_unchecked(self.0.clone())),
             BINARY => ExpressionKind::Binary(BinaryExpression::cast_unchecked(self.0.clone())),
             _ => unreachable!(),
         }
-    }
-}
-
-ast_node!(Root, ROOT);
-
-impl Root {
-    pub fn expr(&self) -> Expression {
-        Expression::cast_unchecked(self.0.first_child().unwrap())
     }
 }

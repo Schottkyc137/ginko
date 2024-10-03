@@ -17,7 +17,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     iter.next();
                     result.push(Token::new(NEQ, "!=".into()))
                 }
-                _ => result.push(Token::new(TILDE, ch.into())),
+                _ => result.push(Token::new(EXCLAMATION, ch.into())),
             },
             '*' => result.push(Token::new(STAR, ch.into())),
             '/' => result.push(Token::new(SLASH, ch.into())),
