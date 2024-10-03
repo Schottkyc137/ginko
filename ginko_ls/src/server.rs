@@ -143,10 +143,6 @@ impl LanguageServer for Backend {
             return;
         };
         let file_type = FileType::from(file_path.as_path());
-        if file_type == FileType::Unknown {
-            self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
-            return;
-        }
         self.project.write().add_file_with_text(
             file_path.clone(),
             params.text_document.text,
