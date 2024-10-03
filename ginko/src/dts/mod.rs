@@ -4,14 +4,16 @@ mod ast;
 mod data;
 mod diagnostics;
 mod error_codes;
+mod expression;
 mod import_guard;
 mod parser;
 mod project;
 mod reader;
-#[cfg(test)]
-mod test;
 mod tokens;
 mod visitor;
+
+#[cfg(test)]
+mod test;
 
 pub use ast::{AnyDirective, Node, NodeItem, NodePayload, Primary};
 pub use data::{FileType, HasSpan, Position, Span};

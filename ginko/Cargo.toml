@@ -16,6 +16,8 @@ clap = { version = "4", features = ["derive"] }
 dunce = "1"
 enum-map = "2"
 itertools = "0.13.0"
+m_lexer = "0.0.4"
+rowan = "0.15.16"
 strum = { version = "0.26.3", features = ["derive"] }
 url = "2"
 
