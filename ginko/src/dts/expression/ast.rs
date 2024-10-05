@@ -1,8 +1,7 @@
 use crate::dts::expression::SyntaxKind::*;
 use crate::dts::expression::{SyntaxNode, SyntaxToken};
-use rowan::TextRange;
-use std::fmt::Formatter;
 
+#[macro_export]
 macro_rules! ast_node {
     (struct $ast:ident($kind:pat);) => {
         #[derive(PartialEq, Eq, Hash, Debug)]
@@ -24,13 +23,13 @@ macro_rules! ast_node {
             }
 
             #[allow(unused)]
-            pub fn range(&self) -> TextRange {
+            pub fn range(&self) -> rowan::TextRange {
                 self.0.text_range()
             }
         }
 
         impl std::fmt::Display for $ast {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
@@ -102,13 +101,13 @@ impl Op {
             STAR => BinaryOp::Mult,
             SLASH => BinaryOp::Div,
             PERCENT => BinaryOp::Mod,
-            DOUBLE_LT => BinaryOp::LShift,
-            DOUBLE_GT => BinaryOp::RShift,
-            GT => BinaryOp::Gt,
+            DOUBLE_L_CHEV => BinaryOp::LShift,
+            DOUBLE_R_CHEV => BinaryOp::RShift,
+            R_CHEV => BinaryOp::Gt,
             GTE => BinaryOp::Gte,
-            LT => BinaryOp::Lt,
+            L_CHEV => BinaryOp::Lt,
             LTE => BinaryOp::Lte,
-            EQ => BinaryOp::Eq,
+            EQEQ => BinaryOp::Eq,
             NEQ => BinaryOp::Neq,
             BAR => BinaryOp::Or,
             AMP => BinaryOp::And,

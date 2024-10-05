@@ -1,6 +1,6 @@
 /// Module for analyzing Device-Tree Source files
 mod analysis;
-mod ast;
+mod ast2;
 mod data;
 mod diagnostics;
 mod error_codes;
@@ -12,10 +12,12 @@ mod reader;
 mod tokens;
 mod visitor;
 
+mod ast;
+mod syntax;
 #[cfg(test)]
 mod test;
 
-pub use ast::{AnyDirective, Node, NodeItem, NodePayload, Primary};
+pub use ast2::{AnyDirective, Node, NodeItem, NodePayload, Primary};
 pub use data::{FileType, HasSpan, Position, Span};
 pub use diagnostics::{Diagnostic, DiagnosticPrinter, Severity};
 pub use error_codes::{ErrorCode, SeverityMap};

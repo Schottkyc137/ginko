@@ -51,10 +51,10 @@
 ///                    | ~
 ///                    | !
 ///```
+#[macro_use]
 pub mod ast;
-mod eval;
+pub mod eval;
 pub mod lex;
-pub mod parser;
 pub mod token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -75,35 +75,79 @@ pub enum SyntaxKind {
 
     PLUS, // +
 
-    DOUBLE_GT, // >>
-    DOUBLE_LT, // <<
+    DOUBLE_R_CHEV, // >>
+    DOUBLE_L_CHEV, // <<
 
-    GT, // >
-    LT, // <
+    R_CHEV, // >
+    L_CHEV, // <
+
+    R_BRAK, // [
+    L_BRAK, // ]
+
+    L_BRACE, // {
+    R_BRACE, // }
 
     LTE, // <=
     GTE, // >=
 
-    EQ,  // ==
-    NEQ, // !=
+    EQ, // =
 
-    AMP,  // &
-    CIRC, // ^
-    BAR,  // |
+    EQEQ, // ==
+    NEQ,  // !=
+
+    AMP,           // &
+    CIRC,          // ^
+    BAR,           // |
+    LINE_COMMENT,  // //
+    BLOCK_COMMENT, // /*
 
     DOUBLE_AMP, // &&
     DOUBLE_BAR, // ||
 
     QUESTION_MARK, // ?
     COLON,         // :
+    SEMICOLON,     // ;
+    COMMA,         // ,
+    DOT,           // .
+    UNDERSCORE,    // _
+    POUND,         // #
     NUMBER,        // decimal or hex
+    IDENT,         // simple identifier
+    STRING,        // quoted string
+    LABEL,         // label:
+    // directives
+    DTS_V1,          // /dts-v1/
+    MEM_RESERVE,     // /memreserve/
+    DELETE_NODE,     // /delete-node/
+    DELETE_PROPERTY, // /delete-property/
+    PLUGIN,          // /plugin/
+    BITS,            // /bits/
+    OMIT_IF_NO_REF,  // /omit-if-no-ref/
+    INCLUDE,         // /include/
 
     ERROR,
-    OP,               // Operator Symbol
-    INT,              // Integer constant
-    BINARY,           // A + B
-    UNARY,            // ! A
-    PAREN_EXPRESSION, // ( expression )
+    NAME,                // Name of a node or property
+    OP,                  // Operator Symbol
+    INT,                 // Integer constant
+    BINARY,              // A + B
+    UNARY,               // ! A
+    PAREN_EXPRESSION,    // ( expression )
+    CELL,                // < Cell content >
+    BYTE_STRING,         // [ byte strings ]
+    BITS_SPEC,           // /bits/ n specification
+    DELETE_SPEC,         // /delete-property/ or /delete-node/
+    OMIT_IF_NO_REF_SPEC, // /omit-if-no-ref/ spec
+    HEADER,              // /dts-v1/ or /plugin/ header
+    RESERVE_MEMORY,      // /memreserve/
+    INCLUDE_FILE,        // /include/ file_name
+    REFERENCE,           // &name
+    PROPERTY_LIST,       // comma-separated property values
+    PROP_VALUE,          // Property value, i.e., a cell, string, ...
+    STRING_PROP,         // String as property value
+    PROPERTY,            // A property, i.e., name = <value>;
+    NODE,                // A Node, i.e., node { ... }
+    NODE_BODY,           // The body of a node; everything inside the curly braces
+    FILE,
 }
 
 impl Display for SyntaxKind {
@@ -129,7 +173,7 @@ pub enum Lang {}
 impl rowan::Language for Lang {
     type Kind = SyntaxKind;
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-        assert!(raw.0 <= PAREN_EXPRESSION as u16);
+        assert!(raw.0 <= FILE as u16);
         unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
     }
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {

@@ -1,4 +1,4 @@
-use crate::dts::ast::{
+use crate::dts::ast2::{
     AnyDirective, Cell, DtsFile, Include, Memreserve, Node, NodeItem, NodeName, NodePayload, Path,
     Primary, Property, PropertyValue, ReferencedNode, WithToken,
 };
@@ -164,11 +164,11 @@ where
         &mut self,
         token: Token,
         reference: &Reference,
-    ) -> WithToken<crate::dts::ast::Reference> {
+    ) -> WithToken<crate::dts::ast2::Reference> {
         match reference {
             Reference::Simple(reference) => {
                 self.check_is_label(token.span, reference);
-                WithToken::new(crate::dts::ast::Reference::Label(reference.clone()), token)
+                WithToken::new(crate::dts::ast2::Reference::Label(reference.clone()), token)
             }
             Reference::Path(path) => {
                 if path.is_empty() {
@@ -182,7 +182,7 @@ where
                 for el in path.iter() {
                     self.check_is_node_name(token.span(), el);
                 }
-                WithToken::new(crate::dts::ast::Reference::Path(path), token)
+                WithToken::new(crate::dts::ast2::Reference::Path(path), token)
             }
         }
     }
@@ -664,7 +664,7 @@ where
         })
     }
 
-    pub fn parse_reference(&mut self) -> Result<WithToken<crate::dts::ast::Reference>> {
+    pub fn parse_reference(&mut self) -> Result<WithToken<crate::dts::ast2::Reference>> {
         let token = self.lexer.expect_next()?;
         if let TokenKind::Ref(reference) = token.kind.clone() {
             Ok(self.reference(token, &reference))
@@ -787,7 +787,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::dts::ast::{
+    use crate::dts::ast2::{
         Cell, DtsFile, Memreserve, Node, NodeItem, NodeName, NodePayload, Path, Property,
         PropertyValue, Reference, WithToken,
     };

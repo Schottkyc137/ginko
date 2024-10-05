@@ -40,14 +40,14 @@ pub trait Reader {
 
 pub struct ByteReader {
     data: Box<[u8]>,
-    char_pos: usize,
+    index: usize,
     pos: Position,
 }
 
 impl Reader for ByteReader {
     fn consume(&mut self) -> Option<u8> {
-        let ch = *self.data.get(self.char_pos)?;
-        self.char_pos += 1;
+        let ch = *self.data.get(self.index)?;
+        self.index += 1;
         match ch {
             b'\n' => {
                 self.pos = Position::new(self.pos.line() + 1, 0);
@@ -58,7 +58,7 @@ impl Reader for ByteReader {
     }
 
     fn peek(&self) -> Option<u8> {
-        self.data.get(self.char_pos).copied()
+        self.data.get(self.index).copied()
     }
 
     fn pos(&self) -> Position {
@@ -71,7 +71,7 @@ impl ByteReader {
         ByteReader {
             data: string.as_bytes().into(),
             pos: Position::zero(),
-            char_pos: 0,
+            index: 0,
         }
     }
 
@@ -83,9 +83,9 @@ impl ByteReader {
 
     #[cfg(test)]
     pub fn matches(&self, substr: &str) -> bool {
-        if self.char_pos + substr.len() > self.data.len() {
+        if self.index + substr.len() > self.data.len() {
             return false;
         }
-        &self.data[self.char_pos..=(self.char_pos + substr.len() - 1)] == substr.as_bytes()
+        &self.data[self.index..=(self.index + substr.len() - 1)] == substr.as_bytes()
     }
 }

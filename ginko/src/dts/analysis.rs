@@ -1,4 +1,4 @@
-use crate::dts::ast::{
+use crate::dts::ast2::{
     AnyDirective, Cell, DtsFile, Include, Node, NodeItem, NodePayload, Path, Primary, Property,
     PropertyValue, Reference, ReferencedNode, WithToken,
 };
@@ -376,7 +376,7 @@ impl Analysis {
 
 #[cfg(test)]
 mod test {
-    use crate::dts::ast::Path;
+    use crate::dts::ast2::Path;
     use crate::dts::data::{HasSource, HasSpan, Position};
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;

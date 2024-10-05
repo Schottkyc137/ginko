@@ -202,10 +202,10 @@ mod tests {
     use crate::dts::expression::ast::Expression;
     use crate::dts::expression::eval::Eval;
     use crate::dts::expression::lex::lex;
-    use crate::dts::expression::parser::Parser;
+    use crate::dts::syntax::Parser;
 
     fn check_equal(expression: &str, result: u64) {
-        let (ast, diag) = Parser::new(lex(expression).into_iter()).parse();
+        let (ast, diag) = Parser::new(lex(expression).into_iter()).parse(Parser::parse_expression);
         assert!(diag.is_empty());
         let expr = Expression::cast(ast).unwrap();
         assert_eq!(expr.eval(), Ok(result))

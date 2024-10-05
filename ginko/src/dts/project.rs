@@ -1,5 +1,5 @@
 use crate::dts::analysis::{Analysis, AnalysisContext};
-use crate::dts::ast::{DtsFile, Include, Reference};
+use crate::dts::ast2::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::error_codes::SeverityMap;
 use crate::dts::reader::ByteReader;
@@ -304,7 +304,7 @@ mod tests {
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
     use crate::dts::tokens::TokenKind;
-    use crate::dts::{ast, Diagnostic, HasSpan, ItemAtCursor, Project};
+    use crate::dts::{ast2, Diagnostic, HasSpan, ItemAtCursor, Project};
     use assert_matches::assert_matches;
     use itertools::Itertools;
     use std::fs;
@@ -421,7 +421,7 @@ mod tests {
         let ItemAtCursor::Reference(reference) = item else {
             panic!("Found non-node at cursor")
         };
-        assert_eq!(reference, &ast::Reference::Label("some_node".to_owned()));
+        assert_eq!(reference, &ast2::Reference::Label("some_node".to_owned()));
         match project.get_node_position(&file2, reference) {
             Some((span, path)) => {
                 assert_eq!(span, code1.s1("node_a").span());
@@ -440,7 +440,7 @@ mod tests {
         let ItemAtCursor::Reference(reference) = item else {
             panic!("Found non-node at cursor")
         };
-        assert_eq!(reference, &ast::Reference::Path("/node_a".into()));
+        assert_eq!(reference, &ast2::Reference::Path("/node_a".into()));
         match project.get_node_position(&file2, reference) {
             Some((span, path)) => {
                 assert_eq!(span, code1.s1("node_a").span());

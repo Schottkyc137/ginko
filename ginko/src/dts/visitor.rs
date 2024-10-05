@@ -1,4 +1,4 @@
-use crate::dts::ast::{
+use crate::dts::ast2::{
     AnyDirective, Cell, DtsFile, Include, Node, NodePayload, Primary, Property, PropertyValue,
     Reference, ReferencedNode, WithToken,
 };
