@@ -52,7 +52,6 @@
 ///                    | !
 ///```
 #[macro_use]
-pub mod ast;
 pub mod lex;
 pub mod token;
 
@@ -157,8 +156,6 @@ impl Display for SyntaxKind {
     }
 }
 
-use crate::dts::expression::token::Token;
-use rowan::{Checkpoint, GreenNode, GreenNodeBuilder};
 use std::fmt::{Display, Formatter};
 use SyntaxKind::*;
 
@@ -186,35 +183,3 @@ type SyntaxNode = rowan::SyntaxNode<Lang>;
 type SyntaxToken = rowan::SyntaxToken<Lang>;
 #[allow(unused)]
 type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
-
-struct NodeBuilder(GreenNodeBuilder<'static>);
-
-impl NodeBuilder {
-    pub fn new() -> NodeBuilder {
-        NodeBuilder(GreenNodeBuilder::new())
-    }
-
-    pub fn push(&mut self, value: Token) {
-        self.0.token(value.kind.into(), value.value.as_str())
-    }
-
-    pub fn finish(self) -> GreenNode {
-        self.0.finish()
-    }
-
-    pub fn start_node(&mut self, node: SyntaxKind) {
-        self.0.start_node(node.into())
-    }
-
-    pub fn finish_node(&mut self) {
-        self.0.finish_node()
-    }
-
-    pub fn checkpoint(&self) -> Checkpoint {
-        self.0.checkpoint()
-    }
-
-    pub fn start_node_at(&mut self, checkpoint: Checkpoint, kind: SyntaxKind) {
-        self.0.start_node_at(checkpoint, kind.into())
-    }
-}

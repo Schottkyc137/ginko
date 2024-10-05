@@ -1,7 +1,8 @@
-use crate::dts::ast::property::{ByteChunk, ByteString};
+use crate::dts::ast::property::{ByteChunk, ByteString, StringProperty};
 use crate::dts::eval;
 use crate::dts::eval::{Eval, EvalError};
 use itertools::Itertools;
+use std::convert::Infallible;
 use std::num::ParseIntError;
 
 #[derive(Debug)]
@@ -46,10 +47,83 @@ impl Eval<Vec<u8>, ByteEvalError> for ByteString {
     }
 }
 
+impl Eval<String, Infallible> for StringProperty {
+    fn eval(&self) -> eval::Result<String, Infallible> {
+        // string guaranteed to have leading and trailing " character
+        let text = self.text();
+        let raw_string = text.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
+        // We can just kill all backslashes because a backslash can never come right before the last quote.
+        // This would have lead to an error in the lexer.
+        Ok(raw_string.chars().unescape('\\').collect())
+    }
+}
+
+struct UnescapeItr<I>
+where
+    I: Iterator,
+    I::Item: Eq,
+{
+    inner: I,
+    escape: I::Item,
+    escape_seq_seen: bool,
+}
+
+impl<I> UnescapeItr<I>
+where
+    I: Iterator,
+    I::Item: Eq,
+{
+    pub fn new(iter: I, escape: I::Item) -> UnescapeItr<I> {
+        UnescapeItr {
+            inner: iter,
+            escape,
+            escape_seq_seen: false,
+        }
+    }
+}
+
+impl<I> Iterator for UnescapeItr<I>
+where
+    I: Iterator,
+    I::Item: Eq,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.inner.next()?;
+        if !self.escape_seq_seen && item == self.escape {
+            self.escape_seq_seen = true;
+            self.inner.next()
+        } else {
+            self.escape_seq_seen = false;
+            Some(item)
+        }
+    }
+}
+
+trait UnescapeItrExtension<I>
+where
+    I: Iterator,
+    I::Item: Eq,
+{
+    fn unescape(self, escape_seq: I::Item) -> UnescapeItr<I>;
+}
+
+impl<I> UnescapeItrExtension<I> for I
+where
+    I: Iterator,
+    I::Item: Eq,
+{
+    fn unescape(self, escape_seq: I::Item) -> UnescapeItr<I> {
+        UnescapeItr::new(self, escape_seq)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::dts::ast::property::ByteString;
+    use crate::dts::ast::property::{ByteString, PropertyValue, PropertyValueKind};
     use crate::dts::eval::Eval;
+    use crate::dts::eval::InfallibleEval;
 
     #[test]
     fn analyze_byte_string() {
@@ -65,5 +139,55 @@ mod tests {
         );
         let byte_string = "[AB CD]".parse::<ByteString>().unwrap();
         assert_eq!(byte_string.eval().unwrap(), vec![0xAB, 0xCD]);
+    }
+
+    #[test]
+    fn analyze_simple_strings() {
+        let string = r#""Hello, World!""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "Hello, World!")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
+    }
+
+    #[test]
+    fn analyze_strings_with_escape_sequences() {
+        let string = r#""\\"""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "\\")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
+        let string = r#""\""""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "\"")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
+        let string = r#""Hello, \"World!\"""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "Hello, \"World!\"")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
+        let string = r#""Hello, \\World\!""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "Hello, \\World!")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
+        let string = r#""\\Hello, World!\\""#.parse::<PropertyValue>().unwrap();
+        match string.kind() {
+            PropertyValueKind::String(string) => {
+                assert_eq!(string.value(), "\\Hello, World!\\")
+            }
+            _ => panic!("Unexpected found non-string"),
+        }
     }
 }

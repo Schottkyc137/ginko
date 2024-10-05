@@ -191,7 +191,7 @@ impl Iterator for Lexer<'_> {
                     match ch {
                         b'\\' => is_escaped = !is_escaped,
                         b'"' if !is_escaped => break,
-                        _ => {}
+                        _ => is_escaped = false,
                     }
                 }
                 Token::new(STRING, buf)

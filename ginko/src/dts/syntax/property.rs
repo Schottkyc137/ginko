@@ -3,7 +3,7 @@ use crate::dts::expression::SyntaxKind::*;
 use crate::dts::syntax::Parser;
 
 impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn parse_byte_strings(&mut self) {
+    pub fn parse_byte_string(&mut self) {
         assert_eq!(self.peek_kind(), Some(L_BRAK));
         self.start_node(BYTE_STRING);
         self.bump();
@@ -41,7 +41,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(STRING) => self.bump_into_node(STRING_PROP),
             Some(L_CHEV) => self.parse_cell(),
             Some(AMP) => self.parse_reference(),
-            Some(L_BRAK) => self.parse_byte_strings(),
+            Some(L_BRAK) => self.parse_byte_string(),
             Some(_) => self.error_token("Expected string, cell, reference or bytes".to_string()),
             _ => self.eof_error(),
         }
@@ -69,7 +69,7 @@ mod test {
     use crate::dts::syntax::Parser;
 
     fn check_byte_string(expression: &str, expected: &str) {
-        check_generic(expression, expected, Parser::parse_byte_strings)
+        check_generic(expression, expected, Parser::parse_byte_string)
     }
 
     #[test]
