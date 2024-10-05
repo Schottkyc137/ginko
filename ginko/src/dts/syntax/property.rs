@@ -13,7 +13,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                     self.bump();
                     break;
                 }
-                Some(NUMBER | IDENT) => self.bump(),
+                Some(NUMBER | IDENT) => self.bump_into_node(BYTE_CHUNK),
                 Some(_) => self.error_token("Expected hexadecimal value".to_string()),
                 None => self.eof_error(),
             }
@@ -100,7 +100,8 @@ BYTE_STRING
             r#"
 BYTE_STRING
   L_BRAK "["
-  NUMBER "000012345678"
+  BYTE_CHUNK
+    NUMBER "000012345678"
   R_BRAK "]"
 "#,
         );
@@ -109,7 +110,8 @@ BYTE_STRING
             r#"
 BYTE_STRING
   L_BRAK "["
-  IDENT "AB"
+  BYTE_CHUNK
+    IDENT "AB"
   R_BRAK "]"
 "#,
         );
@@ -122,17 +124,23 @@ BYTE_STRING
             r#"
 BYTE_STRING
   L_BRAK "["
-  NUMBER "00"
+  BYTE_CHUNK
+    NUMBER "00"
   WHITESPACE " "
-  NUMBER "00"
+  BYTE_CHUNK
+    NUMBER "00"
   WHITESPACE " "
-  NUMBER "12"
+  BYTE_CHUNK
+    NUMBER "12"
   WHITESPACE " "
-  NUMBER "34"
+  BYTE_CHUNK
+    NUMBER "34"
   WHITESPACE " "
-  NUMBER "56"
+  BYTE_CHUNK
+    NUMBER "56"
   WHITESPACE " "
-  NUMBER "78"
+  BYTE_CHUNK
+    NUMBER "78"
   R_BRAK "]"
 "#,
         );
@@ -145,9 +153,11 @@ BYTE_STRING
             r#"
 BYTE_STRING
   L_BRAK "["
-  IDENT "AB"
+  BYTE_CHUNK
+    IDENT "AB"
   WHITESPACE " "
-  IDENT "CD"
+  BYTE_CHUNK
+    IDENT "CD"
   R_BRAK "]"
 "#,
         );
@@ -173,7 +183,8 @@ PROP_VALUE
 PROP_VALUE
   BYTE_STRING
     L_BRAK "["
-    IDENT "AB"
+    BYTE_CHUNK
+      IDENT "AB"
     R_BRAK "]"
 "#,
         );

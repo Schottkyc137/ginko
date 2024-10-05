@@ -13,6 +13,7 @@ mod tokens;
 mod visitor;
 
 mod ast;
+pub mod eval;
 mod syntax;
 #[cfg(test)]
 mod test;

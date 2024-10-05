@@ -53,7 +53,6 @@
 ///```
 #[macro_use]
 pub mod ast;
-pub mod eval;
 pub mod lex;
 pub mod token;
 
@@ -134,6 +133,7 @@ pub enum SyntaxKind {
     PAREN_EXPRESSION,    // ( expression )
     CELL,                // < Cell content >
     BYTE_STRING,         // [ byte strings ]
+    BYTE_CHUNK,          // a bunch of letters that make up a byte
     BITS_SPEC,           // /bits/ n specification
     DELETE_SPEC,         // /delete-property/ or /delete-node/
     OMIT_IF_NO_REF_SPEC, // /omit-if-no-ref/ spec

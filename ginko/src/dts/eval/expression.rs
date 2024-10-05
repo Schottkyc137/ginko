@@ -1,8 +1,9 @@
-use crate::dts::expression::ast::{
+use crate::dts::ast::expression::{
     BinaryExpression, BinaryOp, Constant, ConstantKind, Expression, ExpressionKind, IntConstant,
     ParenExpression, Primary, PrimaryKind, UnaryExpression, UnaryOp,
 };
-use rowan::TextRange;
+use crate::dts::eval::{Eval, EvalError};
+use line_index::TextRange;
 use std::num::ParseIntError;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -11,19 +12,13 @@ pub enum IntEvalError {
     DivideByZero,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct EvalError {
-    pub cause: IntEvalError,
-    pub pos: TextRange,
+pub type Result = crate::dts::eval::Result<u64, IntEvalError>;
+
+pub trait IntoEvalResult<T, E> {
+    fn into_eval_result(self, pos: TextRange) -> crate::dts::eval::Result<T, E>;
 }
 
-pub type Result<T = u64> = std::result::Result<T, EvalError>;
-
-pub trait IntoEvalResult {
-    fn into_eval_result(self, pos: TextRange) -> Result;
-}
-
-impl IntoEvalResult for std::result::Result<u64, ParseIntError> {
+impl IntoEvalResult<u64, IntEvalError> for std::result::Result<u64, ParseIntError> {
     fn into_eval_result(self, pos: TextRange) -> Result {
         match self {
             Ok(res) => Ok(res),
@@ -35,11 +30,7 @@ impl IntoEvalResult for std::result::Result<u64, ParseIntError> {
     }
 }
 
-pub trait Eval {
-    fn eval(&self) -> Result;
-}
-
-impl Eval for IntConstant {
+impl Eval<u64, IntEvalError> for IntConstant {
     fn eval(&self) -> Result {
         // TODO: suffixes (i.e., L, LL, ULL, ...)
         let text = self.text();
@@ -56,7 +47,7 @@ impl Eval for IntConstant {
     }
 }
 
-impl Eval for Constant {
+impl Eval<u64, IntEvalError> for Constant {
     fn eval(&self) -> Result {
         match self.kind() {
             ConstantKind::Int(int) => int.eval(),
@@ -64,7 +55,7 @@ impl Eval for Constant {
     }
 }
 
-impl Eval for Primary {
+impl Eval<u64, IntEvalError> for Primary {
     fn eval(&self) -> Result {
         match self.kind() {
             PrimaryKind::Constant(c) => c.eval(),
@@ -73,7 +64,7 @@ impl Eval for Primary {
     }
 }
 
-impl Eval for BinaryExpression {
+impl Eval<u64, IntEvalError> for BinaryExpression {
     fn eval(&self) -> Result {
         let lhs = self.lhs().eval()?;
         let rhs = self.rhs().eval()?;
@@ -164,7 +155,7 @@ impl Eval for BinaryExpression {
     }
 }
 
-impl Eval for UnaryExpression {
+impl Eval<u64, IntEvalError> for UnaryExpression {
     fn eval(&self) -> Result {
         let result = self.expr().eval()?;
         Ok(match self.unary_op() {
@@ -181,13 +172,13 @@ impl Eval for UnaryExpression {
     }
 }
 
-impl Eval for ParenExpression {
+impl Eval<u64, IntEvalError> for ParenExpression {
     fn eval(&self) -> Result {
         self.expr().eval()
     }
 }
 
-impl Eval for Expression {
+impl Eval<u64, IntEvalError> for Expression {
     fn eval(&self) -> Result {
         match self.kind() {
             ExpressionKind::Binary(binary) => binary.eval(),
@@ -199,8 +190,8 @@ impl Eval for Expression {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::expression::ast::Expression;
-    use crate::dts::expression::eval::Eval;
+    use crate::dts::ast::expression::Expression;
+    use crate::dts::eval::Eval;
     use crate::dts::expression::lex::lex;
     use crate::dts::syntax::Parser;
 

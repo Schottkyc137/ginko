@@ -1,7 +1,7 @@
-use crate::ast_node;
-use crate::dts::expression::ast::{IntConstant, ParenExpression};
+use crate::dts::ast::ast_node;
+use crate::dts::ast::expression::{IntConstant, ParenExpression};
 use crate::dts::expression::SyntaxKind::*;
-use crate::dts::syntax::{SyntaxNode, SyntaxToken};
+use crate::dts::syntax::SyntaxToken;
 
 ast_node! {
     struct Reference(REFERENCE);
@@ -58,7 +58,7 @@ impl Cell {
 #[cfg(test)]
 mod tests {
     use crate::dts::ast::cell::{Cell, CellContentKind};
-    use crate::dts::expression::eval::Eval;
+    use crate::dts::eval::Eval;
     use crate::dts::expression::lex::lex;
     use crate::dts::syntax::Parser;
     use assert_matches::assert_matches;
