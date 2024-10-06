@@ -1,6 +1,6 @@
-use crate::dts::expression::token::Token;
-use crate::dts::expression::SyntaxKind::*;
+use crate::dts::lex::token::Token;
 use crate::dts::syntax::Parser;
+use crate::dts::syntax::SyntaxKind::*;
 
 impl<I: Iterator<Item = Token>> Parser<I> {
     pub fn parse_file(&mut self) {

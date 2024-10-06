@@ -1,7 +1,7 @@
-use crate::dts::expression::token::Token;
-use crate::dts::expression::SyntaxKind;
-use crate::dts::expression::SyntaxKind::*;
+use crate::dts::lex::token::Token;
 use crate::dts::syntax::parser::Parser;
+use crate::dts::syntax::SyntaxKind;
+use crate::dts::syntax::SyntaxKind::*;
 use rowan::Checkpoint;
 
 impl<I: Iterator<Item = Token>> Parser<I> {

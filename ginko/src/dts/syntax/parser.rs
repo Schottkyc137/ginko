@@ -1,8 +1,6 @@
-use crate::dts::expression::token::Token;
-use crate::dts::expression::SyntaxKind;
-use crate::dts::expression::SyntaxKind::{
-    AMP, ERROR, IDENT, INT, MEM_RESERVE, NUMBER, REFERENCE, RESERVE_MEMORY, SEMICOLON,
-};
+use crate::dts::lex::token::Token;
+use crate::dts::syntax::SyntaxKind;
+use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
 use itertools::Itertools;
 use rowan::{Checkpoint, GreenNodeBuilder};

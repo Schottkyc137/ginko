@@ -1,6 +1,6 @@
 use crate::dts::ast::{ast_node, impl_from_str, Cast};
-use crate::dts::expression::SyntaxKind::*;
 use crate::dts::syntax::Parser;
+use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxToken;
 
 ast_node! { struct Name(NAME); }

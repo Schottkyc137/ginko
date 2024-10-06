@@ -4,7 +4,6 @@ mod ast2;
 mod data;
 mod diagnostics;
 mod error_codes;
-mod expression;
 mod import_guard;
 mod parser;
 mod project;
@@ -14,6 +13,7 @@ mod visitor;
 
 mod ast;
 pub mod eval;
+mod lex;
 mod syntax;
 #[cfg(test)]
 mod test;

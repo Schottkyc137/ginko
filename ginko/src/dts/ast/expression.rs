@@ -1,5 +1,58 @@
-use crate::dts::ast::{ast_node, Cast};
-use crate::dts::expression::SyntaxKind::*;
+/// Devicetree expression parsing
+///
+/// The following BNF syntax describes the allowed expressions in a Devicetree context.
+///```ebnf
+/// <expression> ::= <logical-or-expression>
+///                | <logical-or-expression> ? <expression> : <expression>
+/// <logical-or-expression> ::= <logical-and-expression>
+///                           | <logical-or-expression> || <logical-and-expression>
+/// <logical-and-expression> ::= <inclusive-or-expression>
+///                            | <logical-and-expression> && <inclusive-or-expression>
+/// <inclusive-or-expression> ::= <exclusive-or-expression>
+///                             | <inclusive-or-expression> | <exclusive-or-expression>
+///
+/// <exclusive-or-expression> ::= <and-expression>
+///                             | <exclusive-or-expression> ^ <and-expression>
+///
+/// <and-expression> ::= <equality-expression>
+///                    | <and-expression> & <equality-expression>
+///
+/// <equality-expression> ::= <relational-expression>
+///                         | <equality-expression> == <relational-expression>
+///                         | <equality-expression> != <relational-expression>
+///
+/// <relational-expression> ::= <shift-expression>
+///                           | <relational-expression> < <shift-expression>
+///                           | <relational-expression> > <shift-expression>
+///                           | <relational-expression> <= <shift-expression>
+///                           | <relational-expression> >= <shift-expression>
+///
+/// <shift-expression> ::= <additive-expression>
+///                      | <shift-expression> << <additive-expression>
+///                      | <shift-expression> >> <additive-expression>
+///
+/// <additive-expression> ::= <multiplicative-expression>
+///                         | <additive-expression> + <multiplicative-expression>
+///                         | <additive-expression> - <multiplicative-expression>
+///
+/// <multiplicative-expression> ::= <unary-expression>
+///                               | <multiplicative-expression> * <unary-expression>
+///                               | <multiplicative-expression> / <unary-expression>
+///                               | <multiplicative-expression> % <unary-expression>
+///
+/// <unary-expression> ::= <primary-expression>
+///                      | <unary-operator> <unary-expression>
+///
+/// <primary-expression> ::= <constant> | ( <expression> )
+///
+/// <constant> ::= <integer-constant> | <character-constant>
+///
+/// <unary-operator> ::= | -
+///                    | ~
+///                    | !
+///```
+use crate::dts::ast::ast_node;
+use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxToken;
 
 ast_node! {

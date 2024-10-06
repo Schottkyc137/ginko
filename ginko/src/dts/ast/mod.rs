@@ -55,10 +55,9 @@ macro_rules! impl_from_str {
             type Err = Vec<String>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let (ast, errors) = $crate::dts::syntax::Parser::new(
-                    $crate::dts::expression::lex::lex(s).into_iter(),
-                )
-                .parse($fn_name);
+                let (ast, errors) =
+                    $crate::dts::syntax::Parser::new($crate::dts::lex::lex::lex(s).into_iter())
+                        .parse($fn_name);
                 if errors.is_empty() {
                     $name::cast(ast)
                         .ok_or_else(|| vec!["String does not refer to value".to_string()])

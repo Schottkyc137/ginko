@@ -1,5 +1,5 @@
-use crate::dts::expression::token::Token;
-use crate::dts::expression::SyntaxKind::*;
+use crate::dts::lex::token::Token;
+use crate::dts::syntax::SyntaxKind::*;
 
 struct Lexer<'a> {
     contents: &'a [u8],

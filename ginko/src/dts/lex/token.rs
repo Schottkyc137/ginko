@@ -1,4 +1,4 @@
-use crate::dts::expression::SyntaxKind;
+use crate::dts::syntax::SyntaxKind;
 
 pub struct Token {
     pub kind: SyntaxKind,
