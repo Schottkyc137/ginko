@@ -1,5 +1,5 @@
 /// Module for analyzing Device-Tree Source files
-mod analysis;
+mod analysis2;
 mod ast2;
 mod data;
 mod diagnostics;
@@ -11,9 +11,11 @@ mod reader;
 mod tokens;
 mod visitor;
 
+mod analysis;
 mod ast;
 pub mod eval;
 mod lex;
+mod model;
 mod syntax;
 #[cfg(test)]
 mod test;

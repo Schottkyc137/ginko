@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext};
+use crate::dts::analysis2::{Analysis, AnalysisContext};
 use crate::dts::ast2::{DtsFile, Include, Reference};
 use crate::dts::data::HasSource;
 use crate::dts::error_codes::SeverityMap;

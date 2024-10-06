@@ -1,13 +1,23 @@
-mod expression;
-mod property;
+pub mod expression;
+pub mod property;
 
 use line_index::TextRange;
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct EvalError<E> {
     pub cause: E,
     pub pos: TextRange,
+}
+
+impl<E> Display for EvalError<E>
+where
+    E: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} at pos {:?}", self.cause, self.pos)
+    }
 }
 
 pub type Result<T, E> = std::result::Result<T, EvalError<E>>;

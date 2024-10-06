@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, AnalysisResult};
+use crate::dts::analysis2::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::data::HasSource;
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::{Lexer, Token};

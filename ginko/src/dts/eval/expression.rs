@@ -4,6 +4,7 @@ use crate::dts::ast::expression::{
 };
 use crate::dts::eval::{Eval, EvalError};
 use line_index::TextRange;
+use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -12,14 +13,23 @@ pub enum IntEvalError {
     DivideByZero,
 }
 
-pub type Result = crate::dts::eval::Result<u64, IntEvalError>;
+impl Display for IntEvalError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntEvalError::ParseError(err) => write!(f, "{err}"),
+            IntEvalError::DivideByZero => write!(f, "Divide by zero"),
+        }
+    }
+}
+
+pub type Result<T = u64> = crate::dts::eval::Result<T, IntEvalError>;
 
 pub trait IntoEvalResult<T, E> {
     fn into_eval_result(self, pos: TextRange) -> crate::dts::eval::Result<T, E>;
 }
 
-impl IntoEvalResult<u64, IntEvalError> for std::result::Result<u64, ParseIntError> {
-    fn into_eval_result(self, pos: TextRange) -> Result {
+impl<T> IntoEvalResult<T, IntEvalError> for std::result::Result<T, ParseIntError> {
+    fn into_eval_result(self, pos: TextRange) -> Result<T> {
         match self {
             Ok(res) => Ok(res),
             Err(err) => Err(EvalError {
@@ -30,22 +40,30 @@ impl IntoEvalResult<u64, IntEvalError> for std::result::Result<u64, ParseIntErro
     }
 }
 
-impl Eval<u64, IntEvalError> for IntConstant {
-    fn eval(&self) -> Result {
-        // TODO: suffixes (i.e., L, LL, ULL, ...)
-        let text = self.text();
-        // guard against '0' case being matched in octal
-        if text == "0" {
-            Ok(0)
-        } else if let Some(digits) = text.to_ascii_lowercase().strip_prefix("0x") {
-            u64::from_str_radix(digits, 16).into_eval_result(self.range())
-        } else if let Some(digits) = text.strip_prefix("0") {
-            u64::from_str_radix(digits, 8).into_eval_result(self.range())
-        } else {
-            text.parse::<u64>().into_eval_result(self.range())
-        }
-    }
+macro_rules! int_eval {
+    ($($t:tt),+) => {
+        $(
+            impl Eval<$t, IntEvalError> for IntConstant {
+                fn eval(&self) -> Result<$t> {
+                    // TODO: suffixes (i.e., L, LL, ULL, ...)
+                    let text = self.text();
+                    // guard against '0' case being matched in octal
+                    if text == "0" {
+                        Ok(0)
+                    } else if let Some(digits) = text.to_ascii_lowercase().strip_prefix("0x") {
+                        $t::from_str_radix(digits, 16).into_eval_result(self.range())
+                    } else if let Some(digits) = text.strip_prefix("0") {
+                        $t::from_str_radix(digits, 8).into_eval_result(self.range())
+                    } else {
+                        text.parse::<$t>().into_eval_result(self.range())
+                    }
+                }
+            }
+        )+
+    };
 }
+
+int_eval!(u32, u64);
 
 impl Eval<u64, IntEvalError> for Constant {
     fn eval(&self) -> Result {

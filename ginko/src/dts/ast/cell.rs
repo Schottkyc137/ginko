@@ -1,7 +1,7 @@
 use crate::dts::ast::expression::{IntConstant, ParenExpression};
-use crate::dts::ast::{ast_node, Cast};
+use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::syntax::SyntaxKind::*;
-use crate::dts::syntax::SyntaxToken;
+use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
 
 ast_node! {
     struct Reference(REFERENCE);
@@ -13,33 +13,29 @@ impl Reference {
     }
 }
 
-ast_node! {
-    struct CellContent(INT | PAREN_EXPRESSION | REFERENCE);
-}
-
 #[derive(Debug)]
-pub enum CellContentKind {
+pub enum CellContent {
     Number(IntConstant),
     Expression(ParenExpression),
     Reference(Reference),
 }
 
-impl CellContent {
-    pub fn kind(&self) -> CellContentKind {
-        match self.0.kind() {
-            INT => CellContentKind::Number(IntConstant::cast(self.0.clone()).unwrap()),
-            PAREN_EXPRESSION => {
-                CellContentKind::Expression(ParenExpression::cast(self.0.clone()).unwrap())
-            }
-            REFERENCE => CellContentKind::Reference(Reference::cast(self.0.clone()).unwrap()),
-            _ => unreachable!(),
-        }
+impl Cast for CellContent {
+    fn cast(node: SyntaxNode) -> Option<Self> {
+        Some(match node.kind() {
+            INT => CellContent::Number(node.cast().unwrap()),
+            PAREN_EXPRESSION => CellContent::Expression(node.cast().unwrap()),
+            REFERENCE => CellContent::Reference(node.cast().unwrap()),
+            _ => return None,
+        })
     }
 }
 
 ast_node! {
     struct Cell(CELL);
 }
+
+impl_from_str!(Cell => Parser::parse_cell);
 
 impl Cell {
     pub fn l_chev(&self) -> SyntaxToken {
@@ -57,7 +53,7 @@ impl Cell {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::ast::cell::{Cell, CellContentKind};
+    use crate::dts::ast::cell::{Cell, CellContent};
     use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
     use crate::dts::lex::lex::lex;
@@ -91,8 +87,8 @@ mod tests {
         let cell = parse_to_cell("<&some_name>");
         let content = cell.content().collect_vec();
         assert_eq!(content.len(), 1);
-        match content[0].kind() {
-            CellContentKind::Reference(reference) => {
+        match &content[0] {
+            CellContent::Reference(reference) => {
                 assert_eq!(reference.target(), "some_name".to_owned())
             }
             _ => panic!("Expected reference"),
@@ -114,14 +110,14 @@ mod tests {
         assert_eq!(contents.len(), 2);
         assert!(contents
             .iter()
-            .all(|content| matches!(content.kind(), CellContentKind::Number(_))));
+            .all(|content| matches!(content, CellContent::Number(_))));
 
         let cell = parse_to_cell("<&node_a &node_b>");
         let contents = cell.content().collect_vec();
         assert_eq!(contents.len(), 2);
         assert!(contents
             .iter()
-            .all(|content| matches!(content.kind(), CellContentKind::Reference(_))));
+            .all(|content| matches!(content, CellContent::Reference(_))));
     }
 
     #[test]
@@ -129,13 +125,13 @@ mod tests {
         let cell = parse_to_cell("<17 &label>");
         let contents = cell.content().collect_vec();
         assert_eq!(contents.len(), 2);
-        match contents[0].kind() {
-            CellContentKind::Number(number) => {
-                assert_eq!(number.eval(), Ok(17))
+        match &contents[0] {
+            CellContent::Number(number) => {
+                assert_eq!(number.eval(), Ok(17_u64))
             }
             _ => panic!("Expected number"),
         }
-        assert_matches!(contents[1].kind(), CellContentKind::Reference(_));
+        assert_matches!(contents[1], CellContent::Reference(_));
     }
 
     #[test]
@@ -143,8 +139,8 @@ mod tests {
         let cell = parse_to_cell("<(42 + 69)>");
         let contents = cell.content().collect_vec();
         assert_eq!(contents.len(), 1);
-        match contents[0].kind() {
-            CellContentKind::Expression(expr) => {
+        match &contents[0] {
+            CellContent::Expression(expr) => {
                 assert_eq!(expr.eval(), Ok(111))
             }
             _ => panic!("Expected expression"),
