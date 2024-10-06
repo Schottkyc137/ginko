@@ -88,7 +88,8 @@ pub enum SyntaxKind {
     BINARY,              // A + B
     UNARY,               // ! A
     PAREN_EXPRESSION,    // ( expression )
-    CELL,                // < Cell content >
+    CELL,                // [optional decoration] < Cell content >
+    CELL_INNER,          // < Cell content >
     BYTE_STRING,         // [ byte strings ]
     BYTE_CHUNK,          // a bunch of letters that make up a byte
     BITS_SPEC,           // /bits/ n specification

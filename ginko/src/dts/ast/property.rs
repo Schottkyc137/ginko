@@ -51,17 +51,8 @@ ast_node! {
 }
 
 impl PropertyValue {
-    pub fn bits(&self) -> Option<BitsSpec> {
-        self.0.first_child().and_then(BitsSpec::cast)
-    }
-
     pub fn kind(&self) -> PropertyValueKind {
-        let node = if self.bits().is_some() {
-            self.0.children().nth(1)
-        } else {
-            self.0.children().nth(0)
-        }
-        .unwrap();
+        let node = self.0.first_child().unwrap();
         match node.kind() {
             STRING_PROP => PropertyValueKind::String(StringProperty::cast(node).unwrap()),
             CELL => PropertyValueKind::Cell(Cell::cast(node).unwrap()),
@@ -148,23 +139,18 @@ mod tests {
     #[test]
     fn property_value_with_bits() {
         let byte_string = "/bits/ 8 <0x2F>".parse::<PropertyValue>().unwrap();
-        assert!(byte_string.bits().is_some());
         assert_matches!(byte_string.kind(), PropertyValueKind::Cell(_))
     }
 
     #[test]
     fn single_property_values() {
         let byte_string = r#""Hello, World!""#.parse::<PropertyValue>().unwrap();
-        assert!(byte_string.bits().is_none());
         assert_matches!(byte_string.kind(), PropertyValueKind::String(_));
         let byte_string = "<17 18>".parse::<PropertyValue>().unwrap();
-        assert!(byte_string.bits().is_none());
         assert_matches!(byte_string.kind(), PropertyValueKind::Cell(_));
         let byte_string = "&other_node".parse::<PropertyValue>().unwrap();
-        assert!(byte_string.bits().is_none());
         assert_matches!(byte_string.kind(), PropertyValueKind::Reference(_));
         let byte_string = "[ABCD]".parse::<PropertyValue>().unwrap();
-        assert!(byte_string.bits().is_none());
         assert_matches!(byte_string.kind(), PropertyValueKind::ByteString(_))
     }
 

@@ -2,13 +2,16 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CellValue<'a> {
-    Number(u32),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
     Reference(&'a Node<'a>),
 }
 
 impl From<u32> for CellValue<'_> {
     fn from(value: u32) -> Self {
-        CellValue::Number(value)
+        CellValue::U32(value)
     }
 }
 

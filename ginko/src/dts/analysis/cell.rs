@@ -24,7 +24,7 @@ impl<'a> Analysis<CellValue<'a>> for CellContent {
     ) -> Result<CellValue<'a>, String> {
         match self {
             CellContent::Number(int) => match int.eval() {
-                Ok(res) => Ok(CellValue::Number(res)),
+                Ok(res) => Ok(CellValue::U32(res)),
                 Err(err) => Err(err.to_string()),
             },
             CellContent::Expression(expr) => match expr.eval() {
@@ -33,7 +33,7 @@ impl<'a> Analysis<CellValue<'a>> for CellContent {
                     if upper_bits != 0 && upper_bits != -1 {
                         diagnostics.push("Truncating bits".to_string())
                     }
-                    Ok(CellValue::Number((result & 0xFFFFFFFF) as u32))
+                    Ok(CellValue::U32((result & 0xFFFFFFFF) as u32))
                 }
                 Err(err) => Err(err.to_string()),
             },
@@ -51,9 +51,9 @@ mod tests {
     #[test]
     fn analyze_simple_cell() {
         let cell = "<32>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::Number(32)]);
+        assert_eq!(cell, vec![CellValue::U32(32)]);
         let cell = "<(13 + 14)>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::Number(27)]);
+        assert_eq!(cell, vec![CellValue::U32(27)]);
     }
 
     #[test]
@@ -61,17 +61,10 @@ mod tests {
         let cell = "<32 54 0x17>".parse::<Cell>().unwrap().analyze_no_errors();
         assert_eq!(
             cell,
-            vec![
-                CellValue::Number(32),
-                CellValue::Number(54),
-                CellValue::Number(0x17)
-            ]
+            vec![CellValue::U32(32), CellValue::U32(54), CellValue::U32(0x17)]
         );
 
         let cell = "<(-1) 5>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(
-            cell,
-            vec![CellValue::Number(0xFFFFFFFF), CellValue::Number(5)]
-        );
+        assert_eq!(cell, vec![CellValue::U32(0xFFFFFFFF), CellValue::U32(5)]);
     }
 }

@@ -4,8 +4,24 @@ use crate::dts::syntax::SyntaxKind::*;
 
 impl<I: Iterator<Item = Token>> Parser<I> {
     pub fn parse_cell(&mut self) {
-        assert_eq!(self.peek_kind(), Some(L_CHEV));
         self.start_node(CELL);
+        self.start_node(BITS_SPEC);
+        if self.peek_kind() == Some(BITS) {
+            self.bump();
+            match self.peek_kind() {
+                Some(NUMBER) => self.bump_into_node(INT),
+                Some(_) => self.error_token("Expected number of bits"),
+                None => {
+                    self.eof_error();
+                    self.finish_node();
+                    return;
+                }
+            }
+        }
+        self.finish_node();
+        self.skip_ws();
+        self.start_node(CELL_INNER);
+        assert_eq!(self.peek_kind(), Some(L_CHEV));
         self.bump();
         loop {
             if self.peek_kind() == Some(R_CHEV) {
@@ -14,6 +30,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
             self.parse_cell_content();
         }
+        self.finish_node();
         self.finish_node();
     }
 
@@ -45,8 +62,10 @@ mod tests {
             "<>",
             r#"
 CELL
-  L_CHEV "<"
-  R_CHEV ">"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    R_CHEV ">"
 "#,
         );
     }
@@ -57,11 +76,13 @@ CELL
             "<&some_name>",
             r#"
 CELL
-  L_CHEV "<"
-  REFERENCE
-    AMP "&"
-    IDENT "some_name"
-  R_CHEV ">"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    REFERENCE
+      AMP "&"
+      IDENT "some_name"
+    R_CHEV ">"
 "#,
         );
 
@@ -69,10 +90,12 @@ CELL
             "<5>",
             r#"
 CELL
-  L_CHEV "<"
-  INT
-    NUMBER "5"
-  R_CHEV ">"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "5"
+    R_CHEV ">"
 "#,
         );
     }
@@ -83,13 +106,15 @@ CELL
             "<8 9>",
             r#"
 CELL
-  L_CHEV "<"
-  INT
-    NUMBER "8"
-  WHITESPACE " "
-  INT
-    NUMBER "9"
-  R_CHEV ">"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "8"
+    WHITESPACE " "
+    INT
+      NUMBER "9"
+    R_CHEV ">"
 "#,
         );
 
@@ -97,15 +122,17 @@ CELL
             "<&node_a &node_b>",
             r#"
 CELL
-  L_CHEV "<"
-  REFERENCE
-    AMP "&"
-    IDENT "node_a"
-  WHITESPACE " "
-  REFERENCE
-    AMP "&"
-    IDENT "node_b"
-  R_CHEV ">"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    REFERENCE
+      AMP "&"
+      IDENT "node_a"
+    WHITESPACE " "
+    REFERENCE
+      AMP "&"
+      IDENT "node_b"
+    R_CHEV ">"
 "#,
         );
     }
@@ -115,14 +142,37 @@ CELL
             "<17 &label>",
             r#"
 CELL
-  L_CHEV "<"
-  INT
-    NUMBER "17"
+  BITS_SPEC
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "17"
+    WHITESPACE " "
+    REFERENCE
+      AMP "&"
+      IDENT "label"
+    R_CHEV ">"
+"#,
+        );
+    }
+
+    #[test]
+    fn check_cell_with_bits() {
+        check(
+            "/bits/ 16 <0xABCD>",
+            r#"
+CELL
+  BITS_SPEC
+    BITS "/bits/"
+    WHITESPACE " "
+    INT
+      NUMBER "16"
   WHITESPACE " "
-  REFERENCE
-    AMP "&"
-    IDENT "label"
-  R_CHEV ">"
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "0xABCD"
+    R_CHEV ">"
 "#,
         );
     }

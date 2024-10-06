@@ -146,10 +146,12 @@ PROPERTY
   PROPERTY_LIST
     PROP_VALUE
       CELL
-        L_CHEV "<"
-        INT
-          NUMBER "12"
-        R_CHEV ">"
+        BITS_SPEC
+        CELL_INNER
+          L_CHEV "<"
+          INT
+            NUMBER "12"
+          R_CHEV ">"
   SEMICOLON ";"
 "#,
         );

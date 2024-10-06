@@ -63,7 +63,7 @@ macro_rules! int_eval {
     };
 }
 
-int_eval!(u32, u64);
+int_eval!(u8, u16, u32, u64);
 
 impl Eval<u64, IntEvalError> for Constant {
     fn eval(&self) -> Result {

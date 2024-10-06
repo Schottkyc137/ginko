@@ -23,23 +23,9 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub fn parse_property_value(&mut self) {
         self.start_node(PROP_VALUE);
-        if self.peek_kind() == Some(BITS) {
-            self.start_node(BITS_SPEC);
-            self.bump();
-            match self.peek_kind() {
-                Some(NUMBER) => self.bump_into_node(INT),
-                Some(_) => self.error_token("Expected number of bits"),
-                None => {
-                    self.eof_error();
-                    self.finish_node();
-                    return;
-                }
-            }
-            self.finish_node()
-        }
         match self.peek_kind() {
             Some(STRING) => self.bump_into_node(STRING_PROP),
-            Some(L_CHEV) => self.parse_cell(),
+            Some(L_CHEV | BITS) => self.parse_cell(),
             Some(AMP) => self.parse_reference(),
             Some(L_BRAK) => self.parse_byte_string(),
             Some(_) => self.error_token("Expected string, cell, reference or bytes".to_string()),
@@ -194,10 +180,12 @@ PROP_VALUE
             r#"
 PROP_VALUE
   CELL
-    L_CHEV "<"
-    INT
-      NUMBER "32"
-    R_CHEV ">"
+    BITS_SPEC
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "32"
+      R_CHEV ">"
 "#,
         );
 
@@ -218,17 +206,18 @@ PROP_VALUE
             "/bits/ 8 <27>",
             r#"
 PROP_VALUE
-  BITS_SPEC
-    BITS "/bits/"
-    WHITESPACE " "
-    INT
-      NUMBER "8"
-  WHITESPACE " "
   CELL
-    L_CHEV "<"
-    INT
-      NUMBER "27"
-    R_CHEV ">"
+    BITS_SPEC
+      BITS "/bits/"
+      WHITESPACE " "
+      INT
+        NUMBER "8"
+    WHITESPACE " "
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "27"
+      R_CHEV ">"
 "#,
         );
     }
@@ -245,18 +234,22 @@ PROP_VALUE
 PROPERTY_LIST
   PROP_VALUE
     CELL
-      L_CHEV "<"
-      INT
-        NUMBER "23"
-      R_CHEV ">"
+      BITS_SPEC
+      CELL_INNER
+        L_CHEV "<"
+        INT
+          NUMBER "23"
+        R_CHEV ">"
   COMMA ","
   PROP_VALUE
     WHITESPACE " "
     CELL
-      L_CHEV "<"
-      INT
-        NUMBER "47"
-      R_CHEV ">"
+      BITS_SPEC
+      CELL_INNER
+        L_CHEV "<"
+        INT
+          NUMBER "47"
+        R_CHEV ">"
 "#,
         );
 
@@ -277,10 +270,12 @@ PROPERTY_LIST
   PROP_VALUE
     WHITESPACE " "
     CELL
-      L_CHEV "<"
-      INT
-        NUMBER "47"
-      R_CHEV ">"
+      BITS_SPEC
+      CELL_INNER
+        L_CHEV "<"
+        INT
+          NUMBER "47"
+        R_CHEV ">"
 "#,
         );
     }

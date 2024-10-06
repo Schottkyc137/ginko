@@ -1,4 +1,5 @@
 use crate::dts::ast::expression::{IntConstant, ParenExpression};
+use crate::dts::ast::property::BitsSpec;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
@@ -38,6 +39,32 @@ ast_node! {
 impl_from_str!(Cell => Parser::parse_cell);
 
 impl Cell {
+    pub fn bits(&self) -> Option<BitsSpec> {
+        self.0.first_child().and_then(BitsSpec::cast)
+    }
+
+    pub fn inner(&self) -> CellInner {
+        self.0.last_child().unwrap().cast().unwrap()
+    }
+
+    pub fn l_chev(&self) -> SyntaxToken {
+        self.inner().l_chev()
+    }
+
+    pub fn r_chev(&self) -> SyntaxToken {
+        self.inner().r_chev()
+    }
+
+    pub fn content(&self) -> impl Iterator<Item = CellContent> {
+        self.inner().content()
+    }
+}
+
+ast_node! {
+    struct CellInner(CELL_INNER);
+}
+
+impl CellInner {
     pub fn l_chev(&self) -> SyntaxToken {
         self.0.first_token().unwrap()
     }
@@ -145,5 +172,14 @@ mod tests {
             }
             _ => panic!("Expected expression"),
         }
+    }
+
+    #[test]
+    fn check_cell_wtih_bits() {
+        let cell = parse_to_cell("/bits/ 8 <32>");
+        let contents = cell.content().collect_vec();
+        assert!(cell.bits().is_some());
+        assert_eq!(contents.len(), 1);
+        assert_matches!(contents[0], CellContent::Number(_));
     }
 }
