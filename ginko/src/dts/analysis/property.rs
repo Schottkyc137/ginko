@@ -38,7 +38,7 @@ mod tests {
     use crate::dts::analysis::{NoErrorAnalysis, WithDiagnosticAnalysis};
     use crate::dts::ast::property::{PropertyList, PropertyValue};
     use crate::dts::diagnostics::Diagnostic;
-    use crate::dts::model::{CellValue, Value};
+    use crate::dts::model::{CellValue, CellValues, Value};
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
 
@@ -47,7 +47,10 @@ mod tests {
         let str = r#""Hello, World!""#.parse::<PropertyValue>().unwrap().analyze_no_errors();
         assert_eq!(str, Value::String("Hello, World!".to_owned()));
         let cell = "<17>".parse::<PropertyValue>().unwrap().analyze_no_errors();
-        assert_eq!(cell, Value::Cell(vec![CellValue::U32(17)]));
+        assert_eq!(
+            cell,
+            Value::Cell(CellValues::U32(vec![CellValue::Number(17)]))
+        );
         let bytes = "[ABCD EF 01]"
             .parse::<PropertyValue>()
             .unwrap()
@@ -63,7 +66,7 @@ mod tests {
             properties,
             vec![
                 Value::String("Hello, World!".into()),
-                Value::Cell(vec![CellValue::U32(17)])
+                Value::Cell(CellValues::U32(vec![CellValue::Number(17)]))
             ]
         )
     }

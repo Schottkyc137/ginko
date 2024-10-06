@@ -49,6 +49,8 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 None => break,
             }
         }
+        // Skip trailing whitespaces
+        self.skip_ws();
         self.finish_node();
     }
 }
@@ -110,6 +112,7 @@ FILE
             r#"
 FILE
   NODE
+    DECORATION
     NAME
       SLASH "/"
     WHITESPACE " "
@@ -153,6 +156,7 @@ FILE
     SEMICOLON ";"
   WHITESPACE "\n"
   NODE
+    DECORATION
     NAME
       SLASH "/"
     WHITESPACE " "

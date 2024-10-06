@@ -36,8 +36,8 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     pub fn parse_node_body(&mut self) {
         match self.peek_kind() {
             Some(L_BRACE) => {
-                self.bump();
                 self.start_node(NODE_BODY);
+                self.bump();
             }
             Some(_) => {
                 self.error_token("Expected '{'");

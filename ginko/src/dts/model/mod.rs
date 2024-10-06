@@ -1,39 +1,65 @@
+mod display;
+
 use std::cell::OnceCell;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum CellValue {
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
+pub enum CellValue<T> {
+    Number(T),
     Reference(OnceCell<Node>),
 }
 
-macro_rules! cell_value_from_int {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CellValues {
+    U8(Vec<CellValue<u8>>),
+    U16(Vec<CellValue<u16>>),
+    U32(Vec<CellValue<u32>>),
+    U64(Vec<CellValue<u64>>),
+}
+
+macro_rules! cell_values_from_iter {
     ($($t:ident => $target:expr),+) => {
         $(
-            impl From<$t> for CellValue {
-                fn from(value: $t) -> Self {
-                    $target(value)
+            impl FromIterator<CellValue<$t>> for CellValues {
+                fn from_iter<T: IntoIterator<Item = CellValue<$t>>>(iter: T) -> Self {
+                    $target(Vec::from_iter(iter))
                 }
             }
         )+
     };
 }
 
-cell_value_from_int! {
-    u8 => CellValue::U8,
-    u16 => CellValue::U16,
-    u32 => CellValue::U32,
-    u64 => CellValue::U64
+cell_values_from_iter! {
+    u8 => CellValues::U8,
+    u16 => CellValues::U16,
+    u32 => CellValues::U32,
+    u64 => CellValues::U64
+}
+
+macro_rules! cell_values_from_int {
+    ($($t:ident => $target:expr),+) => {
+        $(
+            impl From<$t> for CellValues {
+                fn from(value: $t) -> Self {
+                    $target(vec![CellValue::Number(value)])
+                }
+            }
+        )+
+    };
+}
+
+cell_values_from_int! {
+    u8 => CellValues::U8,
+    u16 => CellValues::U16,
+    u32 => CellValues::U32,
+    u64 => CellValues::U64
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Value {
     Bytes(Vec<u8>),
     String(String),
-    Cell(Vec<CellValue>),
+    Cell(CellValues),
     Reference(OnceCell<Node>),
 }
 
@@ -42,7 +68,7 @@ macro_rules! value_from_int {
         $(
             impl From<$t> for Value {
                 fn from(value: $t) -> Self {
-                    Value::Cell(vec![value.into()])
+                    Value::Cell(value.into())
                 }
             }
         )+
@@ -54,6 +80,18 @@ value_from_int!(u8, u16, u32, u64);
 impl<const N: usize> From<[u8; N]> for Value {
     fn from(value: [u8; N]) -> Self {
         Value::Bytes(value.to_vec())
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Value::String(value)
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Value::String(value.to_owned())
     }
 }
 

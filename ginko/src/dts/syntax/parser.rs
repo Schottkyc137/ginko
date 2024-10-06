@@ -115,8 +115,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 impl<I: Iterator<Item = Token>> Parser<I> {
     pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<String>) {
         target(&mut self);
-        // eat all trailing whitespaces
-        self.skip_ws();
         (SyntaxNode::new_root(self.builder.finish()), self.errors)
     }
 }

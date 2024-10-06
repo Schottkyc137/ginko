@@ -84,7 +84,7 @@ ast_node! {
 }
 
 // TODO: this panics if one parses a valid property
-impl_from_str!(Node => Parser::parse_node);
+impl_from_str!(Node => Parser::parse_property_or_node);
 
 impl Node {
     pub fn decoration(&self) -> Decoration {

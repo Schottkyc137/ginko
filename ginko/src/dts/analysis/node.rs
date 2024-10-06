@@ -84,8 +84,7 @@ node {
   sub_node {
     empty_prop;
   };
-};
-        "
+};"
         .parse::<Node>()
         .unwrap()
         .analyze_no_errors();

@@ -2,16 +2,16 @@ use crate::dts::analysis::{Analysis, AnalysisContext, BitWidth};
 use crate::dts::ast::cell::{Cell, CellContent};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
-use crate::dts::model::CellValue;
+use crate::dts::model::{CellValue, CellValues};
 use crate::dts::ErrorCode;
 use itertools::Itertools;
 
-impl Analysis<Vec<CellValue>> for Cell {
+impl Analysis<CellValues> for Cell {
     fn analyze(
         &self,
         context: &AnalysisContext,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<Vec<CellValue>, Diagnostic> {
+    ) -> Result<CellValues, Diagnostic> {
         let bits = match self.bits() {
             None => BitWidth::default(),
             Some(spec) => {
@@ -27,84 +27,145 @@ impl Analysis<Vec<CellValue>> for Cell {
         };
         // this stops at the first error.
         // One could alternatively push all errors to the diagnostics; unsure what's better
-        self.content()
-            .map(|content| content.analyze(&context.with_bit_width(bits), diagnostics))
-            .try_collect()
-    }
-}
-
-impl Analysis<CellValue> for CellContent {
-    fn analyze(
-        &self,
-        context: &AnalysisContext,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<CellValue, Diagnostic> {
-        match self {
-            CellContent::Number(int) => match context.bit_width {
-                BitWidth::W8 => Ok(CellValue::U8(int.eval()?)),
-                BitWidth::W16 => Ok(CellValue::U16(int.eval()?)),
-                BitWidth::W32 => Ok(CellValue::U32(int.eval()?)),
-                BitWidth::W64 => Ok(CellValue::U64(int.eval()?)),
-            },
-            CellContent::Expression(expr) => {
-                let result = expr.eval()?;
-                match context.bit_width {
-                    BitWidth::W8 => {
-                        let upper_bits = ((result & 0xFFFFFFFFFFFFFF00) >> 8) as i8;
-                        if upper_bits != 0 && upper_bits != -1 {
-                            diagnostics.push(Diagnostic::new(
-                                expr.range(),
-                                ErrorCode::IntError,
-                                "Truncating bits".to_string(),
-                            ))
-                        }
-                        Ok(CellValue::U8((result & 0xFF) as u8))
-                    }
-                    BitWidth::W16 => {
-                        let upper_bits = ((result & 0xFFFFFFFFFFFF0000) >> 16) as i16;
-                        if upper_bits != 0 && upper_bits != -1 {
-                            diagnostics.push(Diagnostic::new(
-                                expr.range(),
-                                ErrorCode::IntError,
-                                "Truncating bits".to_string(),
-                            ))
-                        }
-                        Ok(CellValue::U16((result & 0xFFFF) as u16))
-                    }
-                    BitWidth::W32 => {
-                        let upper_bits = ((result & 0xFFFFFFFF00000000) >> 32) as i32;
-                        if upper_bits != 0 && upper_bits != -1 {
-                            diagnostics.push(Diagnostic::new(
-                                expr.range(),
-                                ErrorCode::IntError,
-                                "Truncating bits".to_string(),
-                            ))
-                        }
-                        Ok(CellValue::U32((result & 0xFFFFFFFF) as u32))
-                    }
-                    BitWidth::W64 => Ok(CellValue::U64(result)),
-                }
-            }
-            CellContent::Reference(_reference) => unimplemented!(),
+        match bits {
+            BitWidth::W8 => self
+                .content()
+                .map(|content| {
+                    <CellContent as Analysis<CellValue<u8>>>::analyze(
+                        &content,
+                        context,
+                        diagnostics,
+                    )
+                })
+                .try_collect(),
+            BitWidth::W16 => self
+                .content()
+                .map(|content| {
+                    <CellContent as Analysis<CellValue<u16>>>::analyze(
+                        &content,
+                        context,
+                        diagnostics,
+                    )
+                })
+                .try_collect(),
+            BitWidth::W32 => self
+                .content()
+                .map(|content| {
+                    <CellContent as Analysis<CellValue<u32>>>::analyze(
+                        &content,
+                        context,
+                        diagnostics,
+                    )
+                })
+                .try_collect(),
+            BitWidth::W64 => self
+                .content()
+                .map(|content| {
+                    <CellContent as Analysis<CellValue<u64>>>::analyze(
+                        &content,
+                        context,
+                        diagnostics,
+                    )
+                })
+                .try_collect(),
         }
     }
 }
+
+trait TruncateFrom<T> {
+    /// Truncates the value unconditionally.
+    /// If the value cannot fill the required space, the returned bool is true.
+    fn truncate(value: T) -> (bool, Self);
+}
+
+// Truncating from self is always possible and returns self without truncation
+impl<I> TruncateFrom<Self> for I {
+    fn truncate(value: Self) -> (bool, Self) {
+        (false, value)
+    }
+}
+
+impl TruncateFrom<u64> for u8 {
+    fn truncate(value: u64) -> (bool, Self) {
+        let test = (value & 0xFFFFFFFFFFFFFF00) >> 8;
+        if test != 0xFFFFFFFFFFFFFF && test != 0x00000000000000 {
+            (true, (value & 0xFF) as u8)
+        } else {
+            (false, (value & 0xFF) as u8)
+        }
+    }
+}
+
+impl TruncateFrom<u64> for u16 {
+    fn truncate(value: u64) -> (bool, Self) {
+        let test = (value & 0xFFFFFFFFFFFF0000) >> 16;
+        if test != 0xFFFFFFFFFFFF && test != 0x000000000000 {
+            (true, (value & 0xFFFF) as u16)
+        } else {
+            (false, (value & 0xFFFF) as u16)
+        }
+    }
+}
+
+impl TruncateFrom<u64> for u32 {
+    fn truncate(value: u64) -> (bool, Self) {
+        let test = (value & 0xFFFFFFFF00000000) >> 32;
+        if test != 0xFFFFFFFF && test != 0x00000000 {
+            (true, (value & 0xFFFFFFFF) as u32)
+        } else {
+            (false, (value & 0xFFFFFFFF) as u32)
+        }
+    }
+}
+
+macro_rules! analysis_from_int {
+    ($($t:ident),+) => {
+        $(
+            impl Analysis<CellValue<$t>> for CellContent {
+                fn analyze(
+                    &self,
+                    _context: &AnalysisContext,
+                    diagnostics: &mut Vec<Diagnostic>,
+                ) -> Result<CellValue<$t>, Diagnostic> {
+                    match self {
+                        CellContent::Number(int) => Ok(CellValue::Number(int.eval()?)),
+                        CellContent::Expression(expr) => {
+                            let result = expr.eval()?;
+                            let (has_truncated, truncated) = $t::truncate(result);
+                            if has_truncated {
+                                diagnostics.push(Diagnostic::new(
+                                    expr.range(),
+                                    ErrorCode::IntError,
+                                    "Truncating bits".to_string(),
+                                ))
+                            }
+                            Ok(CellValue::Number(truncated))
+                        }
+                        CellContent::Reference(_reference) => unimplemented!(),
+                    }
+                }
+            }
+        )+
+    };
+}
+
+analysis_from_int!(u8, u16, u32, u64);
 
 #[cfg(test)]
 mod tests {
     use crate::dts::analysis::{ExpectedErrorAnalysis, NoErrorAnalysis};
     use crate::dts::ast::cell::Cell;
     use crate::dts::diagnostics::Diagnostic;
-    use crate::dts::model::CellValue;
+    use crate::dts::model::{CellValue, CellValues};
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
 
     #[test]
     fn analyze_simple_cell() {
         let cell = "<32>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U32(32)]);
+        assert_eq!(cell, CellValues::U32(vec![CellValue::Number(32)]));
         let cell = "<(13 + 14)>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U32(27)]);
+        assert_eq!(cell, CellValues::U32(vec![CellValue::Number(27)]));
     }
 
     #[test]
@@ -112,11 +173,18 @@ mod tests {
         let cell = "<32 54 0x17>".parse::<Cell>().unwrap().analyze_no_errors();
         assert_eq!(
             cell,
-            vec![CellValue::U32(32), CellValue::U32(54), CellValue::U32(0x17)]
+            CellValues::U32(vec![
+                CellValue::Number(32),
+                CellValue::Number(54),
+                CellValue::Number(0x17)
+            ])
         );
 
         let cell = "<(-1) 5>".parse::<Cell>().unwrap().analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U32(0xFFFFFFFF), CellValue::U32(5)]);
+        assert_eq!(
+            cell,
+            CellValues::U32(vec![CellValue::Number(0xFFFFFFFF), CellValue::Number(5)])
+        );
     }
 
     #[test]
@@ -125,13 +193,19 @@ mod tests {
             .parse::<Cell>()
             .unwrap()
             .analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U8(0xFF), CellValue::U8(0x23)]);
+        assert_eq!(
+            cell,
+            CellValues::U8(vec![CellValue::Number(0xFF), CellValue::Number(0x23)])
+        );
 
         let cell = "/bits/ 16 <0x241C 0x0809>"
             .parse::<Cell>()
             .unwrap()
             .analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U16(0x241C), CellValue::U16(0x0809)]);
+        assert_eq!(
+            cell,
+            CellValues::U16(vec![CellValue::Number(0x241C), CellValue::Number(0x0809)])
+        );
 
         let cell = "/bits/ 32 <0x12345678 0x9ABCDEF0>"
             .parse::<Cell>()
@@ -139,14 +213,20 @@ mod tests {
             .analyze_no_errors();
         assert_eq!(
             cell,
-            vec![CellValue::U32(0x12345678), CellValue::U32(0x9ABCDEF0)]
+            CellValues::U32(vec![
+                CellValue::Number(0x12345678),
+                CellValue::Number(0x9ABCDEF0)
+            ])
         );
 
         let cell = "/bits/ 64 <0x0123456789ABCDEF>"
             .parse::<Cell>()
             .unwrap()
             .analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U64(0x0123456789ABCDEF)]);
+        assert_eq!(
+            cell,
+            CellValues::U64(vec![CellValue::Number(0x0123456789ABCDEF)])
+        );
     }
 
     #[test]
@@ -155,7 +235,10 @@ mod tests {
             .parse::<Cell>()
             .unwrap()
             .analyze_no_errors();
-        assert_eq!(cell, vec![CellValue::U64(0x123456789ABCDCE)]);
+        assert_eq!(
+            cell,
+            CellValues::U64(vec![CellValue::Number(0x123456789ABCDCE)])
+        );
     }
 
     #[test]
