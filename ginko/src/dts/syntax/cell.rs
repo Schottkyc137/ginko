@@ -5,8 +5,8 @@ use crate::dts::syntax::SyntaxKind::*;
 impl<I: Iterator<Item = Token>> Parser<I> {
     pub fn parse_cell(&mut self) {
         self.start_node(CELL);
-        self.start_node(BITS_SPEC);
         if self.peek_kind() == Some(BITS) {
+            self.start_node(BITS_SPEC);
             self.bump();
             match self.peek_kind() {
                 Some(NUMBER) => self.bump_into_node(INT),
@@ -14,11 +14,12 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 None => {
                     self.eof_error();
                     self.finish_node();
+                    self.finish_node();
                     return;
                 }
             }
+            self.finish_node();
         }
-        self.finish_node();
         self.skip_ws();
         self.start_node(CELL_INNER);
         assert_eq!(self.peek_kind(), Some(L_CHEV));
@@ -62,7 +63,6 @@ mod tests {
             "<>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     R_CHEV ">"
@@ -76,7 +76,6 @@ CELL
             "<&some_name>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     REFERENCE
@@ -90,7 +89,6 @@ CELL
             "<5>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     INT
@@ -106,7 +104,6 @@ CELL
             "<8 9>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     INT
@@ -122,7 +119,6 @@ CELL
             "<&node_a &node_b>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     REFERENCE
@@ -142,7 +138,6 @@ CELL
             "<17 &label>",
             r#"
 CELL
-  BITS_SPEC
   CELL_INNER
     L_CHEV "<"
     INT

@@ -180,7 +180,6 @@ PROP_VALUE
             r#"
 PROP_VALUE
   CELL
-    BITS_SPEC
     CELL_INNER
       L_CHEV "<"
       INT
@@ -234,7 +233,6 @@ PROP_VALUE
 PROPERTY_LIST
   PROP_VALUE
     CELL
-      BITS_SPEC
       CELL_INNER
         L_CHEV "<"
         INT
@@ -244,7 +242,6 @@ PROPERTY_LIST
   PROP_VALUE
     WHITESPACE " "
     CELL
-      BITS_SPEC
       CELL_INNER
         L_CHEV "<"
         INT
@@ -270,7 +267,6 @@ PROPERTY_LIST
   PROP_VALUE
     WHITESPACE " "
     CELL
-      BITS_SPEC
       CELL_INNER
         L_CHEV "<"
         INT

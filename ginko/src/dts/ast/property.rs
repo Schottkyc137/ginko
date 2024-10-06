@@ -1,5 +1,6 @@
 use crate::dts::ast::cell::{Cell, Reference};
-use crate::dts::ast::{ast_node, impl_from_str, Cast};
+use crate::dts::ast::expression::IntConstant;
+use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::lex::lex::lex;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};
@@ -79,6 +80,16 @@ ast_node! {
 
 ast_node! {
     struct BitsSpec(BITS_SPEC);
+}
+
+impl BitsSpec {
+    pub fn bits_token(&self) -> SyntaxToken {
+        self.0.first_token().unwrap()
+    }
+
+    pub fn bits(&self) -> IntConstant {
+        self.0.first_child().unwrap().cast().unwrap()
+    }
 }
 
 ast_node! {

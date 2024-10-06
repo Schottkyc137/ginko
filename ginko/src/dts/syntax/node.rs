@@ -146,7 +146,6 @@ PROPERTY
   PROPERTY_LIST
     PROP_VALUE
       CELL
-        BITS_SPEC
         CELL_INNER
           L_CHEV "<"
           INT
