@@ -1,7 +1,8 @@
+use crate::dts::ast::property::PropertyList;
 use crate::dts::ast::{ast_node, impl_from_str, Cast};
-use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxToken;
+use crate::dts::syntax::{Parser, SyntaxNode};
 
 ast_node! { struct Name(NAME); }
 
@@ -17,8 +18,12 @@ pub enum IllegalNodeName {
 }
 
 impl Name {
+    // TODO: This needs to be revisited
     pub fn node_name(&self) -> Result<String, IllegalNodeName> {
         let text = self.text();
+        if text == "/" {
+            return Ok(text);
+        }
         match text.find(
             |ch| !matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | ',' | '.' | '_' | '+' | '-'),
         ) {
@@ -56,27 +61,21 @@ impl NodeBody {
     }
 }
 
-ast_node! {
-    struct NodeOrProperty(NODE | PROPERTY | DELETE_SPEC);
-}
-
 #[derive(Debug)]
-pub enum NodeOrPropertyKind {
+pub enum NodeOrProperty {
     Node(Node),
     Property(Property),
     DeleteSpec(DeleteSpec),
 }
 
-impl NodeOrProperty {
-    pub fn kind(&self) -> NodeOrPropertyKind {
-        match self.0.kind() {
-            NODE => NodeOrPropertyKind::Node(Node::cast_unchecked(self.0.clone())),
-            PROPERTY => NodeOrPropertyKind::Property(Property::cast_unchecked(self.0.clone())),
-            DELETE_SPEC => {
-                NodeOrPropertyKind::DeleteSpec(DeleteSpec::cast_unchecked(self.0.clone()))
-            }
-            _ => unreachable!(),
-        }
+impl Cast for NodeOrProperty {
+    fn cast(node: SyntaxNode) -> Option<Self> {
+        Some(match node.kind() {
+            NODE => NodeOrProperty::Node(Node::cast_unchecked(node)),
+            PROPERTY => NodeOrProperty::Property(Property::cast_unchecked(node)),
+            DELETE_SPEC => NodeOrProperty::DeleteSpec(DeleteSpec::cast_unchecked(node)),
+            _ => return None,
+        })
     }
 }
 
@@ -84,15 +83,8 @@ ast_node! {
     struct Node(NODE);
 }
 
-impl_from_str!(Node => Parser::parse_property_or_node);
-
-ast_node! {
-    struct Property(PROPERTY);
-}
-
-ast_node! {
-    struct DeleteSpec(DELETE_SPEC);
-}
+// TODO: this panics if one parses a valid property
+impl_from_str!(Node => Parser::parse_node);
 
 impl Node {
     pub fn decoration(&self) -> Decoration {
@@ -114,6 +106,35 @@ impl Node {
 }
 
 ast_node! {
+    struct Property(PROPERTY);
+}
+
+// TODO: this panics if one parses a valid property
+impl_from_str!(Property => Parser::parse_property_or_node);
+
+impl Property {
+    pub fn decoration(&self) -> Decoration {
+        Decoration::cast(self.0.children().nth(0).unwrap()).unwrap()
+    }
+
+    pub fn name(&self) -> Name {
+        Name::cast(self.0.children().nth(1).unwrap()).unwrap()
+    }
+
+    pub fn value(&self) -> Option<PropertyList> {
+        self.0.children().nth(2).and_then(PropertyList::cast)
+    }
+
+    pub fn semicolon(&self) -> SyntaxToken {
+        self.0.last_token().unwrap()
+    }
+}
+
+ast_node! {
+    struct DeleteSpec(DELETE_SPEC);
+}
+
+ast_node! {
     struct Decoration(DECORATION);
 }
 
@@ -129,7 +150,7 @@ impl Decoration {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::ast::node::{Node, NodeOrPropertyKind};
+    use crate::dts::ast::node::{Node, NodeOrProperty};
     use assert_matches::assert_matches;
     use itertools::Itertools;
 
@@ -155,9 +176,9 @@ mod tests {
         assert_eq!(node.name().node_name().unwrap(), "name");
         let children = node.body().children().collect_vec();
         assert_eq!(children.len(), 2);
-        assert_matches!(children[0].kind(), NodeOrPropertyKind::Property(_));
-        match children[1].kind() {
-            NodeOrPropertyKind::Node(node) => {
+        assert_matches!(&children[0], NodeOrProperty::Property(_));
+        match &children[1] {
+            NodeOrProperty::Node(node) => {
                 assert_eq!(node.name().node_name().unwrap(), "sub_node");
                 assert_eq!(node.body().children().count(), 1);
             }

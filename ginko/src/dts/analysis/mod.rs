@@ -1,7 +1,10 @@
 use crate::dts::diagnostics::Diagnostic;
+use crate::dts::FileType;
 use std::fmt::Debug;
 
 mod cell;
+mod file;
+mod node;
 mod property;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
@@ -35,6 +38,7 @@ impl TryFrom<u32> for BitWidth {
 #[derive(Default)]
 pub struct AnalysisContext {
     bit_width: BitWidth,
+    file_type: FileType,
 }
 
 impl AnalysisContext {
@@ -52,6 +56,22 @@ pub trait Analysis<T> {
         context: &AnalysisContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<T, Diagnostic>;
+}
+
+pub trait PushIntoDiagnostics<T> {
+    fn or_push_into(self, diagnostics: &mut Vec<Diagnostic>) -> Option<T>;
+}
+
+impl<T> PushIntoDiagnostics<T> for Result<T, Diagnostic> {
+    fn or_push_into(self, diagnostics: &mut Vec<Diagnostic>) -> Option<T> {
+        match self {
+            Ok(val) => Some(val),
+            Err(err) => {
+                diagnostics.push(err);
+                None
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -90,5 +110,24 @@ where
         let result = self.analyze(&context, &mut diagnostics).unwrap_err();
         assert!(diagnostics.is_empty());
         result
+    }
+}
+
+#[cfg(test)]
+pub trait WithDiagnosticAnalysis<T> {
+    fn analyze_with_diagnostics(&self) -> (T, Vec<Diagnostic>);
+}
+
+#[cfg(test)]
+impl<I, T> WithDiagnosticAnalysis<T> for I
+where
+    I: Analysis<T>,
+    T: Debug,
+{
+    fn analyze_with_diagnostics(&self) -> (T, Vec<Diagnostic>) {
+        let mut diagnostics = Vec::new();
+        let context = AnalysisContext::default();
+        let result = self.analyze(&context, &mut diagnostics).unwrap();
+        (result, diagnostics)
     }
 }

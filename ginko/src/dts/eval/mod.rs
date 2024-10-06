@@ -2,7 +2,6 @@ pub mod expression;
 pub mod property;
 
 use crate::dts::diagnostics::Diagnostic;
-use crate::dts::eval::expression::IntEvalError;
 use crate::dts::ErrorCode;
 use line_index::TextRange;
 use std::convert::Infallible;

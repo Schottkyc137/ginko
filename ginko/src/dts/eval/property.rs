@@ -3,12 +3,24 @@ use crate::dts::eval;
 use crate::dts::eval::{Eval, EvalError};
 use itertools::Itertools;
 use std::convert::Infallible;
+use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
 
 #[derive(Debug)]
-enum ByteEvalError {
+pub enum ByteEvalError {
     OddNumberOfBytes,
     ParseError(ParseIntError),
+}
+
+impl Display for ByteEvalError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ByteEvalError::OddNumberOfBytes => {
+                write!(f, "Number of elements in byte string must be even")
+            }
+            ByteEvalError::ParseError(e) => write!(f, "{}", e),
+        }
+    }
 }
 
 impl Eval<Vec<u8>, ByteEvalError> for ByteChunk {

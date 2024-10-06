@@ -1,7 +1,7 @@
 pub mod cell;
 pub mod expression;
-mod file;
-mod node;
+pub mod file;
+pub mod node;
 pub mod property;
 
 macro_rules! ast_node {
@@ -15,6 +15,7 @@ macro_rules! ast_node {
                 self.0.text_range()
             }
 
+            #[allow(unused)]
             pub(crate) fn cast_unchecked(node: $crate::dts::syntax::SyntaxNode) -> Self {
                 debug_assert!(matches!(node.kind(), $kind), "got {}", node.kind());
                 Self(node)
@@ -52,7 +53,7 @@ macro_rules! ast_node {
 macro_rules! impl_from_str {
     ($name:ident => $fn_name:expr) => {
         impl std::str::FromStr for $name {
-            type Err = Vec<$crate::dts::diagnostics::Diagnostic>;
+            type Err = Vec<String>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let (ast, errors) =
@@ -60,7 +61,7 @@ macro_rules! impl_from_str {
                         .parse($fn_name);
                 if errors.is_empty() {
                     // TODO: unwrap or diagnostic?
-                    Ok($name::cast(ast).unwrap())
+                    Ok($name::cast(ast).expect("Found non-expecting root object"))
                 } else {
                     Err(errors)
                 }

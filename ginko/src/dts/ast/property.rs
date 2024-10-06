@@ -46,7 +46,7 @@ impl PropertyValue {
             CELL => PropertyValueKind::Cell(Cell::cast(node).unwrap()),
             REFERENCE => PropertyValueKind::Reference(Reference::cast(node).unwrap()),
             BYTE_STRING => PropertyValueKind::ByteString(ByteString::cast(node).unwrap()),
-            _ => unreachable!(),
+            kind => unreachable!("Got unreachable kind {}", kind),
         }
     }
 }

@@ -6,12 +6,12 @@ use crate::dts::model::CellValue;
 use crate::dts::ErrorCode;
 use itertools::Itertools;
 
-impl<'a> Analysis<Vec<CellValue<'a>>> for Cell {
+impl Analysis<Vec<CellValue>> for Cell {
     fn analyze(
         &self,
         context: &AnalysisContext,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<Vec<CellValue<'a>>, Diagnostic> {
+    ) -> Result<Vec<CellValue>, Diagnostic> {
         let bits = match self.bits() {
             None => BitWidth::default(),
             Some(spec) => {
@@ -33,12 +33,12 @@ impl<'a> Analysis<Vec<CellValue<'a>>> for Cell {
     }
 }
 
-impl<'a> Analysis<CellValue<'a>> for CellContent {
+impl Analysis<CellValue> for CellContent {
     fn analyze(
         &self,
         context: &AnalysisContext,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<CellValue<'a>, Diagnostic> {
+    ) -> Result<CellValue, Diagnostic> {
         match self {
             CellContent::Number(int) => match context.bit_width {
                 BitWidth::W8 => Ok(CellValue::U8(int.eval()?)),
@@ -168,7 +168,7 @@ mod tests {
             diag,
             Diagnostic::new(
                 TextRange::new(TextSize::new(7), TextSize::new(9)),
-                ErrorCode::IntError,
+                ErrorCode::IllegalBitWidth,
                 "Illegal bit width (must be 8, 16, 32 or 64)"
             )
         );

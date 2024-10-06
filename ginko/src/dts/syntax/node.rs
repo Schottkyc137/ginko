@@ -34,9 +34,20 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub fn parse_node_body(&mut self) {
-        assert_eq!(self.peek_kind(), Some(L_BRACE));
-        self.start_node(NODE_BODY);
-        self.bump();
+        match self.peek_kind() {
+            Some(L_BRACE) => {
+                self.bump();
+                self.start_node(NODE_BODY);
+            }
+            Some(_) => {
+                self.error_token("Expected '{'");
+                return;
+            }
+            None => {
+                self.finish_node();
+                return;
+            }
+        }
         loop {
             if self.peek_kind() == Some(R_BRACE) {
                 self.bump();
@@ -44,6 +55,21 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
             self.parse_property_or_node();
         }
+        self.finish_node();
+    }
+
+    pub fn parse_node(&mut self) {
+        self.start_node(NODE);
+        match self.peek_kind() {
+            Some(OMIT_IF_NO_REF) => self.bump_into_node(DECORATION),
+            _ => {
+                self.start_node(DECORATION);
+                self.finish_node();
+            }
+        }
+        self.node_name();
+        self.parse_node_body();
+        self.expect(SEMICOLON);
         self.finish_node();
     }
 

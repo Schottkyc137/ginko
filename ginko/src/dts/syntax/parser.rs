@@ -1,4 +1,3 @@
-use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::token::Token;
 use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
@@ -10,7 +9,7 @@ use std::iter::Peekable;
 pub struct Parser<I: Iterator<Item = Token>> {
     builder: GreenNodeBuilder<'static>,
     iter: Peekable<I>,
-    errors: Vec<Diagnostic>,
+    errors: Vec<String>,
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -99,12 +98,14 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.finish_node();
     }
 
-    pub(crate) fn error_token(&mut self, _message: impl Into<String>) {
+    pub(crate) fn error_token(&mut self, message: impl Into<String>) {
         // TODO: message
+        self.errors.push(message.into());
         self.bump_into_node(ERROR);
     }
 
     pub(crate) fn eof_error(&mut self) {
+        self.errors.push("Unexpected EOF".into());
         self.start_node(ERROR);
         self.finish_node();
         // TODO: message
@@ -112,7 +113,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<Diagnostic>) {
+    pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<String>) {
         target(&mut self);
         // eat all trailing whitespaces
         self.skip_ws();
