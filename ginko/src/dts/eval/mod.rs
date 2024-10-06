@@ -1,6 +1,9 @@
 pub mod expression;
 pub mod property;
 
+use crate::dts::diagnostics::Diagnostic;
+use crate::dts::eval::expression::IntEvalError;
+use crate::dts::ErrorCode;
 use line_index::TextRange;
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
@@ -9,6 +12,15 @@ use std::fmt::{Display, Formatter};
 pub struct EvalError<E> {
     pub cause: E,
     pub pos: TextRange,
+}
+
+impl<E> From<EvalError<E>> for Diagnostic
+where
+    E: Display,
+{
+    fn from(value: EvalError<E>) -> Self {
+        Diagnostic::new(value.pos, ErrorCode::IntError, value.cause.to_string())
+    }
 }
 
 impl<E> Display for EvalError<E>

@@ -3,7 +3,7 @@ use crate::dts::ast2::{
     Primary, Property, PropertyValue, ReferencedNode, WithToken,
 };
 use crate::dts::data::{HasSource, Span};
-use crate::dts::diagnostics::{Diagnostic, NameContext};
+use crate::dts::diagnostics::{Diagnostic2, NameContext};
 use crate::dts::error_codes::ErrorCode;
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::{CompilerDirective, Lexer, PeekingLexer, Reference, Token, TokenKind};
@@ -24,11 +24,11 @@ where
     R: Reader + Sized,
 {
     lexer: PeekingLexer<R>,
-    pub diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic2>,
     pub context: ParserContext,
 }
 
-type Result<T> = std::result::Result<T, Diagnostic>;
+type Result<T> = std::result::Result<T, Diagnostic2>;
 
 impl<R> Parser<R>
 where
@@ -62,7 +62,7 @@ impl<R> Parser<R>
 where
     R: Reader + Sized,
 {
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic2> {
         self.diagnostics.iter()
     }
 
@@ -82,14 +82,14 @@ where
         F2: FnMut(char) -> bool,
     {
         if let Some((pos, ch)) = str.chars().enumerate().find(|(_, ch)| !predicate(*ch)) {
-            self.diagnostics.push(Diagnostic::new(
+            self.diagnostics.push(Diagnostic2::new(
                 span.start().offset_by_char(pos as i32).as_char_span(),
                 self.lexer.source(),
                 ErrorCode::IllegalChar,
                 format!("Illegal char '{ch}' in {name_context}"),
             ));
         } else if str.len() > 31 {
-            self.diagnostics.push(Diagnostic::new(
+            self.diagnostics.push(Diagnostic2::new(
                 span,
                 self.lexer.source(),
                 ErrorCode::NameTooLong,
@@ -99,14 +99,14 @@ where
                 ),
             ))
         } else if str.is_empty() {
-            self.diagnostics.push(Diagnostic::new(
+            self.diagnostics.push(Diagnostic2::new(
                 span,
                 self.lexer.source(),
                 ErrorCode::ExpectedName,
                 format!("Expected {name_context}"),
             ))
         } else if !str.starts_with(starting_chars) {
-            self.diagnostics.push(Diagnostic::new(
+            self.diagnostics.push(Diagnostic2::new(
                 span,
                 self.lexer.source(),
                 ErrorCode::IllegalStart,
@@ -172,7 +172,7 @@ where
             }
             Reference::Path(path) => {
                 if path.is_empty() {
-                    self.diagnostics.push(Diagnostic::from_token(
+                    self.diagnostics.push(Diagnostic2::from_token(
                         token.clone(),
                         ErrorCode::PathCannotBeEmpty,
                         "Path cannot be empty",
@@ -206,7 +206,7 @@ where
                 match num {
                     Ok(num) => Ok(Cell::Number(WithToken::new(num, tok))),
                     Err(err) => {
-                        self.diagnostics.push(Diagnostic::parse_int_error(
+                        self.diagnostics.push(Diagnostic2::parse_int_error(
                             tok.span(),
                             tok.source(),
                             err,
@@ -218,7 +218,7 @@ where
             TokenKind::OpenParen => {
                 self.skip_expression_starting_with_paren();
                 if self.lexer.peek().is_none() {
-                    self.diagnostics.push(Diagnostic::from_token(
+                    self.diagnostics.push(Diagnostic2::from_token(
                         tok,
                         ErrorCode::UnbalancedParentheses,
                         "Unbalanced parentheses",
@@ -226,7 +226,7 @@ where
                 }
                 Ok(Cell::Expression)
             }
-            _ => Err(Diagnostic::expected(
+            _ => Err(Diagnostic2::expected(
                 tok.span(),
                 tok.source(),
                 &[
@@ -254,7 +254,7 @@ where
                 match num {
                     Ok(num) => Ok(WithToken::new(num, tok)),
                     Err(err) => {
-                        self.diagnostics.push(Diagnostic::parse_int_error(
+                        self.diagnostics.push(Diagnostic2::parse_int_error(
                             tok.span(),
                             tok.source(),
                             err,
@@ -263,7 +263,7 @@ where
                     }
                 }
             }
-            _ => Err(Diagnostic::expected(
+            _ => Err(Diagnostic2::expected(
                 self.lexer.last_pos().offset_by_char(1).as_span(),
                 self.lexer.source(),
                 &[TokenKind::UnparsedNumber("".to_string())],
@@ -276,7 +276,7 @@ where
         match &tok.kind {
             TokenKind::UnparsedNumber(raw_str) | TokenKind::Ident(raw_str) => {
                 if raw_str.len() % 2 != 0 {
-                    self.diagnostics.push(Diagnostic::from_token(
+                    self.diagnostics.push(Diagnostic2::from_token(
                         tok.clone(),
                         ErrorCode::OddNumberOfBytestringElements,
                         "Number of elements in byte string must be even",
@@ -288,7 +288,7 @@ where
                     match u8::from_str_radix(std::str::from_utf8(&[first, second]).unwrap(), 16) {
                         Ok(byte) => bytes.push(byte),
                         Err(err) => {
-                            self.diagnostics.push(Diagnostic::parse_int_error(
+                            self.diagnostics.push(Diagnostic2::parse_int_error(
                                 tok.span(),
                                 tok.source(),
                                 err,
@@ -300,7 +300,7 @@ where
                 Ok(WithToken::new(bytes, tok))
             }
             _ => {
-                self.diagnostics.push(Diagnostic::expected(
+                self.diagnostics.push(Diagnostic2::expected(
                     tok.span(),
                     tok.source(),
                     &[
@@ -357,7 +357,7 @@ where
             self.skip_tok();
             let width = self.lexer.expect_next()?;
             if !matches!(width.kind, TokenKind::UnparsedNumber(_)) {
-                self.diagnostics.push(Diagnostic::expected(
+                self.diagnostics.push(Diagnostic2::expected(
                     width.span(),
                     width.source(),
                     &[TokenKind::UnparsedNumber("".to_string())],
@@ -404,7 +404,7 @@ where
                 }
                 Ok(PropertyValue::ByteStrings(tok, byte_strings, end))
             }
-            _ => Err(Diagnostic::expected(
+            _ => Err(Diagnostic2::expected(
                 tok.span(),
                 tok.source(),
                 &[
@@ -450,7 +450,7 @@ where
             self.check_is_property_name(tok.span(), &value);
             return Ok(WithToken::new(value, tok));
         }
-        Err(Diagnostic::expected(
+        Err(Diagnostic2::expected(
             tok.span(),
             tok.source(),
             &[TokenKind::Ident("".to_string())],
@@ -464,7 +464,7 @@ where
             self.check_is_node_name(tok.span(), &node_name);
             return Ok(WithToken::new(node_name, tok));
         }
-        Err(Diagnostic::expected(
+        Err(Diagnostic2::expected(
             tok.span(),
             tok.source(),
             &[TokenKind::Ident("".to_string())],
@@ -513,7 +513,7 @@ where
                     break;
                 }
                 _ => {
-                    return Err(Diagnostic::expected(
+                    return Err(Diagnostic2::expected(
                         tok.span(),
                         tok.source(),
                         &[TokenKind::Ident("".to_string()), TokenKind::CloseBrace],
@@ -541,7 +541,7 @@ where
                     let values = self.property_values()?;
                     let end_tok = self.expect_semicolon()?.unwrap_or(cloned_tok);
                     if let Some(omit_if_no_ref) = omit_if_no_ref {
-                        self.diagnostics.push(Diagnostic::new(
+                        self.diagnostics.push(Diagnostic2::new(
                             omit_if_no_ref.span,
                             self.lexer.source(),
                             ErrorCode::IncorrectDirective,
@@ -555,7 +555,7 @@ where
                         end: end_tok,
                     };
                     if node_discovered {
-                        self.diagnostics.push(Diagnostic::new(
+                        self.diagnostics.push(Diagnostic2::new(
                             prop.span(),
                             self.lexer.source(),
                             ErrorCode::PropertyAfterNode,
@@ -569,7 +569,7 @@ where
                     self.check_is_property_name(ident.span(), &ident);
                     let prop = Property::empty(ident, label, cloned_tok);
                     if node_discovered {
-                        self.diagnostics.push(Diagnostic::new(
+                        self.diagnostics.push(Diagnostic2::new(
                             prop.span(),
                             self.lexer.source(),
                             ErrorCode::PropertyAfterNode,
@@ -577,7 +577,7 @@ where
                         ))
                     }
                     if let Some(omit_if_no_ref) = omit_if_no_ref {
-                        self.diagnostics.push(Diagnostic::new(
+                        self.diagnostics.push(Diagnostic2::new(
                             omit_if_no_ref.span,
                             self.lexer.source(),
                             ErrorCode::IncorrectDirective,
@@ -587,7 +587,7 @@ where
                     items.push(NodeItem::Property(Arc::new(prop)));
                 }
                 _ => {
-                    return Err(Diagnostic::expected(
+                    return Err(Diagnostic2::expected(
                         self.lexer.last_pos().as_span(),
                         self.lexer.source(),
                         &[
@@ -608,7 +608,7 @@ where
     fn expect_semicolon(&mut self) -> Result<Option<Token>> {
         let tok = self.lexer.peek();
         let Some(tok) = tok else {
-            self.diagnostics.push(Diagnostic::expected(
+            self.diagnostics.push(Diagnostic2::expected(
                 self.lexer.last_pos().as_span(),
                 self.lexer.source(),
                 &[TokenKind::Semicolon],
@@ -645,7 +645,7 @@ where
         } else {
             self.lexer.last_pos().as_char_span()
         };
-        self.diagnostics.push(Diagnostic::expected(
+        self.diagnostics.push(Diagnostic2::expected(
             span,
             self.lexer.source(),
             &[TokenKind::Semicolon],
@@ -669,7 +669,7 @@ where
         if let TokenKind::Ref(reference) = token.kind.clone() {
             Ok(self.reference(token, &reference))
         } else {
-            Err(Diagnostic::expected(
+            Err(Diagnostic2::expected(
                 token.span(),
                 token.source(),
                 &[TokenKind::Ref(Reference::Simple("".to_string()))],
@@ -700,7 +700,7 @@ where
                 let tok = self.lexer.expect_next()?;
                 match tok.kind {
                     TokenKind::String(include_str) => Ok(Primary::CStyleInclude(include_str)),
-                    _ => Err(Diagnostic::expected(
+                    _ => Err(Diagnostic2::expected(
                         tok.span(),
                         tok.source(),
                         &[TokenKind::String("".to_string())],
@@ -714,7 +714,7 @@ where
                 let path = match string_tok.kind.clone() {
                     TokenKind::String(string) => string,
                     _ => {
-                        return Err(Diagnostic::expected(
+                        return Err(Diagnostic2::expected(
                             string_tok.span(),
                             string_tok.source(),
                             &[TokenKind::String("".into())],
@@ -723,7 +723,7 @@ where
                 };
                 if self.lexer.peek_kind() == Some(&TokenKind::Semicolon) {
                     let tok = self.lexer.expect_next()?;
-                    self.diagnostics.push(Diagnostic::from_token(
+                    self.diagnostics.push(Diagnostic2::from_token(
                         tok,
                         ErrorCode::ParserError,
                         "Include directive must not end with a semicolon",
@@ -768,7 +768,7 @@ where
                     token, reference,
                 )))
             }
-            _ => Err(Diagnostic::expected(
+            _ => Err(Diagnostic2::expected(
                 token.span(),
                 token.source(),
                 &[
@@ -792,7 +792,7 @@ mod test {
         PropertyValue, Reference, WithToken,
     };
     use crate::dts::data::HasSource;
-    use crate::dts::diagnostics::Diagnostic;
+    use crate::dts::diagnostics::Diagnostic2;
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
@@ -830,17 +830,17 @@ mod test {
         assert_eq!(
             diagnostics,
             vec![
-                Diagnostic::expected(
+                Diagnostic2::expected(
                     Position::new(0, 8).as_char_span(),
                     code.source(),
                     &[Semicolon],
                 ),
-                Diagnostic::expected(
+                Diagnostic2::expected(
                     Position::new(3, 19).as_char_span(),
                     code.source(),
                     &[Semicolon],
                 ),
-                Diagnostic::expected(Position::new(4, 1).as_span(), code.source(), &[Semicolon],),
+                Diagnostic2::expected(Position::new(4, 1).as_span(), code.source(), &[Semicolon],),
             ]
         )
     }
@@ -1180,13 +1180,13 @@ mod test {
         assert_eq!(
             diag,
             vec![
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("bar;").span(),
                     code.source(),
                     ErrorCode::PropertyAfterNode,
                     "Properties must be placed before nodes"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("some_prop = <0x1>;").span(),
                     code.source(),
                     ErrorCode::PropertyAfterNode,
@@ -1294,7 +1294,7 @@ mod test {
 
         assert_eq!(
             res,
-            Err(Diagnostic::expected(
+            Err(Diagnostic2::expected(
                 code.s1("prop_a").end().as_span(),
                 code.source(),
                 &[Semicolon, Equal, OpenBrace, Directive(OmitIfNoRef)],
@@ -1317,7 +1317,7 @@ mod test {
 
         assert_eq!(
             diag,
-            vec![Diagnostic::expected(
+            vec![Diagnostic2::expected(
                 code.s1("}").end().as_span(),
                 code.source(),
                 &[Semicolon],

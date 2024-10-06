@@ -1,10 +1,8 @@
 use crate::dts::ast::cell::{Cell, Reference};
 use crate::dts::ast::expression::IntConstant;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
-use crate::dts::lex::lex::lex;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};
-use std::str::FromStr;
 
 ast_node! {
     struct ByteString(BYTE_STRING);
@@ -34,18 +32,7 @@ impl ByteString {
     }
 }
 
-impl FromStr for ByteString {
-    type Err = Vec<String>;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (ast, errors) = Parser::new(lex(s).into_iter()).parse(Parser::parse_byte_string);
-        if errors.is_empty() {
-            Ok(ByteString::cast(ast).unwrap())
-        } else {
-            Err(errors)
-        }
-    }
-}
+impl_from_str!(ByteString => Parser::parse_byte_string);
 
 ast_node! {
     struct PropertyValue(PROP_VALUE);

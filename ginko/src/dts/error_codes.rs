@@ -11,6 +11,8 @@ pub enum ErrorCode {
     ExpectedName,
     OddNumberOfBytestringElements,
     IntError,
+    IllegalBitWidth,
+    Truncation,
     NonDtsV1,
     NameTooLong,
     IllegalChar,
@@ -50,6 +52,7 @@ impl Default for SeverityMap {
             | ExpectedName
             | OddNumberOfBytestringElements
             | IntError
+            | IllegalBitWidth
             | NonDtsV1
             | IllegalChar
             | IllegalStart
@@ -65,6 +68,7 @@ impl Default for SeverityMap {
             | CyclicDependencyError
             | IncorrectDirective => Severity::Error,
             NameTooLong
+            | Truncation
             | NonStringInCompatible
             | DuplicateDirective => Severity::Warning
         };

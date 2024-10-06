@@ -5,7 +5,7 @@ use crate::dts::ast2::{
 use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::error_codes::ErrorCode;
 use crate::dts::import_guard::ImportGuard;
-use crate::dts::{Diagnostic, FileType, Position, Project};
+use crate::dts::{Diagnostic2, FileType, Position, Project};
 use std::collections::HashMap;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
@@ -41,7 +41,7 @@ pub struct AnalysisContext {
 
 pub struct AnalysisResult {
     pub context: AnalysisContext,
-    pub diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic2>,
 }
 
 impl AnalysisContext {
@@ -66,7 +66,7 @@ impl AnalysisContext {
 
 pub struct FileContext<'a> {
     project: &'a Project,
-    diagnostics: Vec<Diagnostic>,
+    diagnostics: Vec<Diagnostic2>,
     labels: HashMap<String, Labeled>,
     flat_nodes: HashMap<Path, Arc<Node>>,
     unresolved_references: Vec<WithToken<Reference>>,
@@ -77,7 +77,7 @@ pub struct FileContext<'a> {
 }
 
 impl FileContext<'_> {
-    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic2) {
         self.diagnostics.push(diagnostic);
     }
 
@@ -123,13 +123,13 @@ impl Analysis {
                 Primary::Directive(directive) => match directive {
                     AnyDirective::DtsHeader(tok) => {
                         if ctx.dts_header_seen {
-                            ctx.add_diagnostic(Diagnostic::from_token(
+                            ctx.add_diagnostic(Diagnostic2::from_token(
                                 tok.clone(),
                                 ErrorCode::DuplicateDirective,
                                 "Duplicate dts-v1 version header",
                             ))
                         } else if ctx.first_non_include {
-                            ctx.add_diagnostic(Diagnostic::from_token(
+                            ctx.add_diagnostic(Diagnostic2::from_token(
                                 tok.clone(),
                                 ErrorCode::MisplacedDtsHeader,
                                 "dts-v1 header must be placed on top of the file",
@@ -160,7 +160,7 @@ impl Analysis {
             }
         }
         if !ctx.dts_header_seen && ctx.file_type == FileType::DtSource {
-            ctx.add_diagnostic(Diagnostic::new(
+            ctx.add_diagnostic(Diagnostic2::new(
                 Position::zero().as_span(),
                 file.source(),
                 ErrorCode::NonDtsV1,
@@ -175,7 +175,7 @@ impl Analysis {
         let path = match include.path() {
             Ok(path) => path,
             Err(err) => {
-                ctx.add_diagnostic(Diagnostic::io_error(include.span(), include.source(), err));
+                ctx.add_diagnostic(Diagnostic2::io_error(include.span(), include.source(), err));
                 return;
             }
         };
@@ -183,7 +183,7 @@ impl Analysis {
             .import_guard
             .add(path.clone(), &[parent.source.clone().to_path_buf()])
         {
-            ctx.add_diagnostic(Diagnostic::cyclic_dependency_error(
+            ctx.add_diagnostic(Diagnostic2::cyclic_dependency_error(
                 include.span(),
                 include.source(),
                 err,
@@ -194,7 +194,7 @@ impl Analysis {
             return;
         };
         if proj_file.has_errors(&ctx.project.severities) {
-            ctx.add_diagnostic(Diagnostic::new(
+            ctx.add_diagnostic(Diagnostic2::new(
                 include.span(),
                 include.source(),
                 ErrorCode::ErrorsInInclude,
@@ -217,7 +217,7 @@ impl Analysis {
         // This will emit false positives as references can only be resolved with the full
         // device-tree information.
         if ctx.file_type == FileType::DtSource && !ctx.is_plugin {
-            ctx.add_diagnostic(Diagnostic::new(
+            ctx.add_diagnostic(Diagnostic2::new(
                 span,
                 source,
                 ErrorCode::UnresolvedReference,
@@ -309,7 +309,7 @@ impl Analysis {
     fn check_is_string_list(&mut self, ctx: &mut FileContext<'_>, values: &Vec<PropertyValue>) {
         for value in values {
             if !matches!(value, PropertyValue::String(_)) {
-                ctx.add_diagnostic(Diagnostic::new(
+                ctx.add_diagnostic(Diagnostic2::new(
                     value.span(),
                     value.source(),
                     ErrorCode::NonStringInCompatible,
@@ -380,7 +380,7 @@ mod test {
     use crate::dts::data::{HasSource, HasSpan, Position};
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
-    use crate::dts::Diagnostic;
+    use crate::dts::Diagnostic2;
     use assert_unordered::assert_eq_unordered;
 
     #[test]
@@ -402,25 +402,25 @@ mod test {
         assert_eq_unordered!(
             diagnostics,
             vec![
-                Diagnostic::new(
+                Diagnostic2::new(
                     Position::new(8, 21).as_char_span(),
                     code.source(),
                     ErrorCode::IllegalChar,
                     "Illegal char '#' in node name"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     Position::new(3, 8).as_char_span(),
                     code.source(),
                     ErrorCode::IllegalChar,
                     "Illegal char '?' in label"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     Position::new(4, 4).char_to(46),
                     code.source(),
                     ErrorCode::NameTooLong,
                     "label should only have 31 characters but has 41 characters"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     Position::new(6, 19).as_char_span(),
                     code.source(),
                     ErrorCode::IllegalChar,
@@ -456,13 +456,13 @@ mod test {
         assert_eq_unordered!(
             diagnostics,
             vec![
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("&node3").span(),
                     code.source(),
                     ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("&{/node3}").span(),
                     code.source(),
                     ErrorCode::UnresolvedReference,
@@ -553,7 +553,7 @@ mod test {
         let (diagnostics, _) = code.get_analyzed_file();
         assert_eq!(
             diagnostics,
-            vec![Diagnostic::new(
+            vec![Diagnostic2::new(
                 Position::zero().as_span(),
                 code.source(),
                 ErrorCode::NonDtsV1,
@@ -586,13 +586,13 @@ mod test {
         assert_eq_unordered!(
             diagnostics,
             vec![
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("&some_other_node").span(),
                     code.source(),
                     ErrorCode::UnresolvedReference,
                     "Reference cannot be resolved"
                 ),
-                Diagnostic::new(
+                Diagnostic2::new(
                     code.s1("&{/some_other_node}").span(),
                     code.source(),
                     ErrorCode::UnresolvedReference,

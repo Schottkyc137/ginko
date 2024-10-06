@@ -52,15 +52,15 @@ macro_rules! ast_node {
 macro_rules! impl_from_str {
     ($name:ident => $fn_name:expr) => {
         impl std::str::FromStr for $name {
-            type Err = Vec<String>;
+            type Err = Vec<$crate::dts::diagnostics::Diagnostic>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let (ast, errors) =
                     $crate::dts::syntax::Parser::new($crate::dts::lex::lex::lex(s).into_iter())
                         .parse($fn_name);
                 if errors.is_empty() {
-                    $name::cast(ast)
-                        .ok_or_else(|| vec!["String does not refer to value".to_string()])
+                    // TODO: unwrap or diagnostic?
+                    Ok($name::cast(ast).unwrap())
                 } else {
                     Err(errors)
                 }

@@ -3,6 +3,7 @@ use crate::dts::error_codes::{ErrorCode, SeverityMap};
 use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::tokens::{Token, TokenKind};
 use itertools::Itertools;
+use rowan::TextRange;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::num::ParseIntError;
@@ -73,20 +74,37 @@ impl Display for TokenKind {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Diagnostic {
+    pub code: ErrorCode,
+    pub range: TextRange,
+    pub message: String,
+}
+
+impl Diagnostic {
+    pub fn new(range: TextRange, code: ErrorCode, message: impl Into<String>) -> Diagnostic {
+        Diagnostic {
+            code,
+            range,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Diagnostic2 {
     pub kind: ErrorCode,
     pub span: Span,
     pub source: Arc<Path>,
     pub message: String,
 }
 
-impl Diagnostic {
+impl Diagnostic2 {
     pub fn new(
         span: Span,
         source: Arc<Path>,
         kind: ErrorCode,
         message: impl Into<String>,
-    ) -> Diagnostic {
-        Diagnostic {
+    ) -> Diagnostic2 {
+        Diagnostic2 {
             kind,
             source,
             span,
@@ -94,12 +112,12 @@ impl Diagnostic {
         }
     }
 
-    pub fn io_error(span: Span, source: Arc<Path>, err: io::Error) -> Diagnostic {
-        Diagnostic::new(span, source, ErrorCode::IOError, format!("{}", err))
+    pub fn io_error(span: Span, source: Arc<Path>, err: io::Error) -> Diagnostic2 {
+        Diagnostic2::new(span, source, ErrorCode::IOError, format!("{}", err))
     }
 
-    pub fn from_token(token: Token, kind: ErrorCode, message: impl Into<String>) -> Diagnostic {
-        Diagnostic {
+    pub fn from_token(token: Token, kind: ErrorCode, message: impl Into<String>) -> Diagnostic2 {
+        Diagnostic2 {
             kind,
             source: token.source(),
             span: token.span,
@@ -107,21 +125,21 @@ impl Diagnostic {
         }
     }
 
-    pub fn parse_int_error(span: Span, source: Arc<Path>, err: ParseIntError) -> Diagnostic {
-        Diagnostic::new(span, source, ErrorCode::IntError, format!("{err}"))
+    pub fn parse_int_error(span: Span, source: Arc<Path>, err: ParseIntError) -> Diagnostic2 {
+        Diagnostic2::new(span, source, ErrorCode::IntError, format!("{err}"))
     }
 
     pub fn cyclic_dependency_error(
         span: Span,
         source: Arc<Path>,
         err: CyclicDependencyError<PathBuf>,
-    ) -> Diagnostic {
+    ) -> Diagnostic2 {
         let str = err
             .cycle()
             .iter()
             .map(|element| format!("{}", element.display()))
             .join(" -> ");
-        Diagnostic::new(
+        Diagnostic2::new(
             span,
             source,
             ErrorCode::CyclicDependencyError,
@@ -129,7 +147,7 @@ impl Diagnostic {
         )
     }
 
-    pub fn expected(span: Span, source: Arc<Path>, kinds: &[TokenKind]) -> Diagnostic {
+    pub fn expected(span: Span, source: Arc<Path>, kinds: &[TokenKind]) -> Diagnostic2 {
         let msg = if kinds.len() == 1 {
             format!("Expected {}", kinds[0])
         } else {
@@ -138,7 +156,7 @@ impl Diagnostic {
                 kinds.iter().map(|kind| format!("{kind}")).join(", ")
             )
         };
-        Diagnostic::new(span, source, ErrorCode::Expected, msg)
+        Diagnostic2::new(span, source, ErrorCode::Expected, msg)
     }
 
     pub fn kind(&self) -> &ErrorCode {
@@ -150,26 +168,26 @@ impl Diagnostic {
     }
 }
 
-impl HasSpan for Diagnostic {
+impl HasSpan for Diagnostic2 {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-impl HasSource for Diagnostic {
+impl HasSource for Diagnostic2 {
     fn source(&self) -> Arc<Path> {
         self.source.clone()
     }
 }
 
 pub struct DiagnosticPrinter<'a> {
-    pub diagnostics: &'a [Diagnostic],
+    pub diagnostics: &'a [Diagnostic2],
     pub code: Vec<String>,
     pub severity_map: SeverityMap,
 }
 
 impl<'a> DiagnosticPrinter<'a> {
-    fn fmt_diagnostic(&self, f: &mut Formatter<'_>, diagnostic: &Diagnostic) -> std::fmt::Result {
+    fn fmt_diagnostic(&self, f: &mut Formatter<'_>, diagnostic: &Diagnostic2) -> std::fmt::Result {
         let start = diagnostic.span.start();
         let end = diagnostic.span.end();
         debug_assert!(start.line() == end.line());
@@ -229,7 +247,7 @@ impl<'a> Display for DiagnosticPrinter<'a> {
 #[cfg(test)]
 mod tests {
     use crate::dts::data::{HasSource, HasSpan};
-    use crate::dts::diagnostics::{Diagnostic, DiagnosticPrinter, ErrorCode};
+    use crate::dts::diagnostics::{Diagnostic2, DiagnosticPrinter, ErrorCode};
     use crate::dts::error_codes::SeverityMap;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
@@ -242,7 +260,7 @@ mod tests {
         let (_, diag) = code.parse(Parser::file);
         assert_eq!(
             diag,
-            vec![Diagnostic::new(
+            vec![Diagnostic2::new(
                 code.s1("}").end().as_span(),
                 code.source(),
                 ErrorCode::Expected,

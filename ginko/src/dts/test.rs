@@ -2,7 +2,7 @@ use crate::dts::analysis2::{Analysis, AnalysisContext, AnalysisResult};
 use crate::dts::data::HasSource;
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::{Lexer, Token};
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, ParserContext, Position, Project, Span};
+use crate::dts::{Diagnostic2, FileType, HasSpan, Parser, ParserContext, Position, Project, Span};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -81,9 +81,9 @@ impl Code {
         &self.code
     }
 
-    pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic>, Vec<Diagnostic>)
+    pub fn parse<F, T>(&self, parse_fn: F) -> (Result<T, Diagnostic2>, Vec<Diagnostic2>)
     where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic2>,
     {
         let mut reader = ByteReader::from_string(self.code.clone());
         reader.seek(self.pos.start());
@@ -92,9 +92,9 @@ impl Code {
         (parse_fn(&mut parser), parser.diagnostics)
     }
 
-    pub fn parse_ok<F, T>(&self, parse_fn: F) -> (T, Vec<Diagnostic>)
+    pub fn parse_ok<F, T>(&self, parse_fn: F) -> (T, Vec<Diagnostic2>)
     where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic2>,
     {
         let (res, diagnostics) = self.parse(parse_fn);
         (res.expect("Unexpectedly found non-ok value"), diagnostics)
@@ -102,7 +102,7 @@ impl Code {
 
     pub fn parse_ok_no_diagnostics<F, T>(&self, parse_fn: F) -> T
     where
-        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic>,
+        F: FnOnce(&mut Parser<ByteReader>) -> Result<T, Diagnostic2>,
     {
         let (res, diagnostics) = self.parse(parse_fn);
         assert!(
@@ -112,7 +112,7 @@ impl Code {
         res.expect("Unexpectedly found non-ok value")
     }
 
-    pub fn get_analyzed_file(&self) -> (Vec<Diagnostic>, AnalysisContext) {
+    pub fn get_analyzed_file(&self) -> (Vec<Diagnostic2>, AnalysisContext) {
         let (file, mut parse_diagnostics) = self.parse_ok(Parser::file);
         let fake_project = Project::default();
         let mut analysis = Analysis::new();

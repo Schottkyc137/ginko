@@ -41,7 +41,7 @@ impl<T> IntoEvalResult<T, IntEvalError> for std::result::Result<T, ParseIntError
 }
 
 macro_rules! int_eval {
-    ($($t:tt),+) => {
+    ($($t:ident),+) => {
         $(
             impl Eval<$t, IntEvalError> for IntConstant {
                 fn eval(&self) -> Result<$t> {

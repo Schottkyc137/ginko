@@ -3,7 +3,7 @@ use crate::dts::error_codes::ErrorCode;
 use crate::dts::reader::{ByteReader, Reader};
 use crate::dts::tokens::token::{Token, TokenKind};
 use crate::dts::tokens::Reference;
-use crate::dts::Diagnostic;
+use crate::dts::Diagnostic2;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -411,13 +411,13 @@ where
         self.peek().map(|tok| &tok.kind)
     }
 
-    pub fn peek_expect(&mut self) -> Result<&Token, Diagnostic> {
+    pub fn peek_expect(&mut self) -> Result<&Token, Diagnostic2> {
         // something something cannot borrow as immutable something something
         // Therefore this is defined here as opposed to the `None` branch
         let eof_pos = self.lexer.pos();
         let source = self.source();
         match self.peek() {
-            None => Err(Diagnostic::new(
+            None => Err(Diagnostic2::new(
                 eof_pos.as_span(),
                 source,
                 ErrorCode::UnexpectedEOF,
@@ -427,11 +427,11 @@ where
         }
     }
 
-    pub fn expect(&mut self, kind: TokenKind) -> Result<Token, Diagnostic> {
+    pub fn expect(&mut self, kind: TokenKind) -> Result<Token, Diagnostic2> {
         let prev_pos = self.lexer.pos();
         let next = self.next();
         match next {
-            None => Err(Diagnostic::new(
+            None => Err(Diagnostic2::new(
                 prev_pos.as_span(),
                 self.source(),
                 ErrorCode::UnexpectedEOF,
@@ -441,7 +441,7 @@ where
                 if token.kind == kind {
                     Ok(token)
                 } else {
-                    Err(Diagnostic::expected(
+                    Err(Diagnostic2::expected(
                         prev_pos.as_span(),
                         self.source(),
                         &[token.kind],
@@ -451,11 +451,11 @@ where
         }
     }
 
-    pub fn expect_next(&mut self) -> Result<Token, Diagnostic> {
+    pub fn expect_next(&mut self) -> Result<Token, Diagnostic2> {
         let eof_pos = self.lexer.pos();
         let next = self.next();
         match next {
-            None => Err(Diagnostic::new(
+            None => Err(Diagnostic2::new(
                 eof_pos.as_span(),
                 self.source(),
                 ErrorCode::UnexpectedEOF,

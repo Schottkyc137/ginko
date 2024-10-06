@@ -5,7 +5,7 @@ use crate::dts::error_codes::SeverityMap;
 use crate::dts::reader::ByteReader;
 use crate::dts::tokens::Lexer;
 use crate::dts::visitor::ItemAtCursor;
-use crate::dts::{Diagnostic, FileType, HasSpan, Parser, ParserContext, Position, Severity, Span};
+use crate::dts::{Diagnostic2, FileType, HasSpan, Parser, ParserContext, Position, Severity, Span};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::empty;
@@ -15,8 +15,8 @@ use std::{fs, io};
 
 #[derive(Default)]
 pub struct ProjectFile {
-    pub(crate) parser_diagnostics: Vec<Diagnostic>,
-    pub(crate) analysis_diagnostics: Vec<Diagnostic>,
+    pub(crate) parser_diagnostics: Vec<Diagnostic2>,
+    pub(crate) analysis_diagnostics: Vec<Diagnostic2>,
     pub(crate) file: Option<DtsFile>,
     pub(crate) context: Option<AnalysisContext>,
     pub(crate) file_type: FileType,
@@ -25,7 +25,7 @@ pub struct ProjectFile {
 
 impl ProjectFile {
     pub fn parsed(
-        diagnostics: Vec<Diagnostic>,
+        diagnostics: Vec<Diagnostic2>,
         file: DtsFile,
         file_type: FileType,
         source: String,
@@ -40,7 +40,7 @@ impl ProjectFile {
         }
     }
 
-    pub fn unrecoverable(err: Diagnostic, source: String, file_type: FileType) -> ProjectFile {
+    pub fn unrecoverable(err: Diagnostic2, source: String, file_type: FileType) -> ProjectFile {
         ProjectFile {
             parser_diagnostics: vec![err],
             analysis_diagnostics: vec![],
@@ -55,7 +55,7 @@ impl ProjectFile {
         self.context.as_ref()
     }
 
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic2> {
         self.parser_diagnostics
             .iter()
             .chain(&self.analysis_diagnostics)
@@ -164,14 +164,14 @@ impl Project {
         }
     }
 
-    pub fn get_diagnostics(&self, path: &Path) -> Box<dyn Iterator<Item = &Diagnostic> + '_> {
+    pub fn get_diagnostics(&self, path: &Path) -> Box<dyn Iterator<Item = &Diagnostic2> + '_> {
         let Some(file) = self.get_file(path) else {
             return Box::new(empty());
         };
         Box::new(file.diagnostics())
     }
 
-    pub fn all_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+    pub fn all_diagnostics(&self) -> impl Iterator<Item = &Diagnostic2> {
         self.files.values().flat_map(|file| file.diagnostics())
     }
 
@@ -266,11 +266,11 @@ impl Project {
         };
     }
 
-    fn parse_included_file(&mut self, diagnostics: &mut Vec<Diagnostic>, include: &Include) {
+    fn parse_included_file(&mut self, diagnostics: &mut Vec<Diagnostic2>, include: &Include) {
         let canonicalized_path = match include.path() {
             Ok(path) => path,
             Err(err) => {
-                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err));
+                diagnostics.push(Diagnostic2::io_error(include.span(), include.source(), err));
                 return;
             }
         };
@@ -284,7 +284,7 @@ impl Project {
                 self.parse_file(canonicalized_path, text, typ);
             }
             Err(err) => {
-                diagnostics.push(Diagnostic::io_error(include.span(), include.source(), err))
+                diagnostics.push(Diagnostic2::io_error(include.span(), include.source(), err))
             }
         }
     }
@@ -304,7 +304,7 @@ mod tests {
     use crate::dts::error_codes::ErrorCode;
     use crate::dts::test::Code;
     use crate::dts::tokens::TokenKind;
-    use crate::dts::{ast2, Diagnostic, HasSpan, ItemAtCursor, Project};
+    use crate::dts::{ast2, Diagnostic2, HasSpan, ItemAtCursor, Project};
     use assert_matches::assert_matches;
     use itertools::Itertools;
     use std::fs;
@@ -475,7 +475,7 @@ mod tests {
         // files affected by the cyclic include.
         assert_matches!(
             &diag[..],
-            &[Diagnostic {
+            &[Diagnostic2 {
                 kind: ErrorCode::CyclicDependencyError,
                 ..
             }]
@@ -570,7 +570,7 @@ mod tests {
         assert!(project.get_file(&file2).is_some());
         assert_eq!(
             project.get_diagnostics(&file1).cloned().collect_vec(),
-            vec![Diagnostic::expected(
+            vec![Diagnostic2::expected(
                 code1.s1("}").end().as_span(),
                 dunce::canonicalize(&file1)
                     .expect("Cannot canonicalize")
@@ -580,7 +580,7 @@ mod tests {
         );
         assert_eq!(
             project.get_diagnostics(&file2).cloned().collect_vec(),
-            vec![Diagnostic::new(
+            vec![Diagnostic2::new(
                 code2
                     .s1(format!(r#"/include/ "{}""#, file1.display()).as_str())
                     .span(),

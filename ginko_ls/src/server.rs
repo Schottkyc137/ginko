@@ -56,7 +56,7 @@ fn lsp_pos_from_pos(pos: ginko::dts::Position) -> Position {
 }
 
 impl Backend {
-    fn lsp_diag_from_diag(&self, diagnostic: &ginko::dts::Diagnostic) -> Diagnostic {
+    fn lsp_diag_from_diag(&self, diagnostic: &ginko::dts::Diagnostic2) -> Diagnostic {
         let span = diagnostic.span();
         Diagnostic {
             range: lsp_range_from_span(span),
