@@ -1,5 +1,6 @@
 pub mod cell;
 pub mod expression;
+mod file;
 mod node;
 pub mod property;
 
@@ -10,22 +11,22 @@ macro_rules! ast_node {
         pub struct $ast($crate::dts::syntax::SyntaxNode);
         impl $ast {
             #[allow(unused)]
-            pub fn cast(node: $crate::dts::syntax::SyntaxNode) -> Option<Self> {
+            pub fn range(&self) -> rowan::TextRange {
+                self.0.text_range()
+            }
+
+            pub(crate) fn cast_unchecked(node: $crate::dts::syntax::SyntaxNode) -> Self {
+                debug_assert!(matches!(node.kind(), $kind), "got {}", node.kind());
+                Self(node)
+            }
+        }
+
+        impl $crate::dts::ast::Cast for $ast {
+            fn cast(node: $crate::dts::syntax::SyntaxNode) -> Option<Self> {
                 match node.kind() {
                     $kind => Some(Self(node)),
                     _ => None,
                 }
-            }
-
-            #[allow(unused)]
-            fn cast_unchecked(node: $crate::dts::syntax::SyntaxNode) -> Self {
-                debug_assert!(matches!(node.kind(), $kind), "got {}", node.kind());
-                Self(node)
-            }
-
-            #[allow(unused)]
-            pub fn range(&self) -> rowan::TextRange {
-                self.0.text_range()
             }
         }
 
@@ -54,9 +55,13 @@ macro_rules! impl_from_str {
             type Err = Vec<String>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let (ast, errors) = Parser::new(lex(s).into_iter()).parse($fn_name);
+                let (ast, errors) = $crate::dts::syntax::Parser::new(
+                    $crate::dts::expression::lex::lex(s).into_iter(),
+                )
+                .parse($fn_name);
                 if errors.is_empty() {
-                    Ok($name::cast(ast).unwrap())
+                    $name::cast(ast)
+                        .ok_or_else(|| vec!["String does not refer to value".to_string()])
                 } else {
                     Err(errors)
                 }
@@ -65,5 +70,29 @@ macro_rules! impl_from_str {
     };
 }
 
+use crate::dts::syntax::SyntaxNode;
 pub(crate) use ast_node;
 pub(crate) use impl_from_str;
+
+pub trait Cast
+where
+    Self: Sized,
+{
+    fn cast(node: SyntaxNode) -> Option<Self>;
+}
+
+pub trait CastExt<T>
+where
+    T: Cast + Sized,
+{
+    fn cast(self) -> Option<T>;
+}
+
+impl<T> CastExt<T> for SyntaxNode
+where
+    T: Cast + Sized,
+{
+    fn cast(self) -> Option<T> {
+        T::cast(self)
+    }
+}

@@ -191,6 +191,7 @@ impl Eval<u64, IntEvalError> for Expression {
 #[cfg(test)]
 mod tests {
     use crate::dts::ast::expression::Expression;
+    use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
     use crate::dts::expression::lex::lex;
     use crate::dts::syntax::Parser;

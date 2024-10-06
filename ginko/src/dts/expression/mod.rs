@@ -145,7 +145,8 @@ pub enum SyntaxKind {
     STRING_PROP,         // String as property value
     PROPERTY,            // A property, i.e., name = <value>;
     NODE,                // A Node, i.e., node { ... }
-    NODE_BODY,           // The body of a node; everything inside the curly braces
+    DECORATION, // Additional attributes for a node or property. Currently, only /omit-if-no-ref/
+    NODE_BODY,  // The body of a node; everything inside the curly braces
     FILE,
 }
 

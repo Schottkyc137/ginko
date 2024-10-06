@@ -1,5 +1,5 @@
 use crate::dts::ast::cell::{Cell, Reference};
-use crate::dts::ast::{ast_node, impl_from_str};
+use crate::dts::ast::{ast_node, impl_from_str, Cast};
 use crate::dts::expression::lex::lex;
 use crate::dts::expression::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};

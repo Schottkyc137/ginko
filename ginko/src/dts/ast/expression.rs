@@ -1,4 +1,4 @@
-use crate::dts::ast::ast_node;
+use crate::dts::ast::{ast_node, Cast};
 use crate::dts::expression::SyntaxKind::*;
 use crate::dts::syntax::SyntaxToken;
 

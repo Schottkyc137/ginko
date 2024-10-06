@@ -66,12 +66,17 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 self.finish_node();
                 return;
             }
-            Some(OMIT_IF_NO_REF) => self.bump_into_node(OMIT_IF_NO_REF_SPEC),
-            _ => {}
-        }
+            Some(OMIT_IF_NO_REF) => {
+                self.bump_into_node(DECORATION);
+            }
+            _ => {
+                self.start_node(DECORATION);
+                self.finish_node();
+            }
+        };
         if matches!(
             self.peek_kind(),
-            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | QUESTION_MARK | POUND,)
+            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | QUESTION_MARK | POUND)
         ) {
             self.property_or_node_name();
             match self.peek_kind() {
@@ -132,6 +137,7 @@ mod test {
             "prop = <12>;",
             r#"
 PROPERTY
+  DECORATION
   NAME
     IDENT "prop"
   WHITESPACE " "
@@ -155,6 +161,7 @@ PROPERTY
             "prop;",
             r#"
 PROPERTY
+  DECORATION
   NAME
     IDENT "prop"
   SEMICOLON ";"
@@ -198,6 +205,7 @@ DELETE_SPEC
             "empty {};",
             r#"
 NODE
+  DECORATION
   NAME
     IDENT "empty"
   WHITESPACE " "
@@ -215,7 +223,7 @@ NODE
             "/omit-if-no-ref/ empty {};",
             r#"
 NODE
-  OMIT_IF_NO_REF_SPEC
+  DECORATION
     OMIT_IF_NO_REF "/omit-if-no-ref/"
   WHITESPACE " "
   NAME
@@ -235,6 +243,7 @@ NODE
             "empty { some_prop; };",
             r#"
 NODE
+  DECORATION
   NAME
     IDENT "empty"
   WHITESPACE " "
@@ -242,6 +251,7 @@ NODE
     L_BRACE "{"
     WHITESPACE " "
     PROPERTY
+      DECORATION
       NAME
         IDENT "some_prop"
       SEMICOLON ";"
@@ -318,6 +328,7 @@ NODE_BODY
   L_BRACE "{"
   WHITESPACE "\n  "
   NODE
+    DECORATION
     NAME
       IDENT "sub_node"
     WHITESPACE " "
@@ -325,6 +336,7 @@ NODE_BODY
       L_BRACE "{"
       WHITESPACE "\n    "
       PROPERTY
+        DECORATION
         NAME
           IDENT "empty_prop"
         SEMICOLON ";"
