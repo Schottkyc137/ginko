@@ -44,7 +44,7 @@ impl PropertyValue {
         match node.kind() {
             STRING_PROP => PropertyValueKind::String(StringProperty::cast(node).unwrap()),
             CELL => PropertyValueKind::Cell(Cell::cast(node).unwrap()),
-            REFERENCE => PropertyValueKind::Reference(Reference::cast(node).unwrap()),
+            REF => PropertyValueKind::Reference(Reference::cast(node).unwrap()),
             BYTE_STRING => PropertyValueKind::ByteString(ByteString::cast(node).unwrap()),
             kind => unreachable!("Got unreachable kind {}", kind),
         }

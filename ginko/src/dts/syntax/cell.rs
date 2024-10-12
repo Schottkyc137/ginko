@@ -86,7 +86,7 @@ CELL
 CELL
   CELL_INNER
     L_CHEV "<"
-    REFERENCE
+    REF
       AMP "&"
       IDENT "some_name"
     R_CHEV ">"
@@ -129,11 +129,11 @@ CELL
 CELL
   CELL_INNER
     L_CHEV "<"
-    REFERENCE
+    REF
       AMP "&"
       IDENT "node_a"
     WHITESPACE " "
-    REFERENCE
+    REF
       AMP "&"
       IDENT "node_b"
     R_CHEV ">"
@@ -151,7 +151,7 @@ CELL
     INT
       NUMBER "17"
     WHITESPACE " "
-    REFERENCE
+    REF
       AMP "&"
       IDENT "label"
     R_CHEV ">"

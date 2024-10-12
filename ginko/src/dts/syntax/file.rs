@@ -131,7 +131,7 @@ FILE
             r#"
 FILE
   NODE
-    REFERENCE
+    REF
       AMP "&"
       IDENT "some_node"
     WHITESPACE " "

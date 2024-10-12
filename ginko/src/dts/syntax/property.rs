@@ -192,7 +192,7 @@ PROP_VALUE
             "&some_label",
             r#"
 PROP_VALUE
-  REFERENCE
+  REF
     AMP "&"
     IDENT "some_label"
 "#,
@@ -255,7 +255,7 @@ PROPERTY_LIST
             r#"
 PROPERTY_LIST
   PROP_VALUE
-    REFERENCE
+    REF
       AMP "&"
       IDENT "label"
   COMMA ","

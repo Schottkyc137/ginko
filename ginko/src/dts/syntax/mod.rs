@@ -101,7 +101,7 @@ pub enum SyntaxKind {
     HEADER,              // /dts-v1/ or /plugin/ header
     RESERVE_MEMORY,      // /memreserve/
     INCLUDE_FILE,        // /include/ file_name
-    REFERENCE,           // &name
+    REF,                 // &name
     REF_PATH,            // &{path/to/somewhere}
     PATH,                // /path/to/somewhere
     PROPERTY_LIST,       // comma-separated property values

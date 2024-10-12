@@ -1,6 +1,5 @@
 use crate::dts::lex::token::Token;
 use crate::dts::syntax::parser::Parser;
-use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 
 impl<I: Iterator<Item = Token>> Parser<I> {

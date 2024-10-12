@@ -5,11 +5,27 @@ use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
 
-ast_node! {
-    struct Reference(REFERENCE);
+#[derive(Debug)]
+pub enum Reference {
+    Ref(Ref),
+    RefPath(RefPath),
 }
 
 impl Reference {
+    pub fn cast(node: SyntaxNode) -> Option<Self> {
+        match node.kind() {
+            REF => Some(Reference::Ref(Ref::cast_unchecked(node))),
+            REF_PATH => Some(Reference::RefPath(RefPath::cast_unchecked(node))),
+            _ => None,
+        }
+    }
+}
+
+ast_node! {
+    struct Ref(REF);
+}
+
+impl Ref {
     pub fn target(&self) -> Option<String> {
         self.0.last_token().map(|tok| tok.to_string())
     }
@@ -39,7 +55,7 @@ impl RefPath {
 pub enum CellContent {
     Number(IntConstant),
     Expression(ParenExpression),
-    Reference(Reference),
+    Reference(Ref),
 }
 
 impl Cast for CellContent {
@@ -47,7 +63,7 @@ impl Cast for CellContent {
         Some(match node.kind() {
             INT => CellContent::Number(node.cast().unwrap()),
             PAREN_EXPRESSION => CellContent::Expression(node.cast().unwrap()),
-            REFERENCE => CellContent::Reference(node.cast().unwrap()),
+            REF => CellContent::Reference(node.cast().unwrap()),
             _ => return None,
         })
     }

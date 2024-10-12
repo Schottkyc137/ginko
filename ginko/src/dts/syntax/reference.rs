@@ -22,7 +22,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
         match self.peek_kind_direct() {
             Some(IDENT) => {
-                self.start_node_at(checkpoint, REFERENCE);
+                self.start_node_at(checkpoint, REF);
                 self.bump();
             }
             Some(L_BRACE) => {
@@ -79,7 +79,7 @@ mod tests {
         check_reference(
             "&some_label",
             r#"
-REFERENCE
+REF
   AMP "&"
   IDENT "some_label"
 "#,
@@ -91,7 +91,7 @@ REFERENCE
         check_reference_diagnostic(
             "&  some_label",
             r#"
-REFERENCE
+REF
   AMP "&"
   WHITESPACE "  "
   IDENT "some_label"
