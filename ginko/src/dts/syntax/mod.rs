@@ -139,13 +139,14 @@ impl rowan::Language for Lang {
 
 #[cfg(test)]
 mod testing {
+    use crate::dts::diagnostics::Diagnostic;
     use crate::dts::lex::lex::lex;
     use crate::dts::lex::token::Token;
     use crate::dts::syntax::SyntaxKind;
     use crate::dts::syntax::{Parser, SyntaxElement};
     use std::vec::IntoIter;
 
-    fn str(element: SyntaxElement) -> String {
+    pub fn str(element: SyntaxElement) -> String {
         let mut buffer: String = String::new();
         _str(0, &mut buffer, element);
         buffer
@@ -175,6 +176,19 @@ mod testing {
     ) {
         let (ast, errors) = Parser::new(lex(expression).into_iter()).parse(parse_fn);
         assert!(errors.is_empty(), "Got errors {:?}", errors);
+        let ast_str = str(ast.into());
+        let ast_str_trimmed = ast_str.trim();
+        assert_eq!(ast_str_trimmed, expected.trim());
+    }
+
+    pub fn check_generic_diag(
+        diagnostics: &[Diagnostic],
+        expression: &str,
+        expected: &str,
+        parse_fn: impl FnOnce(&mut Parser<IntoIter<Token>>),
+    ) {
+        let (ast, errors) = Parser::new(lex(expression).into_iter()).parse(parse_fn);
+        assert_eq!(errors, diagnostics);
         let ast_str = str(ast.into());
         let ast_str_trimmed = ast_str.trim();
         assert_eq!(ast_str_trimmed, expected.trim());

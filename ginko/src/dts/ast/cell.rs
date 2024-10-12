@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn check_cell_wtih_bits() {
+    fn check_cell_with_bits() {
         let cell = parse_to_cell("/bits/ 8 <32>");
         let contents = cell.content().collect_vec();
         assert!(cell.bits().is_some());

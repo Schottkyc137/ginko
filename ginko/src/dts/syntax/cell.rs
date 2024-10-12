@@ -10,6 +10,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.bump();
             match self.peek_kind() {
                 Some(NUMBER) => self.bump_into_node(INT),
+                Some(L_CHEV) => self.error_node("Expected number of bits"),
                 Some(_) => self.error_token("Expected number of bits"),
                 None => {
                     self.eof_error();
@@ -22,8 +23,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
         self.skip_ws();
         self.start_node(CELL_INNER);
-        assert_eq!(self.peek_kind(), Some(L_CHEV));
-        self.bump();
+        self.expect(L_CHEV);
         loop {
             if self.peek_kind() == Some(R_CHEV) {
                 self.bump();
@@ -50,8 +50,11 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
 #[cfg(test)]
 mod tests {
+    use crate::dts::diagnostics::Diagnostic;
     use crate::dts::syntax::parser::Parser;
-    use crate::dts::syntax::testing::check_generic;
+    use crate::dts::syntax::testing::{check_generic, check_generic_diag, str};
+    use crate::dts::ErrorCode;
+    use rowan::{TextRange, TextSize};
 
     fn check(expression: &str, expected: &str) {
         check_generic(expression, expected, Parser::parse_cell)
@@ -169,6 +172,73 @@ CELL
       NUMBER "0xABCD"
     R_CHEV ">"
 "#,
+        );
+    }
+
+    #[test]
+    fn check_error_after_bits() {
+        check_generic_diag(
+            &[Diagnostic::new(
+                TextRange::new(TextSize::new(7), TextSize::new(7)),
+                ErrorCode::Expected,
+                "Expected number of bits",
+            )],
+            "/bits/ <0xABCD>",
+            r#"
+CELL
+  BITS_SPEC
+    BITS "/bits/"
+    WHITESPACE " "
+    ERROR
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "0xABCD"
+    R_CHEV ">"
+"#,
+            Parser::parse_cell,
+        );
+        check_generic_diag(
+            &[Diagnostic::new(
+                TextRange::new(TextSize::new(7), TextSize::new(12)),
+                ErrorCode::Expected,
+                "Expected number of bits",
+            )],
+            "/bits/ eight <0xABCD>",
+            r#"
+CELL
+  BITS_SPEC
+    BITS "/bits/"
+    WHITESPACE " "
+    ERROR
+      IDENT "eight"
+  WHITESPACE " "
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "0xABCD"
+    R_CHEV ">"
+"#,
+            Parser::parse_cell,
+        );
+    }
+
+    #[test]
+    fn check_eof_after_bits() {
+        check_generic_diag(
+            &[Diagnostic::new(
+                TextRange::new(TextSize::new(6), TextSize::new(6)),
+                ErrorCode::Expected,
+                "Unexpected EOF",
+            )],
+            "/bits/",
+            r#"
+CELL
+  BITS_SPEC
+    BITS "/bits/"
+    ERROR
+"#,
+            Parser::parse_cell,
         );
     }
 }

@@ -1,15 +1,35 @@
+use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::token::Token;
 use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
+use crate::dts::ErrorCode;
 use itertools::Itertools;
-use rowan::{Checkpoint, GreenNodeBuilder};
+use rowan::{Checkpoint, GreenNodeBuilder, TextRange, WalkEvent};
 use std::iter::Peekable;
+
+struct ParserDiagnostic {
+    message: String,
+    kind: ErrorCode,
+}
+
+impl ParserDiagnostic {
+    pub fn new(message: impl Into<String>, kind: ErrorCode) -> ParserDiagnostic {
+        ParserDiagnostic {
+            message: message.into(),
+            kind,
+        }
+    }
+
+    pub fn into_diagnostic(self, range: TextRange) -> Diagnostic {
+        Diagnostic::new(range, self.kind, self.message)
+    }
+}
 
 pub struct Parser<I: Iterator<Item = Token>> {
     builder: GreenNodeBuilder<'static>,
     iter: Peekable<I>,
-    errors: Vec<String>,
+    errors: Vec<ParserDiagnostic>,
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -99,23 +119,44 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub(crate) fn error_token(&mut self, message: impl Into<String>) {
-        // TODO: message
-        self.errors.push(message.into());
+        self.errors
+            .push(ParserDiagnostic::new(message, ErrorCode::Expected));
         self.bump_into_node(ERROR);
     }
 
     pub(crate) fn eof_error(&mut self) {
-        self.errors.push("Unexpected EOF".into());
+        self.errors.push(ParserDiagnostic::new(
+            "Unexpected EOF",
+            ErrorCode::UnexpectedEOF,
+        ));
         self.start_node(ERROR);
         self.finish_node();
-        // TODO: message
+    }
+
+    pub(crate) fn error_node(&mut self, message: impl Into<String>) {
+        self.start_node(ERROR);
+        self.errors
+            .push(ParserDiagnostic::new(message, ErrorCode::Expected));
+        self.finish_node();
     }
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<String>) {
+    pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<Diagnostic>) {
         target(&mut self);
-        (SyntaxNode::new_root(self.builder.finish()), self.errors)
+        let node = self.builder.finish();
+        let root = SyntaxNode::new_root(node);
+        let errors = root
+            .preorder_with_tokens()
+            .filter_map(|event| match event {
+                WalkEvent::Enter(el) => Some(el),
+                WalkEvent::Leave(_) => None,
+            })
+            .filter(|el| el.kind() == ERROR)
+            .zip_eq(self.errors)
+            .map(|(el, err)| err.into_diagnostic(el.text_range()))
+            .collect_vec();
+        (root, errors)
     }
 }
 

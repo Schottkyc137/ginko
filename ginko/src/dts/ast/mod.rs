@@ -53,7 +53,7 @@ macro_rules! ast_node {
 macro_rules! impl_from_str {
     ($name:ident => $fn_name:expr) => {
         impl std::str::FromStr for $name {
-            type Err = Vec<String>;
+            type Err = Vec<$crate::dts::diagnostics::Diagnostic>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let (ast, errors) =
