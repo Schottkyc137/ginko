@@ -14,6 +14,8 @@ pub struct Parser<I: Iterator<Item = Token>> {
     non_ws_pos: TextSize,
     pos: TextSize,
     errors: Vec<Diagnostic>,
+    // This is to avoid multiple EOF errors
+    unexpected_eof: bool,
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -24,6 +26,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             errors: Vec::new(),
             non_ws_pos: TextSize::default(),
             pos: TextSize::default(),
+            unexpected_eof: false,
         }
     }
 }
@@ -38,6 +41,14 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         {
             self.bump();
         }
+    }
+
+    pub fn pos(&self) -> TextSize {
+        self.pos
+    }
+
+    pub fn diagnostic(&mut self, range: TextRange, code: ErrorCode, message: impl Into<String>) {
+        self.errors.push(Diagnostic::new(range, code, message))
     }
 
     pub(crate) fn peek_kind(&mut self) -> Option<SyntaxKind> {
@@ -145,6 +156,11 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub(crate) fn error_node(&mut self, message: impl Into<String>) {
+        // There is a previous EOF
+        if self.unexpected_eof {
+            return;
+        }
+        self.unexpected_eof = true;
         self.start_node(ERROR);
         self.errors.push(Diagnostic::new(
             TextRange::empty(self.pos),
@@ -165,14 +181,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn parse_reference(&mut self) {
-        assert_eq!(self.peek_kind(), Some(AMP));
-        self.start_node(REFERENCE);
-        self.bump();
-        self.expect_direct(IDENT);
-        self.finish_node();
-    }
-
     pub fn parse_mem_reserve(&mut self) {
         assert_eq!(self.peek_kind(), Some(MEM_RESERVE));
         self.start_node(RESERVE_MEMORY);
@@ -207,22 +215,6 @@ mod tests {
     use crate::dts::syntax::Parser;
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
-
-    fn check_reference(expression: &str, expected: &str) {
-        check_generic(expression, expected, Parser::parse_reference)
-    }
-
-    #[test]
-    fn check_simple_reference() {
-        check_reference(
-            "&some_label",
-            r#"
-REFERENCE
-  AMP "&"
-  IDENT "some_label"
-"#,
-        );
-    }
 
     fn check_mem_reserve(expression: &str, expected: &str) {
         check_generic(expression, expected, Parser::parse_mem_reserve)

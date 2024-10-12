@@ -7,6 +7,7 @@ mod file;
 pub mod node;
 pub mod parser;
 mod property;
+mod reference;
 
 pub use parser::Parser;
 
@@ -100,6 +101,8 @@ pub enum SyntaxKind {
     RESERVE_MEMORY,      // /memreserve/
     INCLUDE_FILE,        // /include/ file_name
     REFERENCE,           // &name
+    REF_PATH,            // &{path/to/somewhere}
+    PATH,                // /path/to/somewhere
     PROPERTY_LIST,       // comma-separated property values
     PROP_VALUE,          // Property value, i.e., a cell, string, ...
     STRING_PROP,         // String as property value
