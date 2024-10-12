@@ -194,7 +194,6 @@ CELL
   BITS_SPEC
     BITS "/bits/"
     WHITESPACE " "
-    ERROR
   CELL_INNER
     L_CHEV "<"
     INT
@@ -241,7 +240,6 @@ CELL
 CELL
   BITS_SPEC
     BITS "/bits/"
-    ERROR
   CELL_INNER
 "#,
             Parser::parse_cell,

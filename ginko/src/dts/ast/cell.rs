@@ -1,4 +1,5 @@
 use crate::dts::ast::expression::{IntConstant, ParenExpression};
+use crate::dts::ast::node::Name;
 use crate::dts::ast::property::BitsSpec;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::syntax::SyntaxKind::*;
@@ -9,8 +10,28 @@ ast_node! {
 }
 
 impl Reference {
-    pub fn target(&self) -> String {
-        self.0.last_token().unwrap().to_string().to_owned()
+    pub fn target(&self) -> Option<String> {
+        self.0.last_token().map(|tok| tok.to_string())
+    }
+}
+
+ast_node! {
+    struct Path(PATH);
+}
+
+impl Path {
+    pub fn items(&self) -> impl Iterator<Item = Name> {
+        self.0.children().filter_map(Name::cast)
+    }
+}
+
+ast_node! {
+    struct RefPath(REF_PATH);
+}
+
+impl RefPath {
+    pub fn target(&self) -> Option<Path> {
+        self.0.first_child().and_then(Path::cast)
     }
 }
 
@@ -40,18 +61,18 @@ impl_from_str!(Cell => Parser::parse_cell);
 
 impl Cell {
     pub fn bits(&self) -> Option<BitsSpec> {
-        self.0.first_child().and_then(BitsSpec::cast)
+        self.0.children().filter_map(BitsSpec::cast).next()
     }
 
     pub fn inner(&self) -> CellInner {
         self.0.last_child().unwrap().cast().unwrap()
     }
 
-    pub fn l_chev(&self) -> SyntaxToken {
+    pub fn l_chev(&self) -> Option<SyntaxToken> {
         self.inner().l_chev()
     }
 
-    pub fn r_chev(&self) -> SyntaxToken {
+    pub fn r_chev(&self) -> Option<SyntaxToken> {
         self.inner().r_chev()
     }
 
@@ -65,12 +86,12 @@ ast_node! {
 }
 
 impl CellInner {
-    pub fn l_chev(&self) -> SyntaxToken {
-        self.0.first_token().unwrap()
+    pub fn l_chev(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
     }
 
-    pub fn r_chev(&self) -> SyntaxToken {
-        self.0.last_token().unwrap()
+    pub fn r_chev(&self) -> Option<SyntaxToken> {
+        self.0.last_token()
     }
 
     pub fn content(&self) -> impl Iterator<Item = CellContent> {
@@ -100,11 +121,11 @@ mod tests {
         let cell = parse_to_cell("<>");
         assert_eq!(cell.content().count(), 0);
         assert_eq!(
-            cell.l_chev().text_range(),
+            cell.l_chev().unwrap().text_range(),
             TextRange::new(TextSize::new(0), TextSize::new(1))
         );
         assert_eq!(
-            cell.r_chev().text_range(),
+            cell.r_chev().unwrap().text_range(),
             TextRange::new(TextSize::new(1), TextSize::new(2))
         );
     }
@@ -116,16 +137,16 @@ mod tests {
         assert_eq!(content.len(), 1);
         match &content[0] {
             CellContent::Reference(reference) => {
-                assert_eq!(reference.target(), "some_name".to_owned())
+                assert_eq!(reference.target(), Some("some_name".to_owned()))
             }
             _ => panic!("Expected reference"),
         }
         assert_eq!(
-            cell.l_chev().text_range(),
+            cell.l_chev().unwrap().text_range(),
             TextRange::new(TextSize::new(0), TextSize::new(1))
         );
         assert_eq!(
-            cell.r_chev().text_range(),
+            cell.r_chev().unwrap().text_range(),
             TextRange::new(TextSize::new(11), TextSize::new(12))
         );
     }

@@ -164,18 +164,14 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             ErrorCode::UnexpectedEOF,
             message,
         ));
-        self.start_node(ERROR);
-        self.finish_node();
     }
 
     pub(crate) fn error_node(&mut self, message: impl Into<String>) {
-        self.start_node(ERROR);
         self.errors.push(Diagnostic::new(
             TextRange::empty(self.pos),
             ErrorCode::Expected,
             message,
         ));
-        self.finish_node();
     }
 }
 
@@ -262,8 +258,8 @@ RESERVE_MEMORY
                 ),
                 Diagnostic::new(
                     TextRange::empty(TextSize::new(35)),
-                    ErrorCode::Expected,
-                    "Expecting SEMICOLON",
+                    ErrorCode::UnexpectedEOF,
+                    "Unexpected EOF while expecting SEMICOLON",
                 ),
             ],
             "\
