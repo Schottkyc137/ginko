@@ -50,9 +50,10 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 self.bump();
                 self.finish_node()
             }
-            _ => {
+            Some(_) => {
                 self.error_token("Expecting number or '('".to_string());
             }
+            None => self.unexpected_eof(),
         }
     }
 

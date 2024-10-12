@@ -15,7 +15,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 }
                 Some(NUMBER | IDENT) => self.bump_into_node(BYTE_CHUNK),
                 Some(_) => self.error_token("Expected hexadecimal value".to_string()),
-                None => self.eof_error(),
+                None => self.unexpected_eof(),
             }
         }
         self.finish_node();
@@ -29,7 +29,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(AMP) => self.parse_reference(),
             Some(L_BRAK) => self.parse_byte_string(),
             Some(_) => self.error_token("Expected string, cell, reference or bytes".to_string()),
-            _ => self.eof_error(),
+            None => self.unexpected_eof(),
         }
         self.finish_node();
     }

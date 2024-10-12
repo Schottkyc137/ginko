@@ -72,24 +72,28 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub(crate) fn expect(&mut self, kind: SyntaxKind) {
-        if self.peek_kind().is_some_and(|peeked| peeked == kind) {
-            self.bump();
-        } else {
-            let range = match kind {
-                SEMICOLON => {
-                    if self.peek_kind() == Some(COLON) {
-                        self.bump().unwrap()
-                    } else {
-                        TextRange::empty(self.non_ws_pos)
+        match self.peek_kind() {
+            Some(other_kind) if other_kind == kind => {
+                self.bump();
+            }
+            Some(_) => {
+                let range = match kind {
+                    SEMICOLON => {
+                        if self.peek_kind() == Some(COLON) {
+                            self.bump().unwrap()
+                        } else {
+                            TextRange::empty(self.non_ws_pos)
+                        }
                     }
-                }
-                _ => self.bump().unwrap(),
-            };
-            self.errors.push(Diagnostic::new(
-                range,
-                ErrorCode::Expected,
-                format!("Expecting {}", kind),
-            ));
+                    _ => self.bump().unwrap(),
+                };
+                self.errors.push(Diagnostic::new(
+                    range,
+                    ErrorCode::Expected,
+                    format!("Expecting {}", kind),
+                ));
+            }
+            None => self.eof_error(format!("Unexpected EOF while expecting {}", kind)),
         }
     }
 
@@ -145,22 +149,26 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             .push(Diagnostic::new(range, ErrorCode::Expected, message));
     }
 
-    pub(crate) fn eof_error(&mut self) {
+    pub(crate) fn unexpected_eof(&mut self) {
+        self.eof_error("Unexpected EOF");
+    }
+
+    pub(crate) fn eof_error(&mut self, message: impl Into<String>) {
+        // There is a previous EOF
+        if self.unexpected_eof {
+            return;
+        }
+        self.unexpected_eof = true;
         self.errors.push(Diagnostic::new(
             TextRange::empty(self.pos),
             ErrorCode::UnexpectedEOF,
-            "Unexpected EOF",
+            message,
         ));
         self.start_node(ERROR);
         self.finish_node();
     }
 
     pub(crate) fn error_node(&mut self, message: impl Into<String>) {
-        // There is a previous EOF
-        if self.unexpected_eof {
-            return;
-        }
-        self.unexpected_eof = true;
         self.start_node(ERROR);
         self.errors.push(Diagnostic::new(
             TextRange::empty(self.pos),
@@ -189,7 +197,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(NUMBER) => self.bump_into_node(INT),
             Some(_) => self.error_token("Expected address"),
             None => {
-                self.eof_error();
+                self.unexpected_eof();
                 self.finish_node();
                 return;
             }
@@ -198,7 +206,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(NUMBER) => self.bump_into_node(INT),
             Some(_) => self.error_token("Expected length"),
             None => {
-                self.eof_error();
+                self.unexpected_eof();
                 self.finish_node();
                 return;
             }

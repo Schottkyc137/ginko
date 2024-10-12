@@ -37,7 +37,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 self.error_token("Expected reference or path");
             }
             None => {
-                self.eof_error();
+                self.unexpected_eof();
                 return;
             }
         }

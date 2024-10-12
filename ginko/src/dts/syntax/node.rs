@@ -1,5 +1,6 @@
 use crate::dts::lex::token::Token;
 use crate::dts::syntax::parser::Parser;
+use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -60,11 +61,17 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
         }
         loop {
-            if self.peek_kind() == Some(R_BRACE) {
-                self.bump();
-                break;
+            match self.peek_kind() {
+                Some(R_BRACE) => {
+                    self.bump();
+                    break;
+                }
+                Some(_) => self.parse_property_or_node(),
+                None => {
+                    self.unexpected_eof();
+                    break;
+                }
             }
-            self.parse_property_or_node();
         }
         self.finish_node();
     }
@@ -143,13 +150,13 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 }
                 None => {
                     self.start_node_at(checkpoint, ERROR);
-                    self.eof_error();
+                    self.unexpected_eof();
                     self.finish_node();
                 }
             }
         } else if self.peek_kind().is_none() {
             self.start_node_at(checkpoint, ERROR);
-            self.eof_error();
+            self.unexpected_eof();
             self.finish_node();
         } else {
             self.start_node_at(checkpoint, ERROR);

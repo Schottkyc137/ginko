@@ -3,33 +3,38 @@ use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 
 impl<I: Iterator<Item = Token>> Parser<I> {
+    fn parse_bits_directive(&mut self) {
+        self.start_node(BITS_SPEC);
+        self.bump();
+        match self.peek_kind() {
+            Some(NUMBER) => self.bump_into_node(INT),
+            Some(L_CHEV) => self.error_node("Expected number of bits"),
+            Some(_) => self.error_token("Expected number of bits"),
+            None => self.unexpected_eof(),
+        }
+        self.finish_node();
+    }
+
     pub fn parse_cell(&mut self) {
         self.start_node(CELL);
         if self.peek_kind() == Some(BITS) {
-            self.start_node(BITS_SPEC);
-            self.bump();
-            match self.peek_kind() {
-                Some(NUMBER) => self.bump_into_node(INT),
-                Some(L_CHEV) => self.error_node("Expected number of bits"),
-                Some(_) => self.error_token("Expected number of bits"),
-                None => {
-                    self.eof_error();
-                    self.finish_node();
-                    self.finish_node();
-                    return;
-                }
-            }
-            self.finish_node();
+            self.parse_bits_directive();
         }
         self.skip_ws();
         self.start_node(CELL_INNER);
         self.expect(L_CHEV);
         loop {
-            if self.peek_kind() == Some(R_CHEV) {
-                self.bump();
-                break;
+            match self.peek_kind() {
+                None => {
+                    self.unexpected_eof();
+                    break;
+                }
+                Some(R_CHEV) => {
+                    self.bump();
+                    break;
+                }
+                Some(_) => self.parse_cell_content(),
             }
-            self.parse_cell_content();
         }
         self.finish_node();
         self.finish_node();
@@ -43,7 +48,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(_) => {
                 self.error_token("Expected number, reference or expression");
             }
-            _ => self.eof_error(),
+            None => {}
         }
     }
 }
@@ -237,6 +242,7 @@ CELL
   BITS_SPEC
     BITS "/bits/"
     ERROR
+  CELL_INNER
 "#,
             Parser::parse_cell,
         );
