@@ -10,7 +10,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.peek_kind_direct(),
             Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS)
         ) {
-            self.bump()
+            self.bump();
         }
         self.finish_node();
     }
@@ -22,7 +22,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.peek_kind_direct(),
             Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | QUESTION_MARK | POUND)
         ) {
-            self.bump()
+            self.bump();
         }
         self.finish_node();
     }

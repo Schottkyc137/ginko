@@ -228,7 +228,7 @@ CELL
         check_generic_diag(
             &[Diagnostic::new(
                 TextRange::new(TextSize::new(6), TextSize::new(6)),
-                ErrorCode::Expected,
+                ErrorCode::UnexpectedEOF,
                 "Unexpected EOF",
             )],
             "/bits/",

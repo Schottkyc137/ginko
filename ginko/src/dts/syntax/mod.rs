@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+mod builder;
 mod cell;
 pub mod expression;
 mod file;

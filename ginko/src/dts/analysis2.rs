@@ -20,7 +20,7 @@ enum Labeled {
 }
 
 /// Struct containing all important information when analyzing a device-tree.
-/// This struct only takes care of identifying cyclic dependencies, but
+/// This struct only takes care of identifying cyclic dependencies
 pub(crate) struct Analysis {
     import_guard: ImportGuard<PathBuf>,
 }

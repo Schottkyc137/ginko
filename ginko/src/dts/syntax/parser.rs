@@ -5,31 +5,15 @@ use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
 use crate::dts::ErrorCode;
 use itertools::Itertools;
-use rowan::{Checkpoint, GreenNodeBuilder, TextRange, WalkEvent};
+use rowan::{Checkpoint, GreenNodeBuilder, TextLen, TextRange, TextSize};
 use std::iter::Peekable;
-
-struct ParserDiagnostic {
-    message: String,
-    kind: ErrorCode,
-}
-
-impl ParserDiagnostic {
-    pub fn new(message: impl Into<String>, kind: ErrorCode) -> ParserDiagnostic {
-        ParserDiagnostic {
-            message: message.into(),
-            kind,
-        }
-    }
-
-    pub fn into_diagnostic(self, range: TextRange) -> Diagnostic {
-        Diagnostic::new(range, self.kind, self.message)
-    }
-}
 
 pub struct Parser<I: Iterator<Item = Token>> {
     builder: GreenNodeBuilder<'static>,
     iter: Peekable<I>,
-    errors: Vec<ParserDiagnostic>,
+    non_ws_pos: TextSize,
+    pos: TextSize,
+    errors: Vec<Diagnostic>,
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -38,6 +22,8 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             builder: GreenNodeBuilder::new(),
             iter: iter.peekable(),
             errors: Vec::new(),
+            non_ws_pos: TextSize::default(),
+            pos: TextSize::default(),
         }
     }
 }
@@ -67,18 +53,32 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.iter.peek()
     }
 
-    fn duplicates_error(&mut self, kinds: &[SyntaxKind]) {
+    fn expect_error(&mut self, kinds: &[SyntaxKind]) {
         self.error_token(format!(
             "Expecting {}",
             kinds.iter().map(|kind| kind.to_string()).join(", ")
         ))
     }
 
-    pub(crate) fn expect(&mut self, kinds: SyntaxKind) {
-        if self.peek_kind().is_some_and(|peeked| peeked == kinds) {
+    pub(crate) fn expect(&mut self, kind: SyntaxKind) {
+        if self.peek_kind().is_some_and(|peeked| peeked == kind) {
             self.bump();
         } else {
-            self.duplicates_error(&[kinds]);
+            let range = match kind {
+                SEMICOLON => {
+                    if self.peek_kind() == Some(COLON) {
+                        self.bump().unwrap()
+                    } else {
+                        TextRange::empty(self.non_ws_pos)
+                    }
+                }
+                _ => self.bump().unwrap(),
+            };
+            self.errors.push(Diagnostic::new(
+                range,
+                ErrorCode::Expected,
+                format!("Expecting {}", kind),
+            ));
         }
     }
 
@@ -86,13 +86,21 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         if self.peek_kind_direct().is_some_and(|peeked| kind == peeked) {
             self.bump();
         } else {
-            self.duplicates_error(&[kind]);
+            self.expect_error(&[kind]);
         }
     }
 
-    pub(crate) fn bump(&mut self) {
+    pub(crate) fn bump(&mut self) -> Option<TextRange> {
+        let curr_pos = self.pos;
         if let Some(token) = self.iter.next() {
+            self.pos += token.value.text_len();
+            if token.kind != WHITESPACE {
+                self.non_ws_pos = self.pos;
+            }
             self.builder.token(token.kind.into(), token.value.as_str());
+            Some(TextRange::new(curr_pos, self.pos))
+        } else {
+            None
         }
     }
 
@@ -119,15 +127,18 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub(crate) fn error_token(&mut self, message: impl Into<String>) {
+        self.start_node(ERROR);
+        let range = self.bump().unwrap();
+        self.finish_node();
         self.errors
-            .push(ParserDiagnostic::new(message, ErrorCode::Expected));
-        self.bump_into_node(ERROR);
+            .push(Diagnostic::new(range, ErrorCode::Expected, message));
     }
 
     pub(crate) fn eof_error(&mut self) {
-        self.errors.push(ParserDiagnostic::new(
-            "Unexpected EOF",
+        self.errors.push(Diagnostic::new(
+            TextRange::empty(self.pos),
             ErrorCode::UnexpectedEOF,
+            "Unexpected EOF",
         ));
         self.start_node(ERROR);
         self.finish_node();
@@ -135,8 +146,11 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub(crate) fn error_node(&mut self, message: impl Into<String>) {
         self.start_node(ERROR);
-        self.errors
-            .push(ParserDiagnostic::new(message, ErrorCode::Expected));
+        self.errors.push(Diagnostic::new(
+            TextRange::empty(self.pos),
+            ErrorCode::Expected,
+            message,
+        ));
         self.finish_node();
     }
 }
@@ -146,17 +160,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         target(&mut self);
         let node = self.builder.finish();
         let root = SyntaxNode::new_root(node);
-        let errors = root
-            .preorder_with_tokens()
-            .filter_map(|event| match event {
-                WalkEvent::Enter(el) => Some(el),
-                WalkEvent::Leave(_) => None,
-            })
-            .filter(|el| el.kind() == ERROR)
-            .zip_eq(self.errors)
-            .map(|(el, err)| err.into_diagnostic(el.text_range()))
-            .collect_vec();
-        (root, errors)
+        (root, self.errors)
     }
 }
 
@@ -198,8 +202,11 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::syntax::testing::check_generic;
+    use crate::dts::diagnostics::Diagnostic;
+    use crate::dts::syntax::testing::{check_generic, check_generic_diag};
     use crate::dts::syntax::Parser;
+    use crate::dts::ErrorCode;
+    use rowan::{TextRange, TextSize};
 
     fn check_reference(expression: &str, expected: &str) {
         check_generic(expression, expected, Parser::parse_reference)
@@ -236,6 +243,68 @@ RESERVE_MEMORY
     NUMBER "0x4000"
   SEMICOLON ";"
 "#,
+        );
+    }
+
+    #[test]
+    fn error_tolerant_parsing() {
+        check_generic_diag(
+            &[
+                Diagnostic::new(
+                    TextRange::empty(TextSize::new(8)),
+                    ErrorCode::Expected,
+                    "Expecting SEMICOLON",
+                ),
+                Diagnostic::new(
+                    TextRange::empty(TextSize::new(33)),
+                    ErrorCode::Expected,
+                    "Expecting SEMICOLON",
+                ),
+                Diagnostic::new(
+                    TextRange::empty(TextSize::new(35)),
+                    ErrorCode::Expected,
+                    "Expecting SEMICOLON",
+                ),
+            ],
+            "\
+/dts-v1/
+
+/ {
+    some_prop = <5>
+}",
+            r#"
+FILE
+  HEADER
+    DTS_V1 "/dts-v1/"
+    WHITESPACE "\n\n"
+  NODE
+    DECORATION
+    NAME
+      SLASH "/"
+    WHITESPACE " "
+    NODE_BODY
+      L_BRACE "{"
+      WHITESPACE "\n    "
+      PROPERTY
+        DECORATION
+        NAME
+          IDENT "some_prop"
+        WHITESPACE " "
+        EQ "="
+        WHITESPACE " "
+        PROPERTY_LIST
+          PROP_VALUE
+            CELL
+              CELL_INNER
+                L_CHEV "<"
+                INT
+                  NUMBER "5"
+                R_CHEV ">"
+          WHITESPACE "\n"
+      R_BRACE "}"
+  
+"#,
+            Parser::parse_file,
         );
     }
 }
