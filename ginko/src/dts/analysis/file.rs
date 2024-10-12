@@ -1,15 +1,19 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, PushIntoDiagnostics};
+use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
 use crate::dts::ast::file as ast;
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
 use crate::dts::{model, ErrorCode};
 use rowan::TextRange;
+use std::cell::RefCell;
+use std::ops::DerefMut;
+use std::path::PathBuf;
 
 impl Analysis<model::File> for ast::File {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<model::File, Diagnostic> {
         let mut dts_header_seen = false;
@@ -22,18 +26,38 @@ impl Analysis<model::File> for ast::File {
                     HeaderKind::DtsV1 => dts_header_seen = true,
                     HeaderKind::Plugin => is_plugin = true,
                 },
-                FileItemKind::Include(include) => {}
+                FileItemKind::Include(include) => {
+                    include.resolve(project.borrow_mut().deref_mut());
+                    let path: PathBuf = include.target().unwrap().into();
+                    let (result, include_diagnostics) =
+                        if let Some(file) = project.borrow().get(&path) {
+                            let ctx = AnalysisContext::default();
+                            let mut include_diagnostics = Vec::new();
+                            let result = file
+                                .ast
+                                .analyze(&ctx, project, &mut include_diagnostics)
+                                .or_push_into(&mut include_diagnostics);
+                            (result, include_diagnostics)
+                        } else {
+                            (None, vec![])
+                        };
+                    if let Some(project_file) = project.borrow_mut().get_mut(&path) {
+                        project_file.model = result;
+                        project_file.analysis_diagnostics = include_diagnostics;
+                    }
+                }
                 FileItemKind::ReserveMemory(reserved) => {
                     if let Some(mem) = reserved
-                        .analyze(context, diagnostics)
+                        .analyze(context, project, diagnostics)
                         .or_push_into(diagnostics)
                     {
                         reserved_memory.push(mem)
                     }
                 }
                 FileItemKind::Node(node) => {
-                    if let Some((name, body)) =
-                        node.analyze(context, diagnostics).or_push_into(diagnostics)
+                    if let Some((name, body)) = node
+                        .analyze(context, project, diagnostics)
+                        .or_push_into(diagnostics)
                     {
                         // TODO: referenced nodes
                         // TODO: duplicates
@@ -65,6 +89,7 @@ impl Analysis<model::ReservedMemory> for ast::ReserveMemory {
     fn analyze(
         &self,
         _: &AnalysisContext,
+        _: &RefCell<ProjectState>,
         _: &mut Vec<Diagnostic>,
     ) -> Result<model::ReservedMemory, Diagnostic> {
         let address: u64 = self.address().eval()?;

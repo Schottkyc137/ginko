@@ -1,7 +1,7 @@
 use crate::dts::ast::expression::IntConstant;
 use crate::dts::ast::node::Node;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
-use crate::dts::eval::property::{UnescapeItrExtension, UnquoteStrExtension};
+use crate::dts::eval::property::UnquoteStrExtension;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
 

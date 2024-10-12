@@ -2,6 +2,7 @@ use crate::dts::data::{HasSource, HasSpan, Span};
 use crate::dts::error_codes::{ErrorCode, SeverityMap};
 use crate::dts::import_guard::CyclicDependencyError;
 use crate::dts::tokens::{Token, TokenKind};
+use codespan_reporting::diagnostic::Label;
 use itertools::Itertools;
 use rowan::TextRange;
 use std::fmt::{Display, Formatter};
@@ -86,6 +87,21 @@ impl Diagnostic {
             range,
             message: message.into(),
         }
+    }
+}
+
+impl Diagnostic {
+    pub fn into_codespan_diagnostic(
+        self,
+        file_id: usize,
+        severity_map: &SeverityMap,
+    ) -> codespan_reporting::diagnostic::Diagnostic<usize> {
+        codespan_reporting::diagnostic::Diagnostic::new(
+            codespan_reporting::diagnostic::Severity::Error,
+        )
+        .with_code(self.code.as_ref().to_string())
+        .with_message(self.message)
+        .with_labels(vec![Label::primary(file_id, self.range)])
     }
 }
 
@@ -180,13 +196,13 @@ impl HasSource for Diagnostic2 {
     }
 }
 
-pub struct DiagnosticPrinter<'a> {
+pub struct DiagnosticPrinter2<'a> {
     pub diagnostics: &'a [Diagnostic2],
     pub code: Vec<String>,
     pub severity_map: SeverityMap,
 }
 
-impl<'a> DiagnosticPrinter<'a> {
+impl<'a> DiagnosticPrinter2<'a> {
     fn fmt_diagnostic(&self, f: &mut Formatter<'_>, diagnostic: &Diagnostic2) -> std::fmt::Result {
         let start = diagnostic.span.start();
         let end = diagnostic.span.end();
@@ -233,7 +249,7 @@ impl<'a> DiagnosticPrinter<'a> {
     }
 }
 
-impl<'a> Display for DiagnosticPrinter<'a> {
+impl<'a> Display for DiagnosticPrinter2<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for diagnostic in self.diagnostics.iter() {
             self.fmt_diagnostic(f, diagnostic)?;
@@ -247,7 +263,7 @@ impl<'a> Display for DiagnosticPrinter<'a> {
 #[cfg(test)]
 mod tests {
     use crate::dts::data::{HasSource, HasSpan};
-    use crate::dts::diagnostics::{Diagnostic2, DiagnosticPrinter, ErrorCode};
+    use crate::dts::diagnostics::{Diagnostic2, DiagnosticPrinter2, ErrorCode};
     use crate::dts::error_codes::SeverityMap;
     use crate::dts::parser::Parser;
     use crate::dts::test::Code;
@@ -267,7 +283,7 @@ mod tests {
                 "Expected ';'"
             )]
         );
-        let printer = DiagnosticPrinter {
+        let printer = DiagnosticPrinter2 {
             diagnostics: &diag,
             code: vec!["/ {}".into()],
             severity_map: SeverityMap::default(),
@@ -296,7 +312,7 @@ error --> fname:1:5
             ParserContext::default(),
         );
         let (_, diag) = code.parse(Parser::file);
-        let printer = DiagnosticPrinter {
+        let printer = DiagnosticPrinter2 {
             diagnostics: &diag,
             code: code
                 .code()

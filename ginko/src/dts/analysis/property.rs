@@ -1,19 +1,24 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, PushIntoDiagnostics};
+use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
 use crate::dts::ast::property::{PropertyList, PropertyValue, PropertyValueKind};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::{Eval, InfallibleEval};
 use crate::dts::model::Value;
 use itertools::Itertools;
+use std::cell::RefCell;
 
 impl Analysis<Vec<Value>> for PropertyList {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<Vec<Value>, Diagnostic> {
         Ok(self
             .items()
-            .filter_map(|item| item.analyze(context, diagnostics).or_push_into(diagnostics))
+            .filter_map(|item| {
+                item.analyze(context, project, diagnostics)
+                    .or_push_into(diagnostics)
+            })
             .collect_vec())
     }
 }
@@ -22,11 +27,14 @@ impl Analysis<Value> for PropertyValue {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<Value, Diagnostic> {
         match self.kind() {
             PropertyValueKind::String(string) => Ok(Value::String(string.value())),
-            PropertyValueKind::Cell(cell) => Ok(Value::Cell(cell.analyze(context, diagnostics)?)),
+            PropertyValueKind::Cell(cell) => {
+                Ok(Value::Cell(cell.analyze(context, project, diagnostics)?))
+            }
             PropertyValueKind::Reference(_reference) => unimplemented!(),
             PropertyValueKind::ByteString(byte_string) => Ok(Value::Bytes(byte_string.eval()?)),
         }

@@ -1,14 +1,16 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, PushIntoDiagnostics};
+use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
 use crate::dts::ast::node as ast;
 use crate::dts::ast::node::NodeOrProperty;
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::model;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 impl Analysis<model::Node> for ast::NodeBody {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<model::Node, Diagnostic> {
         let mut nodes = HashMap::new();
@@ -16,8 +18,9 @@ impl Analysis<model::Node> for ast::NodeBody {
         for child in self.children() {
             match child {
                 NodeOrProperty::Node(node) => {
-                    let Some((name, node)) =
-                        node.analyze(context, diagnostics).or_push_into(diagnostics)
+                    let Some((name, node)) = node
+                        .analyze(context, project, diagnostics)
+                        .or_push_into(diagnostics)
                     else {
                         continue;
                     };
@@ -26,7 +29,7 @@ impl Analysis<model::Node> for ast::NodeBody {
                 }
                 NodeOrProperty::Property(property) => {
                     let Some((name, property)) = property
-                        .analyze(context, diagnostics)
+                        .analyze(context, project, diagnostics)
                         .or_push_into(diagnostics)
                     else {
                         continue;
@@ -45,11 +48,12 @@ impl Analysis<(String, model::Node)> for ast::Node {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<(String, model::Node), Diagnostic> {
         // TODO: node name unwrapped
         let name = self.name().node_name().unwrap();
-        let body = self.body().analyze(context, diagnostics)?;
+        let body = self.body().analyze(context, project, diagnostics)?;
         Ok((name, body))
     }
 }
@@ -58,13 +62,14 @@ impl Analysis<(String, Vec<model::Value>)> for ast::Property {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<(String, Vec<model::Value>), Diagnostic> {
         // TODO: property name unwrapped
         let name = self.name().property_name().unwrap();
         let value = match self.value() {
             None => vec![],
-            Some(value) => value.analyze(context, diagnostics)?,
+            Some(value) => value.analyze(context, project, diagnostics)?,
         };
         Ok((name, value))
     }

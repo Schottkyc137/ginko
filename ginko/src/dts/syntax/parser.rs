@@ -36,7 +36,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         while self
             .iter
             .peek()
-            .map(|token| token.is_whitespace())
+            .map(|token| token.is_whitespace() || token.is_comment())
             .unwrap_or(false)
         {
             self.bump();
@@ -160,7 +160,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
         self.unexpected_eof = true;
         self.errors.push(Diagnostic::new(
-            TextRange::empty(self.pos),
+            TextRange::empty(self.non_ws_pos),
             ErrorCode::UnexpectedEOF,
             message,
         ));

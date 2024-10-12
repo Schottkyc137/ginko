@@ -1,15 +1,17 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, BitWidth};
+use crate::dts::analysis::{Analysis, AnalysisContext, BitWidth, ProjectState};
 use crate::dts::ast::cell::{Cell, CellContent};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
 use crate::dts::model::{CellValue, CellValues};
 use crate::dts::ErrorCode;
 use itertools::Itertools;
+use std::cell::RefCell;
 
 impl Analysis<CellValues> for Cell {
     fn analyze(
         &self,
         context: &AnalysisContext,
+        project: &RefCell<ProjectState>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<CellValues, Diagnostic> {
         let bits = match self.bits() {
@@ -34,6 +36,7 @@ impl Analysis<CellValues> for Cell {
                     <CellContent as Analysis<CellValue<u8>>>::analyze(
                         &content,
                         context,
+                        project,
                         diagnostics,
                     )
                 })
@@ -44,6 +47,7 @@ impl Analysis<CellValues> for Cell {
                     <CellContent as Analysis<CellValue<u16>>>::analyze(
                         &content,
                         context,
+                        project,
                         diagnostics,
                     )
                 })
@@ -54,6 +58,7 @@ impl Analysis<CellValues> for Cell {
                     <CellContent as Analysis<CellValue<u32>>>::analyze(
                         &content,
                         context,
+                        project,
                         diagnostics,
                     )
                 })
@@ -64,6 +69,7 @@ impl Analysis<CellValues> for Cell {
                     <CellContent as Analysis<CellValue<u64>>>::analyze(
                         &content,
                         context,
+                        project,
                         diagnostics,
                     )
                 })
@@ -125,6 +131,7 @@ macro_rules! analysis_from_int {
                 fn analyze(
                     &self,
                     _context: &AnalysisContext,
+                    _project: &RefCell<ProjectState>,
                     diagnostics: &mut Vec<Diagnostic>,
                 ) -> Result<CellValue<$t>, Diagnostic> {
                     match self {

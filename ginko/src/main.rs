@@ -1,7 +1,11 @@
 use clap::Parser;
-use ginko::dts::{DiagnosticPrinter, Project, SeverityMap};
+use codespan_reporting::files::SimpleFiles;
+use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use ginko::dts::analysis::Project;
+use ginko::dts::SeverityMap;
 use itertools::Itertools;
 use std::error::Error;
+use std::path::PathBuf;
 use std::process::exit;
 
 #[derive(clap::Parser, Debug)]
@@ -16,10 +20,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let mut project = Project::default();
 
-    project.set_include_paths(args.include.unwrap_or_default());
-    project.add_file(args.file)?;
+    project.add_include_paths(args.include.unwrap_or_default().iter().map(PathBuf::from));
+
+    project.add_file_from_fs(PathBuf::from(args.file))?;
 
     let mut has_errors = false;
+    let severities = SeverityMap::default();
     for file in project.project_files() {
         let diag = file.diagnostics().cloned().collect_vec();
         if diag.is_empty() {
@@ -27,19 +33,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         } else {
             has_errors = true;
         }
-        let code = file.source().lines().map(|it| it.to_owned()).collect_vec();
-        let printer = DiagnosticPrinter {
-            code,
-            diagnostics: &diag,
-            severity_map: SeverityMap::default(),
-        };
-        println!("{}", printer);
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(
+            file.path().unwrap().clone().to_str().unwrap().to_string(),
+            file.source(),
+        );
+        let diagnostics = diag
+            .into_iter()
+            .map(|diag| diag.into_codespan_diagnostic(file_id, &severities));
+
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        let config = codespan_reporting::term::Config::default();
+
+        for diagnostic in diagnostics {
+            codespan_reporting::term::emit(&mut writer.lock(), &config, &files, &diagnostic)?;
+        }
     }
 
     if has_errors {
+        exit(1);
+    } else {
         println!("OK; No issues found");
         exit(0);
-    } else {
-        exit(1);
     }
 }

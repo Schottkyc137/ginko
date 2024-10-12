@@ -1,6 +1,8 @@
 /dts-v1/;
 
+/include/ "test2.dts"
+
 / {
     very-long-company,very-long-name;    
-};",
+};
 

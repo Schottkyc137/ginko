@@ -11,7 +11,7 @@ mod reader;
 mod tokens;
 mod visitor;
 
-mod analysis;
+pub mod analysis;
 mod ast;
 pub mod eval;
 mod lex;
@@ -22,7 +22,7 @@ mod test;
 
 pub use ast2::{AnyDirective, Node, NodeItem, NodePayload, Primary};
 pub use data::{FileType, HasSpan, Position, Span};
-pub use diagnostics::{Diagnostic2, DiagnosticPrinter, Severity};
+pub use diagnostics::{Diagnostic2, DiagnosticPrinter2, Severity};
 pub use error_codes::{ErrorCode, SeverityMap};
 pub use parser::Parser;
 pub use parser::ParserContext;
