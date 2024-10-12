@@ -1,6 +1,7 @@
 use crate::dts::ast::expression::IntConstant;
 use crate::dts::ast::node::Node;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
+use crate::dts::eval::property::{UnescapeItrExtension, UnquoteStrExtension};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
 
@@ -65,7 +66,17 @@ pub enum HeaderKind {
 }
 
 ast_node! {
-    struct Include(INCLUDE);
+    struct Include(INCLUDE_FILE);
+}
+
+impl Include {
+    pub fn target_tok(&self) -> Option<SyntaxToken> {
+        self.0.last_token().filter(|tok| tok.kind() == STRING)
+    }
+
+    pub fn target(&self) -> Option<String> {
+        self.0.last_token().map(|tok| tok.to_string().unquote())
+    }
 }
 
 ast_node! {
@@ -73,12 +84,12 @@ ast_node! {
 }
 
 impl ReserveMemory {
-    pub fn token(&self) -> SyntaxToken {
-        self.0.first_token().unwrap()
+    pub fn token(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
     }
 
-    pub fn semicolon(&self) -> SyntaxToken {
-        self.0.last_token().unwrap()
+    pub fn semicolon(&self) -> Option<SyntaxToken> {
+        self.0.last_token()
     }
 
     pub fn address(&self) -> IntConstant {
@@ -152,5 +163,29 @@ mod tests {
         assert_matches!(children[0], FileItemKind::Header(_));
         assert_matches!(children[1], FileItemKind::Node(_));
         assert_matches!(children[2], FileItemKind::Node(_));
+    }
+
+    #[test]
+    fn include() {
+        let file = r#"
+/include/ "other_file.dtsi"
+/include/ "path/to/some\\file"
+        "#
+        .parse::<File>()
+        .unwrap();
+        let children = file.children().collect_vec();
+        assert_eq!(children.len(), 2);
+        match &children[0] {
+            FileItemKind::Include(include) => {
+                assert_eq!(include.target(), Some("other_file.dtsi".to_string()))
+            }
+            _ => panic!("Expected include"),
+        }
+        match &children[1] {
+            FileItemKind::Include(include) => {
+                assert_eq!(include.target(), Some("path/to/some\\file".to_string()))
+            }
+            _ => panic!("Expected include"),
+        }
     }
 }

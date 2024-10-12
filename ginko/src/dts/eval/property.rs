@@ -61,16 +61,11 @@ impl Eval<Vec<u8>, ByteEvalError> for ByteString {
 
 impl Eval<String, Infallible> for StringProperty {
     fn eval(&self) -> eval::Result<String, Infallible> {
-        // string guaranteed to have leading and trailing " character
-        let text = self.text();
-        let raw_string = text.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
-        // We can just kill all backslashes because a backslash can never come right before the last quote.
-        // This would have lead to an error in the lexer.
-        Ok(raw_string.chars().unescape('\\').collect())
+        Ok(self.text().unquote())
     }
 }
 
-struct UnescapeItr<I>
+pub(crate) struct UnescapeItr<I>
 where
     I: Iterator,
     I::Item: Eq,
@@ -113,7 +108,7 @@ where
     }
 }
 
-trait UnescapeItrExtension<I>
+pub(crate) trait UnescapeItrExtension<I>
 where
     I: Iterator,
     I::Item: Eq,
@@ -128,6 +123,22 @@ where
 {
     fn unescape(self, escape_seq: I::Item) -> UnescapeItr<I> {
         UnescapeItr::new(self, escape_seq)
+    }
+}
+
+pub(crate) trait UnquoteStrExtension {
+    fn unquote(&self) -> Self;
+}
+
+impl UnquoteStrExtension for String {
+    fn unquote(&self) -> Self {
+        self.strip_prefix('"')
+            .unwrap()
+            .strip_suffix('"')
+            .unwrap()
+            .chars()
+            .unescape('\\')
+            .collect()
     }
 }
 

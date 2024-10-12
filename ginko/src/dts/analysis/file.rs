@@ -22,7 +22,7 @@ impl Analysis<model::File> for ast::File {
                     HeaderKind::DtsV1 => dts_header_seen = true,
                     HeaderKind::Plugin => is_plugin = true,
                 },
-                FileItemKind::Include(_) => {}
+                FileItemKind::Include(include) => {}
                 FileItemKind::ReserveMemory(reserved) => {
                     if let Some(mem) = reserved
                         .analyze(context, diagnostics)
