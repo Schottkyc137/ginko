@@ -107,7 +107,7 @@ REFERENCE
     #[test]
     fn check_reference_path() {
         check_reference(
-            "&{/path/to/node}",
+            "&{/path/to/node@2000}",
             r#"
 REF_PATH
   AMP "&"
@@ -122,6 +122,8 @@ REF_PATH
     SLASH "/"
     NAME
       IDENT "node"
+      AT "@"
+      NUMBER "2000"
   R_BRACE "}"
 "#,
         )

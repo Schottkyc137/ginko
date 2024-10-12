@@ -69,6 +69,7 @@ pub enum SyntaxKind {
     DOT,           // .
     UNDERSCORE,    // _
     POUND,         // #
+    AT,            // @
     NUMBER,        // decimal or hex
     IDENT,         // simple identifier
     STRING,        // quoted string

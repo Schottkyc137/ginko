@@ -8,7 +8,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.start_node(NAME);
         while matches!(
             self.peek_kind_direct(),
-            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS)
+            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | AT)
         ) {
             self.bump();
         }
@@ -20,7 +20,18 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.start_node(NAME);
         while matches!(
             self.peek_kind_direct(),
-            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | QUESTION_MARK | POUND)
+            Some(
+                IDENT
+                    | NUMBER
+                    | COMMA
+                    | DOT
+                    | UNDERSCORE
+                    | PLUS
+                    | MINUS
+                    | QUESTION_MARK
+                    | POUND
+                    | AT
+            )
         ) {
             self.bump();
         }

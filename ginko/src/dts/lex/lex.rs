@@ -107,6 +107,7 @@ impl Iterator for Lexer<'_> {
             b']' => Token::new(R_BRAK, "]".to_string()),
             b'{' => Token::new(L_BRACE, "{".to_string()),
             b'}' => Token::new(R_BRACE, "}".to_string()),
+            b'@' => Token::new(AT, "@".to_string()),
             b'>' => match self.peek() {
                 Some(b'>') => {
                     self.consume();
