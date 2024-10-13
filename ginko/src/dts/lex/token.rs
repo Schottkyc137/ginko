@@ -1,5 +1,6 @@
 use crate::dts::syntax::SyntaxKind;
 
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: SyntaxKind,
     pub value: String,

@@ -1,5 +1,4 @@
 use crate::dts::ast::expression::{IntConstant, ParenExpression};
-use crate::dts::ast::label::Label;
 use crate::dts::ast::node::Name;
 use crate::dts::ast::property::BitsSpec;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};

@@ -1,15 +1,16 @@
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
 use crate::dts::ErrorCode;
 use rowan::{Checkpoint, GreenNodeBuilder, TextLen, TextRange, TextSize};
-use std::iter::Peekable;
+use std::iter::zip;
 
-pub struct Parser<I: Iterator<Item = Token>> {
+pub struct Parser<M> {
     builder: GreenNodeBuilder<'static>,
-    iter: Peekable<I>,
+    iter: M,
     non_ws_pos: TextSize,
     pos: TextSize,
     errors: Vec<Diagnostic>,
@@ -17,11 +18,11 @@ pub struct Parser<I: Iterator<Item = Token>> {
     unexpected_eof: bool,
 }
 
-impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn new(iter: I) -> Parser<I> {
+impl<M> Parser<M> {
+    pub fn new(iter: M) -> Parser<M> {
         Parser {
             builder: GreenNodeBuilder::new(),
-            iter: iter.peekable(),
+            iter,
             errors: Vec::new(),
             non_ws_pos: TextSize::default(),
             pos: TextSize::default(),
@@ -30,11 +31,13 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 }
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     pub(crate) fn skip_ws(&mut self) {
         while self
-            .iter
-            .peek()
+            .peek_direct()
             .map(|token| token.is_whitespace() || token.is_comment())
             .unwrap_or(false)
         {
@@ -52,7 +55,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub(crate) fn peek_kind(&mut self) -> Option<SyntaxKind> {
         self.skip_ws();
-        self.iter.peek().map(|token| token.kind)
+        self.iter.peek(0).map(|token| token.kind)
     }
 
     pub(crate) fn peek_kind_direct(&mut self) -> Option<SyntaxKind> {
@@ -60,7 +63,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     pub(crate) fn peek_direct(&mut self) -> Option<&Token> {
-        self.iter.peek()
+        self.iter.peek(0)
     }
 
     pub(crate) fn push_error(
@@ -109,6 +112,12 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(TextRange::new(curr_pos, self.pos))
         } else {
             None
+        }
+    }
+
+    pub(crate) fn bump_n(&mut self, n: usize) {
+        for _ in 0..n {
+            self.bump();
         }
     }
 
@@ -166,6 +175,19 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             message,
         ));
     }
+
+    pub(crate) fn next_kinds_are<const N: usize>(&mut self, kinds: [SyntaxKind; N]) -> bool {
+        self.skip_ws();
+        if self.peek_kind().is_none() {
+            return false;
+        }
+        for (expected, got) in zip(kinds, self.iter.peek_slice(N)) {
+            if expected != got.kind {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
@@ -177,7 +199,10 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 }
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     pub fn parse_mem_reserve(&mut self) {
         assert_eq!(self.peek_kind(), Some(MEM_RESERVE));
         self.start_node(RESERVE_MEMORY);

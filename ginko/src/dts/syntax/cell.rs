@@ -1,8 +1,12 @@
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     fn parse_bits_directive(&mut self) {
         self.start_node(BITS_SPEC);
         self.bump();

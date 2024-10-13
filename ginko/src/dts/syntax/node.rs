@@ -1,21 +1,13 @@
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::parser::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 
-impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn node_name(&mut self) {
-        self.skip_ws();
-        self.start_node(NAME);
-        while matches!(
-            self.peek_kind_direct(),
-            Some(IDENT | NUMBER | COMMA | DOT | UNDERSCORE | PLUS | MINUS | AT)
-        ) {
-            self.bump();
-        }
-        self.finish_node();
-    }
-
-    pub fn property_name(&mut self) {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
+    pub fn property_or_node_name(&mut self) {
         self.skip_ws();
         self.start_node(NAME);
         while matches!(
@@ -36,12 +28,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.bump();
         }
         self.finish_node();
-    }
-
-    pub fn property_or_node_name(&mut self) {
-        // a property name is more generic than a node name.
-        // Checking happens at a later stage
-        self.property_name()
     }
 
     pub fn parse_node_body(&mut self) {
@@ -85,7 +71,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 self.finish_node();
             }
         }
-        self.node_name();
+        self.property_or_node_name();
         self.parse_node_body();
         self.expect(SEMICOLON);
         self.finish_node();
@@ -93,11 +79,12 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub fn parse_property_or_node(&mut self) {
         let checkpoint = self.checkpoint();
+        self.parse_optional_label();
         match self.peek_kind() {
             Some(DELETE_NODE) => {
                 self.start_node(DELETE_SPEC);
                 self.bump();
-                self.node_name();
+                self.property_or_node_name();
                 self.expect(SEMICOLON);
                 self.finish_node();
                 return;
@@ -105,7 +92,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(DELETE_PROPERTY) => {
                 self.start_node(DELETE_SPEC);
                 self.bump();
-                self.property_name();
+                self.property_or_node_name();
                 self.expect(SEMICOLON);
                 self.finish_node();
                 return;
@@ -195,6 +182,39 @@ PROPERTY
           INT
             NUMBER "12"
           R_CHEV ">"
+  SEMICOLON ";"
+"#,
+        );
+    }
+
+    #[test]
+    fn property_with_label() {
+        check_property_or_node(
+            "labeled: prop;",
+            r#"
+PROPERTY
+  LABEL
+    IDENT "labeled"
+    COLON ":"
+  WHITESPACE " "
+  DECORATION
+  NAME
+    IDENT "prop"
+  SEMICOLON ";"
+"#,
+        );
+
+        check_property_or_node(
+            "leading: prop;",
+            r#"
+PROPERTY
+  LABEL
+    IDENT "labeled"
+    COLON ":"
+  WHITESPACE " "
+  DECORATION
+  NAME
+    IDENT "prop"
   SEMICOLON ";"
 "#,
         );
@@ -308,7 +328,7 @@ NODE
     }
 
     fn check_property_name(expression: &str, expected: &str) {
-        check_generic(expression, expected, Parser::property_name)
+        check_generic(expression, expected, Parser::property_or_node_name)
     }
 
     #[test]

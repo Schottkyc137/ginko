@@ -1,5 +1,6 @@
 use crate::dts::ast::cell::{Cell, Reference};
 use crate::dts::ast::expression::IntConstant;
+use crate::dts::ast::label::Label;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};
@@ -40,14 +41,29 @@ ast_node! {
 
 impl PropertyValue {
     pub fn kind(&self) -> PropertyValueKind {
-        let node = self.0.first_child().unwrap();
-        match node.kind() {
-            STRING_PROP => PropertyValueKind::String(StringProperty::cast(node).unwrap()),
-            CELL => PropertyValueKind::Cell(Cell::cast(node).unwrap()),
-            REF => PropertyValueKind::Reference(Reference::cast(node).unwrap()),
-            BYTE_STRING => PropertyValueKind::ByteString(ByteString::cast(node).unwrap()),
-            kind => unreachable!("Got unreachable kind {}", kind),
-        }
+        self.0
+            .children()
+            .filter_map(|node| match node.kind() {
+                STRING_PROP => Some(PropertyValueKind::String(StringProperty::cast_unchecked(
+                    node,
+                ))),
+                CELL => Some(PropertyValueKind::Cell(Cell::cast_unchecked(node))),
+                REF => Some(PropertyValueKind::Reference(Reference::cast(node).unwrap())),
+                BYTE_STRING => Some(PropertyValueKind::ByteString(ByteString::cast_unchecked(
+                    node,
+                ))),
+                _ => None,
+            })
+            .next()
+            .unwrap()
+    }
+
+    pub fn leading_label(&self) -> Option<Label> {
+        self.0.first_child().and_then(Label::cast)
+    }
+
+    pub fn trailing_label(&self) -> Option<Label> {
+        self.0.last_child().and_then(Label::cast)
     }
 }
 
@@ -165,5 +181,13 @@ mod tests {
         assert_eq!(elements.len(), 2);
         assert_matches!(elements[0].kind(), PropertyValueKind::ByteString(_));
         assert_matches!(elements[1].kind(), PropertyValueKind::Cell(_));
+    }
+
+    #[test]
+    fn property_with_labels() {
+        let prop = "begin: [AB CD EF] end:".parse::<PropertyValue>().unwrap();
+        assert_matches!(prop.kind(), PropertyValueKind::ByteString(_));
+        assert!(prop.leading_label().is_some());
+        assert!(prop.trailing_label().is_some());
     }
 }

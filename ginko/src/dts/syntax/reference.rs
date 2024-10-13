@@ -1,10 +1,14 @@
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::ErrorCode;
 use rowan::TextRange;
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     pub fn parse_reference(&mut self) {
         assert_eq!(self.peek_kind(), Some(AMP));
         let checkpoint = self.checkpoint();
@@ -52,7 +56,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
         while self.peek_kind_direct() == Some(SLASH) {
             self.bump();
-            self.node_name();
+            self.property_or_node_name();
         }
         self.finish_node();
     }

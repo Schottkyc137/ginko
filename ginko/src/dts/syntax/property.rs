@@ -1,8 +1,12 @@
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     pub fn parse_byte_string(&mut self) {
         assert_eq!(self.peek_kind(), Some(L_BRAK));
         self.start_node(BYTE_STRING);

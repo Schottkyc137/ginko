@@ -4,6 +4,7 @@ mod cell;
 pub mod expression;
 mod file;
 mod label;
+mod multipeek;
 pub mod node;
 pub mod parser;
 mod property;

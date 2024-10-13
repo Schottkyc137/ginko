@@ -1,10 +1,14 @@
 use crate::dts::lex::token::Token;
+use crate::dts::syntax::multipeek::MultiPeek;
 use crate::dts::syntax::parser::Parser;
 use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 use rowan::Checkpoint;
 
-impl<I: Iterator<Item = Token>> Parser<I> {
+impl<M> Parser<M>
+where
+    M: MultiPeek<Token> + Iterator<Item = Token>,
+{
     pub fn parse_expression(&mut self) {
         let lhs = self.checkpoint();
         self.parse_unary();
