@@ -17,6 +17,8 @@ pub struct Project {
 }
 
 impl Project {
+    /// Add a file to the project and parse it.
+    /// No analysis will be performed at this point.
     pub fn add_file(&mut self, location: PathBuf, contents: &str) {
         let tokens = lex(contents);
         let parser = Parser::new(tokens.into_iter());
@@ -38,6 +40,16 @@ impl Project {
         );
     }
 
+    /// Read the contents of the file at `location` and add it to the project.
+    /// Similar to `add_file`, no analysis will be performed in this step.
+    pub fn add_file_from_fs(&mut self, location: &PathBuf) -> Result<(), io::Error> {
+        let contents = std::fs::read_to_string(location)?;
+        self.add_file(location.clone(), &contents);
+        Ok(())
+    }
+
+    /// Analyze the file at `file`.
+    /// If the file can't be found, this is a noop.
     pub fn analyze(&mut self, file: &PathBuf) {
         self.resolve_includes(file);
         let kind = self
@@ -57,6 +69,7 @@ impl Project {
         self.state.analyze(file, context);
     }
 
+    /// Resolve includes from the file denoted by `path`
     fn resolve_includes(&mut self, path: &PathBuf) {
         let mut diagnostics = Vec::new();
         if let Some(cell) = self.state.files.get(path) {
@@ -96,25 +109,12 @@ impl Project {
         }
     }
 
-    pub fn add_file_from_fs(&mut self, location: &PathBuf) -> Result<(), io::Error> {
-        let contents = std::fs::read_to_string(&location)?;
-        self.add_file(location.clone(), &contents);
-        Ok(())
-    }
-
     pub fn add_include_paths(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
         self.state.include_paths.extend(paths);
     }
 
     pub fn project_files(&self) -> impl Iterator<Item = &RefCell<ProjectFile>> {
         self.state.files.values()
-    }
-
-    #[cfg(test)]
-    pub fn add_raw_file(&mut self, file: ProjectFile) {
-        self.state
-            .files
-            .insert(file.path.clone().unwrap(), RefCell::new(file));
     }
 
     pub fn get_file(&self, path: &PathBuf) -> Option<&RefCell<ProjectFile>> {
@@ -135,25 +135,6 @@ pub struct ProjectFile {
     syntax_diagnostics: Vec<Diagnostic>,
     model: Option<model::File>,
     analysis_diagnostics: Vec<Diagnostic>,
-}
-
-#[cfg(test)]
-impl ProjectFile {
-    pub fn inline_with_path(path: impl Into<PathBuf>, text: impl Into<String>) -> ProjectFile {
-        let path = path.into();
-        let typ = FileType::from(path.as_path());
-        let content = text.into();
-        let ast: ast::File = content.parse().unwrap();
-        ProjectFile {
-            path: Some(path),
-            source: content,
-            kind: typ,
-            ast,
-            syntax_diagnostics: vec![],
-            model: None,
-            analysis_diagnostics: vec![],
-        }
-    }
 }
 
 impl ProjectFile {
@@ -263,7 +244,7 @@ impl Include {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::analysis::project::{Project, ProjectFile};
+    use crate::dts::analysis::project::Project;
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::{ErrorCode, FileType};
     use rowan::{TextRange, TextSize};
@@ -272,13 +253,13 @@ mod tests {
     #[test]
     fn multi_includes() {
         let mut project = Project::default();
-        project.add_raw_file(ProjectFile::inline_with_path(
-            "file2.dts",
+        project.add_file(
+            PathBuf::from("file2.dts"),
             r#"
 /include/ "file3.dts"
         "#,
-        ));
-        project.add_raw_file(ProjectFile::inline_with_path("file3.dts", r#""#));
+        );
+        project.add_file(PathBuf::from("file3.dts"), r#""#);
         project.add_file(
             PathBuf::from("file1.dts"),
             r#"
@@ -287,6 +268,7 @@ mod tests {
 /include/ "file2.dts"
         "#,
         );
+        project.analyze(&PathBuf::from("file1.dts"));
         let file = project
             .get_file(&PathBuf::from("file1.dts"))
             .unwrap()
@@ -319,14 +301,8 @@ mod tests {
     #[test]
     fn cyclic_includes() {
         let mut project = Project::default();
-        project.add_raw_file(ProjectFile::inline_with_path(
-            "file2.dts",
-            r#"/include/ "file3.dts""#,
-        ));
-        project.add_raw_file(ProjectFile::inline_with_path(
-            "file3.dts",
-            r#"/include/ "file1.dts""#,
-        ));
+        project.add_file(PathBuf::from("file2.dts"), r#"/include/ "file3.dts""#);
+        project.add_file(PathBuf::from("file3.dts"), r#"/include/ "file1.dts""#);
         project.add_file(
             PathBuf::from("file1.dts"),
             r#"
@@ -335,6 +311,7 @@ mod tests {
 /include/ "file2.dts"
         "#,
         );
+        project.analyze(&PathBuf::from("file1.dts"));
         let file = project
             .get_file(&PathBuf::from("file3.dts"))
             .unwrap()
