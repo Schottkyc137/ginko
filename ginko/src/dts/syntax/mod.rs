@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 mod cell;
 pub mod expression;
 mod file;
+mod label;
 pub mod node;
 pub mod parser;
 mod property;
@@ -73,7 +74,6 @@ pub enum SyntaxKind {
     NUMBER,        // decimal or hex
     IDENT,         // simple identifier
     STRING,        // quoted string
-    LABEL,         // label:
     // directives
     DTS_V1,          // /dts-v1/
     MEM_RESERVE,     // /memreserve/
@@ -85,6 +85,7 @@ pub enum SyntaxKind {
     INCLUDE,         // /include/
 
     ERROR,
+    LABEL,               // label:
     NAME,                // Name of a node or property
     OP,                  // Operator Symbol
     INT,                 // Integer constant

@@ -63,6 +63,15 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.iter.peek()
     }
 
+    pub(crate) fn push_error(
+        &mut self,
+        range: TextRange,
+        kind: ErrorCode,
+        message: impl Into<String>,
+    ) {
+        self.errors.push(Diagnostic::new(range, kind, message))
+    }
+
     pub(crate) fn expect(&mut self, kind: SyntaxKind) {
         match self.peek_kind() {
             Some(other_kind) if other_kind == kind => {

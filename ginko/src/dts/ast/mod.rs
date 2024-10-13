@@ -2,6 +2,7 @@ pub mod cell;
 pub mod expression;
 pub mod file;
 pub use file::*;
+mod label;
 pub mod node;
 pub mod property;
 

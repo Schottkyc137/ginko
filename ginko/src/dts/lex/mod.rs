@@ -179,11 +179,7 @@ impl Iterator for Lexer<'_> {
                 {
                     buf.push(self.consume().unwrap() as char)
                 }
-                if self.peek() == Some(&b':') {
-                    Token::new(LABEL, buf)
-                } else {
-                    Token::new(IDENT, buf)
-                }
+                Token::new(IDENT, buf)
             }
             b'"' => {
                 let mut buf = String::new();

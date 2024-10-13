@@ -17,6 +17,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub fn parse_cell(&mut self) {
         self.start_node(CELL);
+        self.parse_optional_label();
         if self.peek_kind() == Some(BITS) {
             self.parse_bits_directive();
         }
@@ -243,6 +244,47 @@ CELL
   CELL_INNER
 "#,
             Parser::parse_cell,
+        );
+    }
+
+    #[test]
+    fn optional_label() {
+        check(
+            "label: <5>",
+            r#"
+CELL
+  LABEL
+    IDENT "label"
+    COLON ":"
+  WHITESPACE " "
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "5"
+    R_CHEV ">"
+"#,
+        );
+
+        check(
+            "label: /bits/ 8 <5>",
+            r#"
+CELL
+  LABEL
+    IDENT "label"
+    COLON ":"
+  WHITESPACE " "
+  BITS_SPEC
+    BITS "/bits/"
+    WHITESPACE " "
+    INT
+      NUMBER "8"
+  WHITESPACE " "
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "5"
+    R_CHEV ">"
+"#,
         );
     }
 }
