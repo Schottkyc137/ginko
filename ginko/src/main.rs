@@ -1,7 +1,7 @@
 use clap::Parser;
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use ginko::dts::analysis::Project;
+use ginko::dts::analysis::project::Project;
 use ginko::dts::SeverityMap;
 use itertools::Itertools;
 use std::error::Error;
@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut has_errors = false;
     let severities = SeverityMap::default();
     for file in project.project_files() {
+        let file = file.borrow();
         let diag = file.diagnostics().cloned().collect_vec();
         if diag.is_empty() {
             continue;

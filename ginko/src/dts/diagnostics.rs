@@ -96,12 +96,16 @@ impl Diagnostic {
         file_id: usize,
         severity_map: &SeverityMap,
     ) -> codespan_reporting::diagnostic::Diagnostic<usize> {
-        codespan_reporting::diagnostic::Diagnostic::new(
-            codespan_reporting::diagnostic::Severity::Error,
-        )
-        .with_code(self.code.as_ref().to_string())
-        .with_message(self.message)
-        .with_labels(vec![Label::primary(file_id, self.range)])
+        let severity = severity_map[self.code];
+        let codespan_sev = match severity {
+            Severity::Error => codespan_reporting::diagnostic::Severity::Error,
+            Severity::Warning => codespan_reporting::diagnostic::Severity::Warning,
+            Severity::Hint => codespan_reporting::diagnostic::Severity::Note,
+        };
+        codespan_reporting::diagnostic::Diagnostic::new(codespan_sev)
+            .with_code(self.code.as_ref().to_string())
+            .with_message(self.message)
+            .with_labels(vec![Label::primary(file_id, self.range)])
     }
 }
 

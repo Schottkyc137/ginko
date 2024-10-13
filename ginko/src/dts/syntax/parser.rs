@@ -4,7 +4,6 @@ use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
 use crate::dts::ErrorCode;
-use itertools::Itertools;
 use rowan::{Checkpoint, GreenNodeBuilder, TextLen, TextRange, TextSize};
 use std::iter::Peekable;
 
@@ -64,13 +63,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.iter.peek()
     }
 
-    fn expect_error(&mut self, kinds: &[SyntaxKind]) {
-        self.error_token(format!(
-            "Expecting {}",
-            kinds.iter().map(|kind| kind.to_string()).join(", ")
-        ))
-    }
-
     pub(crate) fn expect(&mut self, kind: SyntaxKind) {
         match self.peek_kind() {
             Some(other_kind) if other_kind == kind => {
@@ -94,14 +86,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 ));
             }
             None => self.eof_error(format!("Unexpected EOF while expecting {}", kind)),
-        }
-    }
-
-    pub(crate) fn expect_direct(&mut self, kind: SyntaxKind) {
-        if self.peek_kind_direct().is_some_and(|peeked| kind == peeked) {
-            self.bump();
-        } else {
-            self.expect_error(&[kind]);
         }
     }
 

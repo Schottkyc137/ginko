@@ -5,13 +5,12 @@ use crate::dts::eval::Eval;
 use crate::dts::model::{CellValue, CellValues};
 use crate::dts::ErrorCode;
 use itertools::Itertools;
-use std::cell::RefCell;
 
 impl Analysis<CellValues> for Cell {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<CellValues, Diagnostic> {
         let bits = match self.bits() {
@@ -131,7 +130,7 @@ macro_rules! analysis_from_int {
                 fn analyze(
                     &self,
                     _context: &AnalysisContext,
-                    _project: &RefCell<ProjectState>,
+                    _project: &ProjectState,
                     diagnostics: &mut Vec<Diagnostic>,
                 ) -> Result<CellValue<$t>, Diagnostic> {
                     match self {

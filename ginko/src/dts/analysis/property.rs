@@ -4,13 +4,12 @@ use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::{Eval, InfallibleEval};
 use crate::dts::model::Value;
 use itertools::Itertools;
-use std::cell::RefCell;
 
 impl Analysis<Vec<Value>> for PropertyList {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<Vec<Value>, Diagnostic> {
         Ok(self
@@ -27,7 +26,7 @@ impl Analysis<Value> for PropertyValue {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<Value, Diagnostic> {
         match self.kind() {

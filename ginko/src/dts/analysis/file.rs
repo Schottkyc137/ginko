@@ -1,19 +1,19 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
+use crate::dts::analysis::project::ProjectState;
+use crate::dts::analysis::{Analysis, AnalysisContext, CyclicDependencyEntry, PushIntoDiagnostics};
 use crate::dts::ast::file as ast;
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
-use crate::dts::{model, ErrorCode};
+use crate::dts::{model, ErrorCode, FileType};
+use itertools::Itertools;
 use rowan::TextRange;
-use std::cell::RefCell;
-use std::ops::DerefMut;
 use std::path::PathBuf;
 
 impl Analysis<model::File> for ast::File {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<model::File, Diagnostic> {
         let mut dts_header_seen = false;
@@ -27,23 +27,29 @@ impl Analysis<model::File> for ast::File {
                     HeaderKind::Plugin => is_plugin = true,
                 },
                 FileItemKind::Include(include) => {
-                    include.resolve(project.borrow_mut().deref_mut());
-                    let path: PathBuf = include.target().unwrap().into();
-                    let (result, include_diagnostics) =
-                        if let Some(file) = project.borrow().get(&path) {
-                            let ctx = AnalysisContext::default();
-                            let mut include_diagnostics = Vec::new();
-                            let result = file
-                                .ast
-                                .analyze(&ctx, project, &mut include_diagnostics)
-                                .or_push_into(&mut include_diagnostics);
-                            (result, include_diagnostics)
+                    if let Some(path) = include.target().map(PathBuf::from) {
+                        let mut ctx = context.clone();
+                        ctx.file_type = FileType::DtSourceInclude;
+                        let location = include.target_tok().unwrap().text_range();
+                        let entry = CyclicDependencyEntry::new(path.clone(), location);
+                        if ctx.path.contains(&entry) {
+                            let diag_text = ctx
+                                .path
+                                .into_iter()
+                                .map(|entry| entry.path.display().to_string())
+                                .chain(std::iter::once(entry.path.display().to_string()))
+                                .join(" -> ");
+                            let diag = Diagnostic::new(
+                                entry.location,
+                                ErrorCode::CyclicDependencyError,
+                                format!("Cyclic dependency: {diag_text}"),
+                            );
+                            diagnostics.push(diag);
+                            continue;
                         } else {
-                            (None, vec![])
-                        };
-                    if let Some(project_file) = project.borrow_mut().get_mut(&path) {
-                        project_file.model = result;
-                        project_file.analysis_diagnostics = include_diagnostics;
+                            ctx.path.push(entry);
+                            project.analyze(&path, ctx);
+                        }
                     }
                 }
                 FileItemKind::ReserveMemory(reserved) => {
@@ -74,7 +80,7 @@ impl Analysis<model::File> for ast::File {
                 }
             }
         }
-        if !dts_header_seen {
+        if context.file_type == FileType::DtSource && !dts_header_seen {
             diagnostics.push(Diagnostic::new(
                 TextRange::default(),
                 ErrorCode::NonDtsV1,
@@ -89,7 +95,7 @@ impl Analysis<model::ReservedMemory> for ast::ReserveMemory {
     fn analyze(
         &self,
         _: &AnalysisContext,
-        _: &RefCell<ProjectState>,
+        _: &ProjectState,
         _: &mut Vec<Diagnostic>,
     ) -> Result<model::ReservedMemory, Diagnostic> {
         let address: u64 = self.address().eval()?;

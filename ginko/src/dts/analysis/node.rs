@@ -10,7 +10,7 @@ impl Analysis<model::Node> for ast::NodeBody {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<model::Node, Diagnostic> {
         let mut nodes = HashMap::new();
@@ -48,7 +48,7 @@ impl Analysis<(String, model::Node)> for ast::Node {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<(String, model::Node), Diagnostic> {
         // TODO: node name unwrapped
@@ -62,7 +62,7 @@ impl Analysis<(String, Vec<model::Value>)> for ast::Property {
     fn analyze(
         &self,
         context: &AnalysisContext,
-        project: &RefCell<ProjectState>,
+        project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<(String, Vec<model::Value>), Diagnostic> {
         // TODO: property name unwrapped

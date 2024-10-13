@@ -20,7 +20,7 @@ impl<V> CyclicDependencyError<V> {
 /// Checks cyclic dependencies by adding them piece-by piece using the `add` method.
 /// This struct operates on easy cloneable objects (such as strings or ints)
 /// and can provide the dependency map later-on.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ImportGuard<V>
 where
     V: Hash + Eq + Clone,
