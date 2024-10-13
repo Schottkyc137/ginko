@@ -64,12 +64,8 @@ where
     #[allow(unused)]
     pub fn parse_node(&mut self) {
         self.start_node(NODE);
-        match self.peek_kind() {
-            Some(OMIT_IF_NO_REF) => self.bump_into_node(DECORATION),
-            _ => {
-                self.start_node(DECORATION);
-                self.finish_node();
-            }
+        if let Some(OMIT_IF_NO_REF) = self.peek_kind() {
+            self.bump_into_node(DECORATION)
         }
         self.property_or_node_name();
         self.parse_node_body();
@@ -100,10 +96,7 @@ where
             Some(OMIT_IF_NO_REF) => {
                 self.bump_into_node(DECORATION);
             }
-            _ => {
-                self.start_node(DECORATION);
-                self.finish_node();
-            }
+            _ => {}
         };
         if matches!(
             self.peek_kind(),
@@ -168,7 +161,6 @@ mod test {
             "prop = <12>;",
             r#"
 PROPERTY
-  DECORATION
   NAME
     IDENT "prop"
   WHITESPACE " "
@@ -197,22 +189,6 @@ PROPERTY
     IDENT "labeled"
     COLON ":"
   WHITESPACE " "
-  DECORATION
-  NAME
-    IDENT "prop"
-  SEMICOLON ";"
-"#,
-        );
-
-        check_property_or_node(
-            "leading: prop;",
-            r#"
-PROPERTY
-  LABEL
-    IDENT "labeled"
-    COLON ":"
-  WHITESPACE " "
-  DECORATION
   NAME
     IDENT "prop"
   SEMICOLON ";"
@@ -226,7 +202,6 @@ PROPERTY
             "prop;",
             r#"
 PROPERTY
-  DECORATION
   NAME
     IDENT "prop"
   SEMICOLON ";"
@@ -270,7 +245,6 @@ DELETE_SPEC
             "empty {};",
             r#"
 NODE
-  DECORATION
   NAME
     IDENT "empty"
   WHITESPACE " "
@@ -308,7 +282,6 @@ NODE
             "empty { some_prop; };",
             r#"
 NODE
-  DECORATION
   NAME
     IDENT "empty"
   WHITESPACE " "
@@ -316,7 +289,6 @@ NODE
     L_BRACE "{"
     WHITESPACE " "
     PROPERTY
-      DECORATION
       NAME
         IDENT "some_prop"
       SEMICOLON ";"
@@ -393,7 +365,6 @@ NODE_BODY
   L_BRACE "{"
   WHITESPACE "\n  "
   NODE
-    DECORATION
     NAME
       IDENT "sub_node"
     WHITESPACE " "
@@ -401,7 +372,6 @@ NODE_BODY
       L_BRACE "{"
       WHITESPACE "\n    "
       PROPERTY
-        DECORATION
         NAME
           IDENT "empty_prop"
         SEMICOLON ";"

@@ -33,8 +33,6 @@ where
                 Some(OMIT_IF_NO_REF) => self.parse_property_or_node(),
                 Some(SLASH) => {
                     self.start_node(NODE);
-                    self.start_node(DECORATION);
-                    self.finish_node();
                     self.bump_into_node(NAME);
                     self.parse_node_body();
                     self.expect(SEMICOLON);
@@ -116,7 +114,6 @@ FILE
             r#"
 FILE
   NODE
-    DECORATION
     NAME
       SLASH "/"
     WHITESPACE " "
@@ -160,7 +157,6 @@ FILE
     SEMICOLON ";"
   WHITESPACE "\n"
   NODE
-    DECORATION
     NAME
       SLASH "/"
     WHITESPACE " "

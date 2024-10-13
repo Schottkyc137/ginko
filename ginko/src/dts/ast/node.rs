@@ -1,3 +1,4 @@
+use crate::dts::ast::label::Label;
 use crate::dts::ast::property::PropertyList;
 use crate::dts::ast::{ast_node, impl_from_str, Cast};
 use crate::dts::syntax::SyntaxKind::*;
@@ -87,21 +88,25 @@ ast_node! {
 impl_from_str!(Node => Parser::parse_property_or_node);
 
 impl Node {
-    pub fn decoration(&self) -> Decoration {
-        Decoration::cast(self.0.children().nth(0).unwrap()).unwrap()
+    pub fn decoration(&self) -> Option<Decoration> {
+        self.0.children().filter_map(Decoration::cast).next()
+    }
+
+    pub fn label(&self) -> Option<Label> {
+        self.0.children().filter_map(Label::cast).next()
     }
 
     // TODO: could also be referenced node
     pub fn name(&self) -> Name {
-        Name::cast(self.0.children().nth(1).unwrap()).unwrap()
+        self.0.children().filter_map(Name::cast).next().unwrap()
     }
 
     pub fn body(&self) -> NodeBody {
-        NodeBody::cast(self.0.children().nth(2).unwrap()).unwrap()
+        self.0.children().filter_map(NodeBody::cast).next().unwrap()
     }
 
-    pub fn semicolon(&self) -> SyntaxToken {
-        self.0.last_token().unwrap()
+    pub fn semicolon(&self) -> Option<SyntaxToken> {
+        self.0.last_token().filter(|tok| tok.kind() == SEMICOLON)
     }
 }
 
@@ -113,20 +118,24 @@ ast_node! {
 impl_from_str!(Property => Parser::parse_property_or_node);
 
 impl Property {
-    pub fn decoration(&self) -> Decoration {
-        Decoration::cast(self.0.children().nth(0).unwrap()).unwrap()
+    pub fn decoration(&self) -> Option<Decoration> {
+        self.0.children().filter_map(Decoration::cast).next()
+    }
+
+    pub fn label(&self) -> Option<Label> {
+        self.0.children().filter_map(Label::cast).next()
     }
 
     pub fn name(&self) -> Name {
-        Name::cast(self.0.children().nth(1).unwrap()).unwrap()
+        self.0.children().filter_map(Name::cast).next().unwrap()
     }
 
     pub fn value(&self) -> Option<PropertyList> {
-        self.0.children().nth(2).and_then(PropertyList::cast)
+        self.0.children().filter_map(PropertyList::cast).next()
     }
 
-    pub fn semicolon(&self) -> SyntaxToken {
-        self.0.last_token().unwrap()
+    pub fn semicolon(&self) -> Option<SyntaxToken> {
+        self.0.last_token().filter(|tok| tok.kind() == SEMICOLON)
     }
 }
 
@@ -157,7 +166,7 @@ mod tests {
     #[test]
     fn check_empty_node() {
         let node = "name {};".parse::<Node>().unwrap();
-        assert!(node.decoration().token().is_none());
+        assert!(node.decoration().is_none());
         assert_eq!(node.name().node_name().unwrap(), "name");
         assert_eq!(node.body().children().count(), 0);
     }
@@ -172,7 +181,7 @@ mod tests {
 };"
         .parse::<Node>()
         .unwrap();
-        assert!(node.decoration().token().is_none());
+        assert!(node.decoration().is_none());
         assert_eq!(node.name().node_name().unwrap(), "name");
         let children = node.body().children().collect_vec();
         assert_eq!(children.len(), 2);

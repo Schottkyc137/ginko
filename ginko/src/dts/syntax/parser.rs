@@ -292,7 +292,6 @@ FILE
     DTS_V1 "/dts-v1/"
     WHITESPACE "\n\n"
   NODE
-    DECORATION
     NAME
       SLASH "/"
     WHITESPACE " "
@@ -300,7 +299,6 @@ FILE
       L_BRACE "{"
       WHITESPACE "\n    "
       PROPERTY
-        DECORATION
         NAME
           IDENT "some_prop"
         WHITESPACE " "
