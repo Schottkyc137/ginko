@@ -86,7 +86,11 @@ impl Cell {
     }
 
     pub fn inner(&self) -> CellInner {
-        self.0.last_child().unwrap().cast().unwrap()
+        self.0
+            .children()
+            .filter_map(CellInner::cast)
+            .next()
+            .unwrap()
     }
 
     pub fn l_chev(&self) -> Option<SyntaxToken> {

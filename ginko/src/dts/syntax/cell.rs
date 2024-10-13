@@ -38,10 +38,12 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
         }
         self.finish_node();
+        self.parse_optional_label();
         self.finish_node();
     }
 
     fn parse_cell_content(&mut self) {
+        self.parse_optional_label();
         match self.peek_kind() {
             Some(NUMBER) => self.bump_into_node(INT),
             Some(L_PAR) => self.parse_parenthesized_expression(),
@@ -51,6 +53,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
             None => {}
         }
+        self.parse_optional_label();
     }
 }
 
@@ -283,6 +286,84 @@ CELL
     L_CHEV "<"
     INT
       NUMBER "5"
+    R_CHEV ">"
+"#,
+        );
+    }
+
+    #[test]
+    fn optional_trailing_label() {
+        check(
+            "<5> label:",
+            r#"
+CELL
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "5"
+    R_CHEV ">"
+  WHITESPACE " "
+  LABEL
+    IDENT "label"
+    COLON ":"
+"#,
+        );
+
+        check(
+            "leading: <5> trailing:",
+            r#"
+CELL
+  LABEL
+    IDENT "leading"
+    COLON ":"
+  WHITESPACE " "
+  CELL_INNER
+    L_CHEV "<"
+    INT
+      NUMBER "5"
+    R_CHEV ">"
+  WHITESPACE " "
+  LABEL
+    IDENT "trailing"
+    COLON ":"
+"#,
+        );
+    }
+
+    #[test]
+    fn optional_label_contents() {
+        check(
+            "<label: 5>",
+            r#"
+CELL
+  CELL_INNER
+    L_CHEV "<"
+    LABEL
+      IDENT "label"
+      COLON ":"
+    WHITESPACE " "
+    INT
+      NUMBER "5"
+    R_CHEV ">"
+"#,
+        );
+
+        check(
+            "<leading: 5 trailing:>",
+            r#"
+CELL
+  CELL_INNER
+    L_CHEV "<"
+    LABEL
+      IDENT "leading"
+      COLON ":"
+    WHITESPACE " "
+    INT
+      NUMBER "5"
+    WHITESPACE " "
+    LABEL
+      IDENT "trailing"
+      COLON ":"
     R_CHEV ">"
 "#,
         );
