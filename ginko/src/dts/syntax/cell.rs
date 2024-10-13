@@ -57,7 +57,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 mod tests {
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::syntax::parser::Parser;
-    use crate::dts::syntax::testing::{check_generic, check_generic_diag, str};
+    use crate::dts::syntax::testing::{check_generic, check_generic_diag};
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
 

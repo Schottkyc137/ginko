@@ -3,7 +3,6 @@ use crate::dts::ast::node as ast;
 use crate::dts::ast::node::NodeOrProperty;
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::model;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 impl Analysis<model::Node> for ast::NodeBody {

@@ -21,10 +21,8 @@ impl Project {
         let tokens = lex(contents);
         let parser = Parser::new(tokens.into_iter());
         let (node, syntax_diagnostics) = parser.parse(Parser::parse_file);
-        let mut analysis_diagnostics = Vec::new();
 
         let node = ast::File::cast(node).unwrap();
-        self.resolve_includes(&node, &mut analysis_diagnostics);
         let file_type = FileType::from(location.as_path());
         self.state.insert(
             location.clone(),
@@ -35,67 +33,72 @@ impl Project {
                 ast: node,
                 syntax_diagnostics,
                 model: None,
-                analysis_diagnostics,
+                analysis_diagnostics: vec![],
             },
         );
-        self.analyze(&location);
     }
 
-    pub fn analyze(&self, file: &PathBuf) {
-        if let Some(cell) = self.state.files.get(file) {
-            let mut analysis_diagnostics = Vec::new();
-            let context = AnalysisContext {
-                file_type: cell.borrow().kind,
-                path: vec![CyclicDependencyEntry::new(
-                    file.clone(),
-                    TextRange::default(),
-                )],
-                ..Default::default()
-            };
-            let model = cell
+    pub fn analyze(&mut self, file: &PathBuf) {
+        self.resolve_includes(file);
+        let kind = self
+            .state
+            .files
+            .get(file)
+            .map(|file| file.borrow().kind)
+            .unwrap_or_default();
+        let context = AnalysisContext {
+            file_type: kind,
+            path: vec![CyclicDependencyEntry::new(
+                file.clone(),
+                TextRange::default(),
+            )],
+            ..Default::default()
+        };
+        self.state.analyze(file, context);
+    }
+
+    fn resolve_includes(&mut self, path: &PathBuf) {
+        let mut diagnostics = Vec::new();
+        if let Some(cell) = self.state.files.get(path) {
+            let children = cell
                 .borrow()
-                .ast
-                .analyze(&context, &self.state, &mut analysis_diagnostics)
-                .or_push_into(&mut analysis_diagnostics);
-            let mut mut_borrow = cell.borrow_mut();
-            mut_borrow.set_analysis_result(model, analysis_diagnostics)
-        }
-    }
-
-    fn resolve_includes(&mut self, file: &ast::File, diagnostics: &mut Vec<Diagnostic>) {
-        let children = file
-            .children()
-            .filter_map(|kind| match kind {
-                FileItemKind::Include(include) => Some(include),
-                _ => None,
-            })
-            .filter_map(|include| {
-                include.target().map(|target| {
-                    (
-                        PathBuf::from(target),
-                        include.target_tok().unwrap().text_range(),
-                    )
+                .ast()
+                .children()
+                .filter_map(|kind| match kind {
+                    FileItemKind::Include(include) => Some(include),
+                    _ => None,
                 })
-            })
-            .collect_vec();
+                .filter_map(|include| {
+                    include.target().map(|target| {
+                        (
+                            PathBuf::from(target),
+                            include.target_tok().unwrap().text_range(),
+                        )
+                    })
+                })
+                .collect_vec();
 
-        for (path, location) in children {
-            if !self.state.files.contains_key(&path) {
-                match self.add_file_from_fs(path) {
-                    Ok(_) => {}
-                    Err(err) => diagnostics.push(Diagnostic::new(
-                        location,
-                        ErrorCode::IOError,
-                        err.to_string(),
-                    )),
+            for (path, location) in children {
+                if !self.state.files.contains_key(&path) {
+                    match self.add_file_from_fs(&path) {
+                        Ok(_) => self.resolve_includes(&path),
+                        Err(err) => diagnostics.push(Diagnostic::new(
+                            location,
+                            ErrorCode::IOError,
+                            err.to_string(),
+                        )),
+                    }
                 }
             }
         }
+        if let Some(cell) = self.state.files.get(path) {
+            cell.borrow_mut().analysis_diagnostics.extend(diagnostics);
+        }
     }
 
-    pub fn add_file_from_fs(&mut self, location: PathBuf) -> Result<(), io::Error> {
+    pub fn add_file_from_fs(&mut self, location: &PathBuf) -> Result<(), io::Error> {
         let contents = std::fs::read_to_string(&location)?;
-        self.add_file(location, &contents);
+        self.add_file(location.clone(), &contents);
         Ok(())
     }
 
@@ -174,7 +177,7 @@ impl ProjectFile {
 
     pub fn set_analysis_result(&mut self, file: Option<model::File>, diagnostics: Vec<Diagnostic>) {
         self.model = file;
-        self.analysis_diagnostics = diagnostics;
+        self.analysis_diagnostics.extend(diagnostics);
     }
 
     pub fn set_kind(&mut self, kind: FileType) {
@@ -263,7 +266,6 @@ mod tests {
     use crate::dts::analysis::project::{Project, ProjectFile};
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::{ErrorCode, FileType};
-    use itertools::Itertools;
     use rowan::{TextRange, TextSize};
     use std::path::PathBuf;
 

@@ -22,7 +22,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     project.add_include_paths(args.include.unwrap_or_default().iter().map(PathBuf::from));
 
-    project.add_file_from_fs(PathBuf::from(args.file))?;
+    let path = PathBuf::from(args.file);
+
+    project.add_file_from_fs(&path)?;
+    project.analyze(&path);
 
     let mut has_errors = false;
     let severities = SeverityMap::default();
