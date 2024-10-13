@@ -81,10 +81,6 @@ impl Cell {
         self.0.children().filter_map(BitsSpec::cast).next()
     }
 
-    pub fn label(&self) -> Option<Label> {
-        self.0.children().filter_map(Label::cast).next()
-    }
-
     pub fn inner(&self) -> CellInner {
         self.0
             .children()
@@ -227,21 +223,5 @@ mod tests {
         assert!(cell.bits().is_some());
         assert_eq!(contents.len(), 1);
         assert_matches!(contents[0], CellContent::Number(_));
-    }
-
-    #[test]
-    fn check_cell_with_label() {
-        let cell = parse_to_cell("label: <42>");
-        let contents = cell.content().collect_vec();
-        assert_eq!(contents.len(), 1);
-        assert_matches!(contents[0], CellContent::Number(_));
-        assert_eq!(cell.label().unwrap().ident(), "label".to_string());
-
-        let cell = parse_to_cell("label: /bits/ 8 <32>");
-        let contents = cell.content().collect_vec();
-        assert!(cell.bits().is_some());
-        assert_eq!(contents.len(), 1);
-        assert_matches!(contents[0], CellContent::Number(_));
-        assert_eq!(cell.label().unwrap().ident(), "label".to_string());
     }
 }

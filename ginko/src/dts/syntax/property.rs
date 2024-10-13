@@ -23,6 +23,8 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
     pub fn parse_property_value(&mut self) {
         self.start_node(PROP_VALUE);
+        self.parse_optional_label();
+        self.skip_ws();
         match self.peek_kind() {
             Some(STRING) => self.bump_into_node(STRING_PROP),
             Some(L_CHEV | BITS) => self.parse_cell(),
@@ -31,6 +33,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             Some(_) => self.error_token("Expected string, cell, reference or bytes".to_string()),
             None => self.unexpected_eof(),
         }
+        self.parse_optional_label();
         self.finish_node();
     }
 
@@ -272,6 +275,90 @@ PROPERTY_LIST
         INT
           NUMBER "47"
         R_CHEV ">"
+"#,
+        );
+    }
+
+    #[test]
+    fn optional_label() {
+        check_property_value(
+            "label: <5>",
+            r#"
+PROP_VALUE
+  LABEL
+    IDENT "label"
+    COLON ":"
+  WHITESPACE " "
+  CELL
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "5"
+      R_CHEV ">"
+"#,
+        );
+
+        check_property_value(
+            "label: /bits/ 8 <5>",
+            r#"
+PROP_VALUE
+  LABEL
+    IDENT "label"
+    COLON ":"
+  WHITESPACE " "
+  CELL
+    BITS_SPEC
+      BITS "/bits/"
+      WHITESPACE " "
+      INT
+        NUMBER "8"
+    WHITESPACE " "
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "5"
+      R_CHEV ">"
+"#,
+        );
+    }
+
+    #[test]
+    fn optional_trailing_label() {
+        check_property_value(
+            "<5> label:",
+            r#"
+PROP_VALUE
+  CELL
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "5"
+      R_CHEV ">"
+  WHITESPACE " "
+  LABEL
+    IDENT "label"
+    COLON ":"
+"#,
+        );
+
+        check_property_value(
+            "leading: <5> trailing:",
+            r#"
+PROP_VALUE
+  LABEL
+    IDENT "leading"
+    COLON ":"
+  WHITESPACE " "
+  CELL
+    CELL_INNER
+      L_CHEV "<"
+      INT
+        NUMBER "5"
+      R_CHEV ">"
+  WHITESPACE " "
+  LABEL
+    IDENT "trailing"
+    COLON ":"
 "#,
         );
     }

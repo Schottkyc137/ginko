@@ -289,7 +289,7 @@ FILE
                 INT
                   NUMBER "5"
                 R_CHEV ">"
-          WHITESPACE "\n"
+            WHITESPACE "\n"
       R_BRACE "}"
   
 "#,
