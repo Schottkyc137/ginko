@@ -152,6 +152,7 @@ impl File {
     }
 }
 
+#[derive(Default)]
 pub struct NodeBuilder {
     nodes: HashMap<String, Node>,
     properties: HashMap<String, Vec<Value>>,
@@ -159,10 +160,7 @@ pub struct NodeBuilder {
 
 impl NodeBuilder {
     pub fn new() -> NodeBuilder {
-        NodeBuilder {
-            nodes: HashMap::default(),
-            properties: HashMap::default(),
-        }
+        NodeBuilder::default()
     }
 
     pub fn property(mut self, name: impl Into<String>, value: impl Into<Value>) -> Self {
@@ -185,7 +183,7 @@ impl NodeBuilder {
     }
 }
 
-impl<'a> From<NodeBuilder> for Node {
+impl From<NodeBuilder> for Node {
     fn from(value: NodeBuilder) -> Self {
         value.build()
     }

@@ -41,7 +41,7 @@ impl TryFrom<u32> for BitWidth {
 }
 
 #[derive(Clone, Default, Debug)]
-struct CyclicDependencyEntry {
+pub struct CyclicDependencyEntry {
     path: PathBuf,
     location: TextRange,
 }

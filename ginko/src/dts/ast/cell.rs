@@ -120,7 +120,7 @@ mod tests {
     use crate::dts::ast::cell::{Cell, CellContent};
     use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
-    use crate::dts::lex::lex::lex;
+    use crate::dts::lex::lex;
     use crate::dts::syntax::Parser;
     use assert_matches::assert_matches;
     use itertools::Itertools;

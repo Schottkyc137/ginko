@@ -58,7 +58,7 @@ macro_rules! impl_from_str {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let (ast, errors) =
-                    $crate::dts::syntax::Parser::new($crate::dts::lex::lex::lex(s).into_iter())
+                    $crate::dts::syntax::Parser::new($crate::dts::lex::lex(s).into_iter())
                         .parse($fn_name);
                 if errors.is_empty() {
                     // TODO: unwrap or diagnostic?

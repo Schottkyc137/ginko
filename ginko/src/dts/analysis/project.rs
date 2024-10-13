@@ -1,7 +1,7 @@
 use crate::dts::analysis::{Analysis, AnalysisContext, CyclicDependencyEntry, PushIntoDiagnostics};
 use crate::dts::ast::{Cast, FileItemKind, Include};
 use crate::dts::diagnostics::Diagnostic;
-use crate::dts::lex::lex::lex;
+use crate::dts::lex::lex;
 use crate::dts::syntax::Parser;
 use crate::dts::{ast, model, ErrorCode, FileType};
 use itertools::Itertools;
@@ -122,7 +122,7 @@ impl Project {
     }
 
     pub fn get_file_mut(&mut self, path: &PathBuf) -> Option<&mut RefCell<ProjectFile>> {
-        self.state.get_mut(&path)
+        self.state.get_mut(path)
     }
 }
 

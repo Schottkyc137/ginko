@@ -211,7 +211,7 @@ mod tests {
     use crate::dts::ast::expression::Expression;
     use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
-    use crate::dts::lex::lex::lex;
+    use crate::dts::lex::lex;
     use crate::dts::syntax::Parser;
 
     fn check_equal(expression: &str, result: u64) {

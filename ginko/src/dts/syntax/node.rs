@@ -75,6 +75,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.finish_node();
     }
 
+    #[allow(unused)]
     pub fn parse_node(&mut self) {
         self.start_node(NODE);
         match self.peek_kind() {

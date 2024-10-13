@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-mod builder;
 mod cell;
 pub mod expression;
 mod file;
@@ -13,10 +12,11 @@ pub use parser::Parser;
 
 pub type SyntaxNode = rowan::SyntaxNode<Lang>;
 pub type SyntaxToken = rowan::SyntaxToken<Lang>;
+#[allow(unused)]
 pub type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[repr(u16)]
 pub enum SyntaxKind {
     WHITESPACE = 0,
@@ -145,7 +145,7 @@ impl rowan::Language for Lang {
 #[cfg(test)]
 mod testing {
     use crate::dts::diagnostics::Diagnostic;
-    use crate::dts::lex::lex::lex;
+    use crate::dts::lex::lex;
     use crate::dts::lex::token::Token;
     use crate::dts::syntax::SyntaxKind;
     use crate::dts::syntax::{Parser, SyntaxElement};
