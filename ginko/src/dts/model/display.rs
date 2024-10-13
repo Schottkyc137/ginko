@@ -1,4 +1,4 @@
-use crate::dts::model::{CellValue, CellValues, Value};
+use crate::dts::model::{CellValue, CellValues, NodeName, Path, Reference, Value};
 use std::fmt::{Display, Formatter, UpperHex};
 
 impl<T> Display for CellValue<T>
@@ -8,8 +8,37 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             CellValue::Number(number) => write!(f, "0x{number:X}"),
-            CellValue::Reference(_) => unimplemented!(),
+            CellValue::Reference(reference) => write!(f, "{reference}"),
         }
+    }
+}
+
+impl Display for Reference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Reference::Path(path) => write!(f, "&{{{path}}}"),
+            Reference::Label(label) => write!(f, "&{label}"),
+        }
+    }
+}
+
+impl Display for Path {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for component in &self.components {
+            write!(f, "/")?;
+            write!(f, "{component}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for NodeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.ident)?;
+        if let Some(address) = &self.address {
+            write!(f, "@{address}")?;
+        }
+        Ok(())
     }
 }
 
@@ -89,7 +118,7 @@ impl Display for Value {
                 write!(f, "{cell}")?;
                 write!(f, ">")
             }
-            Value::Reference(_) => unimplemented!(),
+            Value::Reference(reference) => write!(f, "{reference}"),
         }
     }
 }

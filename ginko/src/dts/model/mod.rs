@@ -1,12 +1,17 @@
 mod display;
 
-use std::cell::OnceCell;
 use std::collections::HashMap;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Reference {
+    Label(String),
+    Path(Path),
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CellValue<T> {
     Number(T),
-    Reference(OnceCell<Node>),
+    Reference(Reference),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -60,7 +65,7 @@ pub enum Value {
     Bytes(Vec<u8>),
     String(String),
     Cell(CellValues),
-    Reference(OnceCell<Node>),
+    Reference(Reference),
 }
 
 macro_rules! value_from_int {
@@ -97,7 +102,7 @@ impl From<&str> for Value {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct Node {
-    nodes: HashMap<String, Node>,
+    nodes: HashMap<NodeName, Node>,
     properties: HashMap<String, Vec<Value>>,
 }
 
@@ -118,7 +123,7 @@ impl Node {
 }
 
 impl Node {
-    pub fn new(nodes: HashMap<String, Node>, properties: HashMap<String, Vec<Value>>) -> Node {
+    pub fn new(nodes: HashMap<NodeName, Node>, properties: HashMap<String, Vec<Value>>) -> Node {
         Node { nodes, properties }
     }
 }
@@ -154,7 +159,7 @@ impl File {
 
 #[derive(Default)]
 pub struct NodeBuilder {
-    nodes: HashMap<String, Node>,
+    nodes: HashMap<NodeName, Node>,
     properties: HashMap<String, Vec<Value>>,
 }
 
@@ -173,7 +178,7 @@ impl NodeBuilder {
         self
     }
 
-    pub fn node(mut self, name: impl Into<String>, value: impl Into<Node>) -> Self {
+    pub fn node(mut self, name: impl Into<NodeName>, value: impl Into<Node>) -> Self {
         self.nodes.insert(name.into(), value.into());
         self
     }
@@ -186,6 +191,70 @@ impl NodeBuilder {
 impl From<NodeBuilder> for Node {
     fn from(value: NodeBuilder) -> Self {
         value.build()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct NodeName {
+    ident: String,
+    address: Option<String>,
+}
+
+impl From<&str> for NodeName {
+    fn from(value: &str) -> Self {
+        NodeName::simple(value)
+    }
+}
+
+impl From<String> for NodeName {
+    fn from(value: String) -> Self {
+        NodeName::simple(value)
+    }
+}
+
+impl NodeName {
+    pub fn simple(ident: impl Into<String>) -> NodeName {
+        NodeName {
+            ident: ident.into(),
+            address: None,
+        }
+    }
+
+    pub fn with_address(ident: impl Into<String>, address: impl Into<String>) -> NodeName {
+        NodeName {
+            ident: ident.into(),
+            address: Some(address.into()),
+        }
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.ident == "/" && self.address.is_none()
+    }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct Path {
+    components: Vec<NodeName>,
+}
+
+impl Path {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, name: NodeName) {
+        self.components.push(name)
+    }
+
+    pub fn pop(&mut self) {
+        self.components.pop();
+    }
+}
+
+impl FromIterator<NodeName> for Path {
+    fn from_iter<T: IntoIterator<Item = NodeName>>(iter: T) -> Self {
+        let components = Vec::from_iter(iter);
+        Self { components }
     }
 }
 
@@ -203,7 +272,7 @@ fn merge_nodes() {
     node_a.merge(node_b);
     assert!(node_a.properties.is_empty());
     assert_eq!(node_a.nodes.len(), 1);
-    let sub_node = &node_a.nodes["some_node"];
+    let sub_node = &node_a.nodes[&NodeName::simple("some_node")];
     assert_eq!(sub_node.properties.len(), 2);
     assert!(sub_node.nodes.is_empty());
     assert_eq!(sub_node.properties["prop_1"], vec![17_u32.into()]);

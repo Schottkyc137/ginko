@@ -26,8 +26,8 @@ ast_node! {
 }
 
 impl Ref {
-    pub fn target(&self) -> Option<String> {
-        self.0.last_token().map(|tok| tok.to_string())
+    pub fn target(&self) -> String {
+        self.0.last_token().unwrap().to_string()
     }
 }
 
@@ -46,8 +46,8 @@ ast_node! {
 }
 
 impl RefPath {
-    pub fn target(&self) -> Option<Path> {
-        self.0.first_child().and_then(Path::cast)
+    pub fn target(&self) -> Path {
+        self.0.first_child().and_then(Path::cast).unwrap()
     }
 }
 
@@ -55,7 +55,7 @@ impl RefPath {
 pub enum CellContent {
     Number(IntConstant),
     Expression(ParenExpression),
-    Reference(Ref),
+    Reference(Reference),
 }
 
 impl Cast for CellContent {
@@ -63,7 +63,8 @@ impl Cast for CellContent {
         Some(match node.kind() {
             INT => CellContent::Number(node.cast().unwrap()),
             PAREN_EXPRESSION => CellContent::Expression(node.cast().unwrap()),
-            REF => CellContent::Reference(node.cast().unwrap()),
+            REF => CellContent::Reference(Reference::Ref(node.cast().unwrap())),
+            REF_PATH => CellContent::Reference(Reference::RefPath(node.cast().unwrap())),
             _ => return None,
         })
     }
@@ -121,7 +122,7 @@ impl CellInner {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::ast::cell::{Cell, CellContent};
+    use crate::dts::ast::cell::{Cell, CellContent, Reference};
     use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
     use crate::dts::lex::lex;
@@ -156,8 +157,8 @@ mod tests {
         let content = cell.content().collect_vec();
         assert_eq!(content.len(), 1);
         match &content[0] {
-            CellContent::Reference(reference) => {
-                assert_eq!(reference.target(), Some("some_name".to_owned()))
+            CellContent::Reference(Reference::Ref(reference)) => {
+                assert_eq!(reference.target(), "some_name".to_owned())
             }
             _ => panic!("Expected reference"),
         }

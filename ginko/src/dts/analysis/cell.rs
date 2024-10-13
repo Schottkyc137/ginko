@@ -1,9 +1,10 @@
 use crate::dts::analysis::{Analysis, AnalysisContext, BitWidth, ProjectState};
-use crate::dts::ast::cell::{Cell, CellContent};
+use crate::dts::ast::cell::{Cell, CellContent, Reference};
+use crate::dts::ast::expression::ParenExpression;
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
 use crate::dts::model::{CellValue, CellValues};
-use crate::dts::ErrorCode;
+use crate::dts::{model, ErrorCode};
 use itertools::Itertools;
 
 impl Analysis<CellValues> for Cell {
@@ -123,6 +124,40 @@ impl TruncateFrom<u64> for u32 {
     }
 }
 
+impl CellContent {
+    fn analyze_expr<T>(
+        &self,
+        expr: &ParenExpression,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Result<CellValue<T>, Diagnostic>
+    where
+        T: TruncateFrom<u64>,
+    {
+        let result = expr.eval()?;
+        let (has_truncated, truncated) = T::truncate(result);
+        if has_truncated {
+            diagnostics.push(Diagnostic::new(
+                expr.range(),
+                ErrorCode::IntError,
+                "Truncating bits".to_string(),
+            ))
+        }
+        Ok(CellValue::Number(truncated))
+    }
+
+    fn analyze_reference<T>(&self, reference: &Reference) -> Result<CellValue<T>, Diagnostic> {
+        match reference {
+            Reference::Ref(reference) => Ok(CellValue::Reference(model::Reference::Label(
+                reference.target(),
+            ))),
+            Reference::RefPath(path) => {
+                let path = path.target().eval()?;
+                Ok(CellValue::Reference(model::Reference::Path(path)))
+            }
+        }
+    }
+}
+
 macro_rules! analysis_from_int {
     ($($t:ident),+) => {
         $(
@@ -135,19 +170,8 @@ macro_rules! analysis_from_int {
                 ) -> Result<CellValue<$t>, Diagnostic> {
                     match self {
                         CellContent::Number(int) => Ok(CellValue::Number(int.eval()?)),
-                        CellContent::Expression(expr) => {
-                            let result = expr.eval()?;
-                            let (has_truncated, truncated) = $t::truncate(result);
-                            if has_truncated {
-                                diagnostics.push(Diagnostic::new(
-                                    expr.range(),
-                                    ErrorCode::IntError,
-                                    "Truncating bits".to_string(),
-                                ))
-                            }
-                            Ok(CellValue::Number(truncated))
-                        }
-                        CellContent::Reference(_reference) => unimplemented!(),
+                        CellContent::Expression(expr) => self.analyze_expr(expr, diagnostics),
+                        CellContent::Reference(reference) => self.analyze_reference(reference),
                     }
                 }
             }

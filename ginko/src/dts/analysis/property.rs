@@ -1,7 +1,9 @@
 use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
+use crate::dts::ast::cell::Reference;
 use crate::dts::ast::property::{PropertyList, PropertyValue, PropertyValueKind};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::{Eval, InfallibleEval};
+use crate::dts::model;
 use crate::dts::model::Value;
 use itertools::Itertools;
 
@@ -34,7 +36,14 @@ impl Analysis<Value> for PropertyValue {
             PropertyValueKind::Cell(cell) => {
                 Ok(Value::Cell(cell.analyze(context, project, diagnostics)?))
             }
-            PropertyValueKind::Reference(_reference) => unimplemented!(),
+            PropertyValueKind::Reference(reference) => match reference {
+                Reference::Ref(reference) => Ok(Value::Reference(model::Reference::Label(
+                    reference.target(),
+                ))),
+                Reference::RefPath(path) => Ok(Value::Reference(model::Reference::Path(
+                    path.target().eval()?,
+                ))),
+            },
             PropertyValueKind::ByteString(byte_string) => Ok(Value::Bytes(byte_string.eval()?)),
         }
     }

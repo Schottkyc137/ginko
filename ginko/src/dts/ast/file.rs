@@ -3,7 +3,8 @@ use crate::dts::ast::node::Node;
 use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
 use crate::dts::eval::property::UnquoteStrExtension;
 use crate::dts::syntax::SyntaxKind::*;
-use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
+use crate::dts::syntax::{Lang, Parser, SyntaxNode, SyntaxToken};
+use rowan::api::Preorder;
 
 ast_node! {
     struct File(FILE);
@@ -14,6 +15,10 @@ impl_from_str!(File => Parser::parse_file);
 impl File {
     pub fn children(&self) -> impl Iterator<Item = FileItemKind> {
         self.0.children().filter_map(FileItemKind::cast)
+    }
+
+    pub fn walk(&self) -> Preorder<Lang> {
+        self.0.preorder()
     }
 }
 

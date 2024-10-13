@@ -1,13 +1,48 @@
 use crate::dts::analysis::project::ProjectState;
 use crate::dts::analysis::{Analysis, AnalysisContext, CyclicDependencyEntry, PushIntoDiagnostics};
-use crate::dts::ast::file as ast;
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
+use crate::dts::ast::node::Node;
+use crate::dts::ast::{file as ast, Cast};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
+use crate::dts::model::{NodeName, Path};
 use crate::dts::{model, ErrorCode, FileType};
 use itertools::Itertools;
-use rowan::TextRange;
+use rowan::{TextRange, WalkEvent};
+use std::collections::HashMap;
 use std::path::PathBuf;
+
+impl ast::File {
+    pub fn extract_labels(&self, diagnostics: &mut Vec<Diagnostic>) -> HashMap<String, Path> {
+        let mut labels: HashMap<String, Path> = HashMap::new();
+        let mut path = Path::new();
+        for event in self.walk().filter_map(|event| match event {
+            WalkEvent::Enter(node) => Node::cast(node).map(WalkEvent::Enter),
+            WalkEvent::Leave(node) => Node::cast(node).map(WalkEvent::Leave),
+        }) {
+            match event {
+                WalkEvent::Enter(node) => {
+                    match node.name().eval() {
+                        Ok(name) => path.push(name),
+                        Err(err) => {
+                            diagnostics.push(err.into());
+                            path.push(NodeName::simple(node.name().text()))
+                        }
+                    }
+
+                    if let Some(label) = node.label() {
+                        // TODO: duplicates
+                        labels.insert(label.to_string(), path.clone());
+                    }
+                }
+                WalkEvent::Leave(_) => {
+                    path.pop();
+                }
+            }
+        }
+        labels
+    }
+}
 
 impl Analysis<model::File> for ast::File {
     fn analyze(
@@ -54,7 +89,7 @@ impl Analysis<model::File> for ast::File {
                 }
                 FileItemKind::ReserveMemory(reserved) => {
                     if let Some(mem) = reserved
-                        .analyze(context, project, diagnostics)
+                        .analyze(&context, project, diagnostics)
                         .or_push_into(diagnostics)
                     {
                         reserved_memory.push(mem)
@@ -62,12 +97,12 @@ impl Analysis<model::File> for ast::File {
                 }
                 FileItemKind::Node(node) => {
                     if let Some((name, body)) = node
-                        .analyze(context, project, diagnostics)
+                        .analyze(&context, project, diagnostics)
                         .or_push_into(diagnostics)
                     {
                         // TODO: referenced nodes
                         // TODO: duplicates
-                        if name == "/" {
+                        if name.is_root() {
                             root.merge(body)
                         } else {
                             diagnostics.push(Diagnostic::new(

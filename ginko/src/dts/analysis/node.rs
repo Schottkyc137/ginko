@@ -2,7 +2,9 @@ use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiag
 use crate::dts::ast::node as ast;
 use crate::dts::ast::node::NodeOrProperty;
 use crate::dts::diagnostics::Diagnostic;
+use crate::dts::eval::Eval;
 use crate::dts::model;
+use crate::dts::model::NodeName;
 use std::collections::HashMap;
 
 impl Analysis<model::Node> for ast::NodeBody {
@@ -36,22 +38,23 @@ impl Analysis<model::Node> for ast::NodeBody {
                     // TODO: duplicates
                     properties.insert(name, property);
                 }
-                NodeOrProperty::DeleteSpec(_) => unimplemented!(),
+                // we just ignore this for now
+                NodeOrProperty::DeleteSpec(_) => {}
             }
         }
         Ok(model::Node::new(nodes, properties))
     }
 }
 
-impl Analysis<(String, model::Node)> for ast::Node {
+impl Analysis<(NodeName, model::Node)> for ast::Node {
     fn analyze(
         &self,
         context: &AnalysisContext,
         project: &ProjectState,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<(String, model::Node), Diagnostic> {
+    ) -> Result<(NodeName, model::Node), Diagnostic> {
         // TODO: node name unwrapped
-        let name = self.name().node_name().unwrap();
+        let name = self.name().eval()?;
         let body = self.body().analyze(context, project, diagnostics)?;
         Ok((name, body))
     }
@@ -93,7 +96,7 @@ node {
         .unwrap()
         .analyze_no_errors();
 
-        assert_eq!(node_name, "node".to_owned());
+        assert_eq!(node_name, "node".into());
         assert_eq!(
             body,
             NodeBuilder::new()

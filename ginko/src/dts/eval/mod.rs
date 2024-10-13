@@ -1,4 +1,5 @@
 pub mod expression;
+mod name;
 pub mod property;
 
 use crate::dts::diagnostics::Diagnostic;
