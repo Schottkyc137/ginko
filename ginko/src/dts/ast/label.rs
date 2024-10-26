@@ -1,7 +1,7 @@
-use crate::dts::ast::Cast;
 use crate::dts::ast::{ast_node, impl_from_str};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};
+use rowan::ast::AstNode;
 
 ast_node! {
     struct Label(LABEL);

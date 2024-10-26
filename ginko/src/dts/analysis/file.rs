@@ -1,17 +1,17 @@
+use super::project::ProjectState;
 use crate::dts::analysis::{Analyzer, CyclicDependencyEntry, PushIntoDiagnostics};
+use crate::dts::ast::file as ast;
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
 use crate::dts::ast::node::Node;
-use crate::dts::ast::{file as ast, Cast};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
 use crate::dts::model::{NodeName, Path};
 use crate::dts::{model, ErrorCode, FileType};
 use itertools::Itertools;
+use rowan::ast::AstNode;
 use rowan::{TextRange, WalkEvent};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-use super::project::ProjectState;
 
 #[derive(Debug, Clone)]
 pub struct LabelLocation {

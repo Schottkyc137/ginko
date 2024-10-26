@@ -209,10 +209,10 @@ impl Eval<u64, IntEvalError> for Expression {
 #[cfg(test)]
 mod tests {
     use crate::dts::ast::expression::Expression;
-    use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
     use crate::dts::lex::lex;
     use crate::dts::syntax::Parser;
+    use rowan::ast::AstNode;
 
     fn check_equal(expression: &str, result: u64) {
         let (ast, diag) = Parser::new(lex(expression).into_iter()).parse(Parser::parse_expression);

@@ -1,9 +1,11 @@
 use crate::dts::ast::label::Label;
 use crate::dts::ast::property::PropertyList;
-use crate::dts::ast::{ast_node, impl_from_str, Cast};
+use crate::dts::ast::{ast_node, impl_from_str};
+use crate::dts::syntax::Parser;
 use crate::dts::syntax::SyntaxKind::*;
-use crate::dts::syntax::SyntaxToken;
-use crate::dts::syntax::{Parser, SyntaxNode};
+use crate::dts::syntax::{Lang, SyntaxToken};
+use rowan::ast::AstNode;
+use rowan::Language;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -87,14 +89,34 @@ pub enum NodeOrProperty {
     DeleteSpec(DeleteSpec),
 }
 
-impl Cast for NodeOrProperty {
-    fn cast(node: SyntaxNode) -> Option<Self> {
+impl rowan::ast::AstNode for NodeOrProperty {
+    type Language = Lang;
+
+    fn can_cast(kind: <Self::Language as Language>::Kind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(kind, NODE | PROPERTY | DELETE_SPEC)
+    }
+
+    fn cast(node: rowan::SyntaxNode<Self::Language>) -> Option<Self>
+    where
+        Self: Sized,
+    {
         Some(match node.kind() {
             NODE => NodeOrProperty::Node(Node::cast_unchecked(node)),
             PROPERTY => NodeOrProperty::Property(Property::cast_unchecked(node)),
             DELETE_SPEC => NodeOrProperty::DeleteSpec(DeleteSpec::cast_unchecked(node)),
             _ => return None,
         })
+    }
+
+    fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
+        match self {
+            NodeOrProperty::Node(node) => node.syntax(),
+            NodeOrProperty::Property(property) => property.syntax(),
+            NodeOrProperty::DeleteSpec(delete_spec) => delete_spec.syntax(),
+        }
     }
 }
 

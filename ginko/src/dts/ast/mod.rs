@@ -24,12 +24,22 @@ macro_rules! ast_node {
             }
         }
 
-        impl $crate::dts::ast::Cast for $ast {
+        impl rowan::ast::AstNode for $ast {
+            type Language = $crate::dts::syntax::Lang;
+
             fn cast(node: $crate::dts::syntax::SyntaxNode) -> Option<Self> {
                 match node.kind() {
                     $kind => Some(Self(node)),
                     _ => None,
                 }
+            }
+
+            fn can_cast(kind: $crate::dts::syntax::SyntaxKind) -> bool {
+                matches!(kind, $kind)
+            }
+
+            fn syntax(&self) -> &$crate::dts::syntax::SyntaxNode {
+                &self.0
             }
         }
 
@@ -72,29 +82,5 @@ macro_rules! impl_from_str {
     };
 }
 
-use crate::dts::syntax::SyntaxNode;
 pub(crate) use ast_node;
 pub(crate) use impl_from_str;
-
-pub trait Cast
-where
-    Self: Sized,
-{
-    fn cast(node: SyntaxNode) -> Option<Self>;
-}
-
-pub trait CastExt<T>
-where
-    T: Cast + Sized,
-{
-    fn cast(self) -> Option<T>;
-}
-
-impl<T> CastExt<T> for SyntaxNode
-where
-    T: Cast + Sized,
-{
-    fn cast(self) -> Option<T> {
-        T::cast(self)
-    }
-}

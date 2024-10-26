@@ -1,18 +1,18 @@
+use super::cyclic_dependency::CyclicDependencyEntry;
+use super::Analyzer;
 use crate::dts::analysis::file::LabelMap;
-use crate::dts::ast::{Cast, FileItemKind, Include};
+use crate::dts::ast::{FileItemKind, Include};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::lex;
 use crate::dts::syntax::Parser;
 use crate::dts::{ast, model, ErrorCode, FileType};
 use itertools::Itertools;
+use rowan::ast::AstNode;
 use rowan::TextRange;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
-
-use super::cyclic_dependency::CyclicDependencyEntry;
-use super::Analyzer;
 
 #[derive(Default, Debug)]
 pub struct Project {

@@ -1,9 +1,11 @@
 use crate::dts::ast::expression::{IntConstant, ParenExpression};
 use crate::dts::ast::node::Name;
 use crate::dts::ast::property::BitsSpec;
-use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
+use crate::dts::ast::{ast_node, impl_from_str};
 use crate::dts::syntax::SyntaxKind::*;
-use crate::dts::syntax::{Parser, SyntaxNode, SyntaxToken};
+use crate::dts::syntax::{Lang, Parser, SyntaxKind, SyntaxToken};
+use rowan::ast::AstNode;
+use rowan::Language;
 
 #[derive(Debug)]
 pub enum Reference {
@@ -11,12 +13,31 @@ pub enum Reference {
     RefPath(RefPath),
 }
 
-impl Reference {
-    pub fn cast(node: SyntaxNode) -> Option<Self> {
+impl AstNode for Reference {
+    type Language = Lang;
+
+    fn can_cast(kind: SyntaxKind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(kind, REF | REF_PATH)
+    }
+
+    fn cast(node: rowan::SyntaxNode<Self::Language>) -> Option<Self>
+    where
+        Self: Sized,
+    {
         match node.kind() {
             REF => Some(Reference::Ref(Ref::cast_unchecked(node))),
             REF_PATH => Some(Reference::RefPath(RefPath::cast_unchecked(node))),
             _ => None,
+        }
+    }
+
+    fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
+        match self {
+            Reference::Ref(reference) => reference.syntax(),
+            Reference::RefPath(ref_path) => ref_path.syntax(),
         }
     }
 }
@@ -58,15 +79,35 @@ pub enum CellContent {
     Reference(Reference),
 }
 
-impl Cast for CellContent {
-    fn cast(node: SyntaxNode) -> Option<Self> {
+impl rowan::ast::AstNode for CellContent {
+    type Language = Lang;
+
+    fn can_cast(kind: <Self::Language as Language>::Kind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(kind, INT | PAREN_EXPRESSION | REF | REF_PATH)
+    }
+
+    fn cast(node: rowan::SyntaxNode<Self::Language>) -> Option<Self>
+    where
+        Self: Sized,
+    {
         Some(match node.kind() {
-            INT => CellContent::Number(node.cast().unwrap()),
-            PAREN_EXPRESSION => CellContent::Expression(node.cast().unwrap()),
-            REF => CellContent::Reference(Reference::Ref(node.cast().unwrap())),
-            REF_PATH => CellContent::Reference(Reference::RefPath(node.cast().unwrap())),
+            INT => CellContent::Number(IntConstant::cast_unchecked(node)),
+            PAREN_EXPRESSION => CellContent::Expression(ParenExpression::cast_unchecked(node)),
+            REF => CellContent::Reference(Reference::Ref(Ref::cast_unchecked(node))),
+            REF_PATH => CellContent::Reference(Reference::RefPath(RefPath::cast_unchecked(node))),
             _ => return None,
         })
+    }
+
+    fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
+        match self {
+            CellContent::Number(number) => number.syntax(),
+            CellContent::Expression(expression) => expression.syntax(),
+            CellContent::Reference(reference) => reference.syntax(),
+        }
     }
 }
 
@@ -123,12 +164,12 @@ impl CellInner {
 #[cfg(test)]
 mod tests {
     use crate::dts::ast::cell::{Cell, CellContent, Reference};
-    use crate::dts::ast::Cast;
     use crate::dts::eval::Eval;
     use crate::dts::lex::lex;
     use crate::dts::syntax::Parser;
     use assert_matches::assert_matches;
     use itertools::Itertools;
+    use rowan::ast::AstNode;
     use rowan::{TextRange, TextSize};
 
     fn parse_to_cell(value: &str) -> Cell {

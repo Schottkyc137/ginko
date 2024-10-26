@@ -1,9 +1,10 @@
 use crate::dts::ast::cell::{Cell, Reference};
 use crate::dts::ast::expression::IntConstant;
 use crate::dts::ast::label::Label;
-use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
+use crate::dts::ast::{ast_node, impl_from_str};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Parser, SyntaxToken};
+use rowan::ast::AstNode;
 
 ast_node! {
     struct ByteString(BYTE_STRING);
@@ -91,7 +92,7 @@ impl BitsSpec {
     }
 
     pub fn bits(&self) -> IntConstant {
-        self.0.first_child().unwrap().cast().unwrap()
+        IntConstant::cast(self.0.first_child().unwrap()).unwrap()
     }
 }
 

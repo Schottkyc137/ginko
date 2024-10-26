@@ -1,10 +1,11 @@
 use crate::dts::ast::expression::IntConstant;
 use crate::dts::ast::node::Node;
-use crate::dts::ast::{ast_node, impl_from_str, Cast, CastExt};
+use crate::dts::ast::{ast_node, impl_from_str};
 use crate::dts::eval::property::UnquoteStrExtension;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Lang, Parser, SyntaxNode, SyntaxToken};
 use rowan::api::Preorder;
+use rowan::ast::AstNode;
 
 ast_node! {
     struct File(FILE);
@@ -98,11 +99,11 @@ impl ReserveMemory {
     }
 
     pub fn address(&self) -> IntConstant {
-        self.0.children().nth(0).unwrap().cast().unwrap()
+        IntConstant::cast(self.0.children().nth(0).unwrap()).unwrap()
     }
 
     pub fn length(&self) -> IntConstant {
-        self.0.children().nth(1).unwrap().cast().unwrap()
+        IntConstant::cast(self.0.children().nth(1).unwrap()).unwrap()
     }
 }
 
