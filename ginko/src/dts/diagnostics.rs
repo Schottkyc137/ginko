@@ -74,10 +74,28 @@ impl Display for TokenKind {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct RelatedDiagnostic {
+    path: PathBuf,
+    range: TextRange,
+    message: String,
+}
+
+impl RelatedDiagnostic {
+    pub fn new(source: PathBuf, range: TextRange, message: impl Into<String>) -> RelatedDiagnostic {
+        RelatedDiagnostic {
+            path: source,
+            range,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct Diagnostic {
     pub code: ErrorCode,
     pub range: TextRange,
     pub message: String,
+    pub related: Vec<RelatedDiagnostic>,
 }
 
 impl Diagnostic {
@@ -86,7 +104,23 @@ impl Diagnostic {
             code,
             range,
             message: message.into(),
+            related: Vec::new(),
         }
+    }
+
+    pub fn add_related(&mut self, related_diagnostic: RelatedDiagnostic) {
+        self.related.push(related_diagnostic)
+    }
+
+    pub fn with_related(
+        mut self,
+        source: PathBuf,
+        range: TextRange,
+        message: impl Into<String>,
+    ) -> Diagnostic {
+        self.related
+            .push(RelatedDiagnostic::new(source, range, message));
+        self
     }
 }
 

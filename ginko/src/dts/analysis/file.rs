@@ -1,5 +1,4 @@
-use crate::dts::analysis::project::ProjectState;
-use crate::dts::analysis::{Analysis, AnalysisContext, CyclicDependencyEntry, PushIntoDiagnostics};
+use crate::dts::analysis::{Analyzer, CyclicDependencyEntry, PushIntoDiagnostics};
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
 use crate::dts::ast::node::Node;
 use crate::dts::ast::{file as ast, Cast};
@@ -12,50 +11,32 @@ use rowan::{TextRange, WalkEvent};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-impl ast::File {
-    pub fn extract_labels(&self, diagnostics: &mut Vec<Diagnostic>) -> HashMap<String, Path> {
-        let mut labels: HashMap<String, Path> = HashMap::new();
-        let mut path = Path::new();
-        for event in self.walk().filter_map(|event| match event {
-            WalkEvent::Enter(node) => Node::cast(node).map(WalkEvent::Enter),
-            WalkEvent::Leave(node) => Node::cast(node).map(WalkEvent::Leave),
-        }) {
-            match event {
-                WalkEvent::Enter(node) => {
-                    match node.name().eval() {
-                        Ok(name) => path.push(name),
-                        Err(err) => {
-                            diagnostics.push(err.into());
-                            path.push(NodeName::simple(node.name().text()))
-                        }
-                    }
+use super::project::ProjectState;
 
-                    if let Some(label) = node.label() {
-                        // TODO: duplicates
-                        labels.insert(label.to_string(), path.clone());
-                    }
-                }
-                WalkEvent::Leave(_) => {
-                    path.pop();
-                }
-            }
-        }
-        labels
-    }
+#[derive(Debug, Clone)]
+pub struct LabelLocation {
+    ast_path: Path,
+    file: PathBuf,
+    range: TextRange,
 }
 
-impl Analysis<model::File> for ast::File {
-    fn analyze(
+impl Analyzer {
+    pub fn analyze_file(
         &self,
-        context: &AnalysisContext,
         project: &ProjectState,
+        path: PathBuf,
+        file_type: FileType,
+        file: &ast::File,
+        mut include_path: Vec<CyclicDependencyEntry>,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<model::File, Diagnostic> {
+    ) -> (model::File, LabelMap, FileType) {
         let mut dts_header_seen = false;
         let mut is_plugin = false;
         let mut reserved_memory = Vec::new();
         let mut root = model::Node::default();
-        for child in self.children() {
+        let mut labels = LabelMap::new();
+        file.extract_labels(path, &mut labels, diagnostics);
+        for child in file.children() {
             match child {
                 FileItemKind::Header(header) => match header.kind() {
                     HeaderKind::DtsV1 => dts_header_seen = true,
@@ -63,41 +44,54 @@ impl Analysis<model::File> for ast::File {
                 },
                 FileItemKind::Include(include) => {
                     if let Some(path) = include.target().map(PathBuf::from) {
-                        let mut ctx = context.clone();
-                        ctx.file_type = FileType::DtSourceInclude;
                         let location = include.target_tok().unwrap().text_range();
                         let entry = CyclicDependencyEntry::new(path.clone(), location);
-                        if ctx.path.contains(&entry) {
-                            let diag_text = ctx
-                                .path
+                        if include_path.contains(&entry) {
+                            let diag_text = include_path
+                                .clone()
                                 .into_iter()
-                                .map(|entry| entry.path.display().to_string())
-                                .chain(std::iter::once(entry.path.display().to_string()))
+                                .map(|entry| entry.path().display().to_string())
+                                .chain(std::iter::once(entry.path().display().to_string()))
                                 .join(" -> ");
                             let diag = Diagnostic::new(
-                                entry.location,
+                                entry.location(),
                                 ErrorCode::CyclicDependencyError,
                                 format!("Cyclic dependency: {diag_text}"),
                             );
                             diagnostics.push(diag);
                             continue;
                         } else {
-                            ctx.path.push(entry);
-                            project.analyze(&path, ctx);
+                            println!("Borrowing {entry:?}");
+                            include_path.push(entry);
+                            if let Some(cell) = project.get(&path) {
+                                let mut analysis_diagnostics = Vec::new();
+                                let (file, labels, kind) = {
+                                    let path = cell.borrow().path().unwrap().clone();
+                                    self.analyze_file(
+                                        project,
+                                        path,
+                                        FileType::DtSourceInclude,
+                                        cell.borrow().ast(),
+                                        include_path.clone(),
+                                        &mut analysis_diagnostics,
+                                    )
+                                };
+                                let mut borrow = cell.borrow_mut();
+                                borrow.set_analysis_result(file, labels, analysis_diagnostics);
+                                borrow.set_kind(kind);
+                            }
                         }
                     }
                 }
                 FileItemKind::ReserveMemory(reserved) => {
-                    if let Some(mem) = reserved
-                        .analyze(&context, project, diagnostics)
-                        .or_push_into(diagnostics)
+                    if let Some(mem) = self.analyze_memreserve(&reserved).or_push_into(diagnostics)
                     {
                         reserved_memory.push(mem)
                     }
                 }
                 FileItemKind::Node(node) => {
-                    if let Some((name, body)) = node
-                        .analyze(&context, project, diagnostics)
+                    if let Some((name, body)) = self
+                        .analyze_node(&node, diagnostics)
                         .or_push_into(diagnostics)
                     {
                         // TODO: referenced nodes
@@ -115,39 +109,125 @@ impl Analysis<model::File> for ast::File {
                 }
             }
         }
-        if context.file_type == FileType::DtSource && !dts_header_seen {
+        if file_type == FileType::DtSource && !dts_header_seen {
             diagnostics.push(Diagnostic::new(
                 TextRange::default(),
                 ErrorCode::NonDtsV1,
                 "Missing /dts-v1/ header",
             ))
         }
-        Ok(model::File::new(root, reserved_memory))
+        let out_file_type = if is_plugin {
+            FileType::DtSourceOverlay
+        } else {
+            file_type
+        };
+        (
+            model::File::new(root, reserved_memory),
+            labels,
+            out_file_type,
+        )
+    }
+
+    pub fn analyze_memreserve(
+        &self,
+        reserve: &ast::ReserveMemory,
+    ) -> Result<model::ReservedMemory, Diagnostic> {
+        let address: u64 = reserve.address().eval()?;
+        let length: u64 = reserve.length().eval()?;
+        Ok(model::ReservedMemory { address, length })
     }
 }
 
-impl Analysis<model::ReservedMemory> for ast::ReserveMemory {
-    fn analyze(
+pub type LabelMap = HashMap<String, LabelLocation>;
+
+impl ast::File {
+    pub fn extract_labels(
         &self,
-        _: &AnalysisContext,
-        _: &ProjectState,
-        _: &mut Vec<Diagnostic>,
-    ) -> Result<model::ReservedMemory, Diagnostic> {
-        let address: u64 = self.address().eval()?;
-        let length: u64 = self.length().eval()?;
-        Ok(model::ReservedMemory { address, length })
+        file: PathBuf,
+        labels: &mut LabelMap,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let mut path = Path::new();
+        for event in self.walk().filter_map(|event| match event {
+            WalkEvent::Enter(node) => Node::cast(node).map(WalkEvent::Enter),
+            WalkEvent::Leave(node) => Node::cast(node).map(WalkEvent::Leave),
+        }) {
+            match event {
+                WalkEvent::Enter(node) => {
+                    match node.name().eval() {
+                        Ok(name) => path.push(name),
+                        Err(err) => {
+                            diagnostics.push(err.into());
+                            path.push(NodeName::simple(node.name().text()))
+                        }
+                    }
+
+                    if let Some(label) = node.label() {
+                        let location = LabelLocation {
+                            ast_path: path.clone(),
+                            file: file.clone(),
+                            range: label.range(),
+                        };
+                        // TODO: duplicates
+                        if let Some(previous) = labels.insert(label.to_string(), location) {
+                            diagnostics.push(
+                                Diagnostic::new(
+                                    label.range(),
+                                    ErrorCode::DuplicateLabel,
+                                    "Duplicate label",
+                                )
+                                .with_related(
+                                    previous.file,
+                                    previous.range,
+                                    "Previously defined here",
+                                ),
+                            )
+                        }
+                    }
+                }
+                WalkEvent::Leave(_) => {
+                    path.pop();
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::analysis::NoErrorAnalysis;
+    use std::path::PathBuf;
+
+    use crate::dts::analysis::project::ProjectState;
+    use crate::dts::analysis::{Analyzer, NoErrorAnalysis, WithDiagnosticAnalysis};
     use crate::dts::ast::file::File;
+    use crate::dts::diagnostics::Diagnostic;
     use crate::dts::model::{Node, NodeBuilder, ReservedMemory};
+    use crate::dts::{model, FileType};
+
+    use super::LabelMap;
+
+    impl WithDiagnosticAnalysis<(model::File, LabelMap, FileType)> for File {
+        fn analyze_with_diagnostics(
+            &self,
+        ) -> (Option<(model::File, LabelMap, FileType)>, Vec<Diagnostic>) {
+            let analyzer = Analyzer::new();
+            let project = ProjectState::default();
+            let mut diagnostics = Vec::new();
+            let value = analyzer.analyze_file(
+                &project,
+                PathBuf::default(),
+                crate::dts::FileType::DtSource,
+                self,
+                vec![],
+                &mut diagnostics,
+            );
+            (Some(value), diagnostics)
+        }
+    }
 
     #[test]
     fn empty_file() {
-        let file = "\
+        let (file, ..) = "\
 /dts-v1/;
 
 / {};
@@ -160,7 +240,7 @@ mod tests {
 
     #[test]
     fn file_with_memreserve() {
-        let file = "\
+        let (file, ..) = "\
 /dts-v1/;
 
 /memreserve/ 0x2000 0x4000;
@@ -189,7 +269,7 @@ mod tests {
 
     #[test]
     fn file_with_sub_nodes() {
-        let file = "\
+        let (file, ..) = "\
 /dts-v1/;
 
 / {

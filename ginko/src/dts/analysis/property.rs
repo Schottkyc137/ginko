@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, ProjectState, PushIntoDiagnostics};
+use crate::dts::analysis::{Analyzer, PushIntoDiagnostics};
 use crate::dts::ast::cell::Reference;
 use crate::dts::ast::property::{PropertyList, PropertyValue, PropertyValueKind};
 use crate::dts::diagnostics::Diagnostic;
@@ -7,34 +7,30 @@ use crate::dts::model;
 use crate::dts::model::Value;
 use itertools::Itertools;
 
-impl Analysis<Vec<Value>> for PropertyList {
-    fn analyze(
+impl Analyzer {
+    pub fn analyze_property_list(
         &self,
-        context: &AnalysisContext,
-        project: &ProjectState,
+        property_list: &PropertyList,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<Vec<Value>, Diagnostic> {
-        Ok(self
+    ) -> Vec<Value> {
+        property_list
             .items()
             .filter_map(|item| {
-                item.analyze(context, project, diagnostics)
+                self.analyze_property_value(&item, diagnostics)
                     .or_push_into(diagnostics)
             })
-            .collect_vec())
+            .collect_vec()
     }
-}
 
-impl Analysis<Value> for PropertyValue {
-    fn analyze(
+    pub fn analyze_property_value(
         &self,
-        context: &AnalysisContext,
-        project: &ProjectState,
+        value: &PropertyValue,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<Value, Diagnostic> {
-        match self.kind() {
+        match value.kind() {
             PropertyValueKind::String(string) => Ok(Value::String(string.value())),
             PropertyValueKind::Cell(cell) => {
-                Ok(Value::Cell(cell.analyze(context, project, diagnostics)?))
+                Ok(Value::Cell(self.analyze_cell(&cell, diagnostics)?))
             }
             PropertyValueKind::Reference(reference) => match reference {
                 Reference::Ref(reference) => Ok(Value::Reference(model::Reference::Label(
@@ -51,12 +47,34 @@ impl Analysis<Value> for PropertyValue {
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::analysis::{NoErrorAnalysis, WithDiagnosticAnalysis};
+    use crate::dts::analysis::{
+        Analyzer, NoErrorAnalysis, PushIntoDiagnostics, WithDiagnosticAnalysis,
+    };
     use crate::dts::ast::property::{PropertyList, PropertyValue};
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::model::{CellValue, CellValues, Value};
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
+
+    impl WithDiagnosticAnalysis<Value> for PropertyValue {
+        fn analyze_with_diagnostics(&self) -> (Option<Value>, Vec<Diagnostic>) {
+            let analyzer = Analyzer::new();
+            let mut diagnostics = Vec::new();
+            let value = analyzer
+                .analyze_property_value(self, &mut diagnostics)
+                .or_push_into(&mut diagnostics);
+            (value, diagnostics)
+        }
+    }
+
+    impl WithDiagnosticAnalysis<Vec<Value>> for PropertyList {
+        fn analyze_with_diagnostics(&self) -> (Option<Vec<Value>>, Vec<Diagnostic>) {
+            let analyzer = Analyzer::new();
+            let mut diagnostics = Vec::new();
+            let value = analyzer.analyze_property_list(self, &mut diagnostics);
+            (Some(value), diagnostics)
+        }
+    }
 
     #[test]
     fn eval_simple_property_value() {
@@ -93,7 +111,10 @@ mod tests {
             .parse::<PropertyList>()
             .unwrap()
             .analyze_with_diagnostics();
-        assert_eq!(properties, vec![Value::String("Hello, World!".into()),]);
+        assert_eq!(
+            properties,
+            Some(vec![Value::String("Hello, World!".into())])
+        );
         assert_eq!(
             diagnostics,
             vec![Diagnostic::new(

@@ -4,6 +4,8 @@ use crate::dts::ast::{ast_node, impl_from_str, Cast};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxToken;
 use crate::dts::syntax::{Parser, SyntaxNode};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 ast_node! { struct Name(NAME); }
 
@@ -17,6 +19,22 @@ impl Name {
 pub enum IllegalNodeName {
     IllegalChar(String, usize),
 }
+
+impl Display for IllegalNodeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IllegalNodeName::IllegalChar(str, pos) => {
+                write!(
+                    f,
+                    "Name contains illegal character '{}'",
+                    str.chars().nth(*pos).unwrap()
+                )
+            }
+        }
+    }
+}
+
+impl Error for IllegalNodeName {}
 
 impl Name {
     // TODO: This needs to be revisited

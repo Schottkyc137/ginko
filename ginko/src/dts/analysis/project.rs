@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, CyclicDependencyEntry, PushIntoDiagnostics};
+use crate::dts::analysis::file::LabelMap;
 use crate::dts::ast::{Cast, FileItemKind, Include};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::lex;
@@ -10,6 +10,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
+
+use super::cyclic_dependency::CyclicDependencyEntry;
+use super::Analyzer;
 
 #[derive(Default, Debug)]
 pub struct Project {
@@ -35,6 +38,7 @@ impl Project {
                 ast: node,
                 syntax_diagnostics,
                 model: None,
+                labels: HashMap::default(),
                 analysis_diagnostics: vec![],
             },
         );
@@ -52,21 +56,7 @@ impl Project {
     /// If the file can't be found, this is a noop.
     pub fn analyze(&mut self, file: &PathBuf) {
         self.resolve_includes(file);
-        let kind = self
-            .state
-            .files
-            .get(file)
-            .map(|file| file.borrow().kind)
-            .unwrap_or_default();
-        let context = AnalysisContext {
-            file_type: kind,
-            path: vec![CyclicDependencyEntry::new(
-                file.clone(),
-                TextRange::default(),
-            )],
-            ..Default::default()
-        };
-        self.state.analyze(file, context);
+        self.state.analyze(file);
     }
 
     /// Resolve includes from the file denoted by `path`
@@ -134,6 +124,7 @@ pub struct ProjectFile {
     ast: ast::File,
     syntax_diagnostics: Vec<Diagnostic>,
     model: Option<model::File>,
+    labels: LabelMap,
     analysis_diagnostics: Vec<Diagnostic>,
 }
 
@@ -156,8 +147,14 @@ impl ProjectFile {
         &self.ast
     }
 
-    pub fn set_analysis_result(&mut self, file: Option<model::File>, diagnostics: Vec<Diagnostic>) {
-        self.model = file;
+    pub fn set_analysis_result(
+        &mut self,
+        file: model::File,
+        labels: LabelMap,
+        diagnostics: Vec<Diagnostic>,
+    ) {
+        self.model = Some(file);
+        self.labels = labels;
         self.analysis_diagnostics.extend(diagnostics);
     }
 
@@ -196,6 +193,7 @@ impl ProjectState {
                     ast: ast::File::cast(node).unwrap(),
                     syntax_diagnostics: diagnostics,
                     model: None,
+                    labels: HashMap::default(),
                     analysis_diagnostics: Vec::new(),
                 }),
             );
@@ -203,17 +201,24 @@ impl ProjectState {
         Ok(self.files.get(&path).unwrap())
     }
 
-    pub fn analyze(&self, file: &PathBuf, context: AnalysisContext) {
+    pub fn analyze(&self, file: &PathBuf) {
         if let Some(cell) = self.files.get(file) {
             let mut analysis_diagnostics = Vec::new();
-            let model = cell
-                .borrow()
-                .ast
-                .analyze(&context, self, &mut analysis_diagnostics)
-                .or_push_into(&mut analysis_diagnostics);
+            let analyzer = Analyzer::new();
+            let path = cell.borrow().path.clone().unwrap();
+            let file_type = FileType::from(path.as_path());
+            let cde = CyclicDependencyEntry::new(path.clone(), TextRange::default());
+            let (file, labels, kind) = analyzer.analyze_file(
+                self,
+                path,
+                file_type,
+                cell.borrow().ast(),
+                vec![cde],
+                &mut analysis_diagnostics,
+            );
             let mut borrow = cell.borrow_mut();
-            borrow.set_analysis_result(model, analysis_diagnostics);
-            borrow.set_kind(context.file_type);
+            borrow.set_analysis_result(file, labels, analysis_diagnostics);
+            borrow.set_kind(kind);
         }
     }
 }

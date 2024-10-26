@@ -25,6 +25,7 @@ pub enum ErrorCode {
     UnbalancedParentheses,
     MisplacedDtsHeader,
     DuplicateDirective,
+    DuplicateLabel,
     IncorrectDirective,
     ParserError,
     IOError,
@@ -66,6 +67,7 @@ impl Default for SeverityMap {
             | IOError
             | ErrorsInInclude
             | CyclicDependencyError
+            | DuplicateLabel
             | IncorrectDirective => Severity::Error,
             NameTooLong
             | Truncation

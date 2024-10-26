@@ -1,4 +1,4 @@
-use crate::dts::analysis::{Analysis, AnalysisContext, BitWidth, ProjectState};
+use crate::dts::analysis::{Analyzer, BitWidth};
 use crate::dts::ast::cell::{Cell, CellContent, Reference};
 use crate::dts::ast::expression::ParenExpression;
 use crate::dts::diagnostics::Diagnostic;
@@ -7,14 +7,13 @@ use crate::dts::model::{CellValue, CellValues};
 use crate::dts::{model, ErrorCode};
 use itertools::Itertools;
 
-impl Analysis<CellValues> for Cell {
-    fn analyze(
+impl Analyzer {
+    pub fn analyze_cell(
         &self,
-        context: &AnalysisContext,
-        project: &ProjectState,
+        cell: &Cell,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<CellValues, Diagnostic> {
-        let bits = match self.bits() {
+        let bits = match cell.bits() {
             None => BitWidth::default(),
             Some(spec) => {
                 let res: u32 = spec.bits().eval()?;
@@ -30,55 +29,27 @@ impl Analysis<CellValues> for Cell {
         // this stops at the first error.
         // One could alternatively push all errors to the diagnostics; unsure what's better
         match bits {
-            BitWidth::W8 => self
+            BitWidth::W8 => cell
                 .content()
-                .map(|content| {
-                    <CellContent as Analysis<CellValue<u8>>>::analyze(
-                        &content,
-                        context,
-                        project,
-                        diagnostics,
-                    )
-                })
+                .map(|content| self.analyze_u8(&content, diagnostics))
                 .try_collect(),
-            BitWidth::W16 => self
+            BitWidth::W16 => cell
                 .content()
-                .map(|content| {
-                    <CellContent as Analysis<CellValue<u16>>>::analyze(
-                        &content,
-                        context,
-                        project,
-                        diagnostics,
-                    )
-                })
+                .map(|content| self.analyze_u16(&content, diagnostics))
                 .try_collect(),
-            BitWidth::W32 => self
+            BitWidth::W32 => cell
                 .content()
-                .map(|content| {
-                    <CellContent as Analysis<CellValue<u32>>>::analyze(
-                        &content,
-                        context,
-                        project,
-                        diagnostics,
-                    )
-                })
+                .map(|content| self.analyze_u32(&content, diagnostics))
                 .try_collect(),
-            BitWidth::W64 => self
+            BitWidth::W64 => cell
                 .content()
-                .map(|content| {
-                    <CellContent as Analysis<CellValue<u64>>>::analyze(
-                        &content,
-                        context,
-                        project,
-                        diagnostics,
-                    )
-                })
+                .map(|content| self.analyze_u64(&content, diagnostics))
                 .try_collect(),
         }
     }
 }
 
-trait TruncateFrom<T> {
+pub trait TruncateFrom<T> {
     /// Truncates the value unconditionally.
     /// If the value cannot fill the required space, the returned bool is true.
     fn truncate(value: T) -> (bool, Self);
@@ -124,8 +95,8 @@ impl TruncateFrom<u64> for u32 {
     }
 }
 
-impl CellContent {
-    fn analyze_expr<T>(
+impl Analyzer {
+    pub fn analyze_expr<T>(
         &self,
         expr: &ParenExpression,
         diagnostics: &mut Vec<Diagnostic>,
@@ -145,7 +116,7 @@ impl CellContent {
         Ok(CellValue::Number(truncated))
     }
 
-    fn analyze_reference<T>(&self, reference: &Reference) -> Result<CellValue<T>, Diagnostic> {
+    pub fn analyze_reference<T>(&self, reference: &Reference) -> Result<CellValue<T>, Diagnostic> {
         match reference {
             Reference::Ref(reference) => Ok(CellValue::Reference(model::Reference::Label(
                 reference.target(),
@@ -159,16 +130,15 @@ impl CellContent {
 }
 
 macro_rules! analysis_from_int {
-    ($($t:ident),+) => {
+    ($($name:ident => $t:ident),+) => {
         $(
-            impl Analysis<CellValue<$t>> for CellContent {
-                fn analyze(
+            impl Analyzer {
+                fn $name (
                     &self,
-                    _context: &AnalysisContext,
-                    _project: &ProjectState,
-                    diagnostics: &mut Vec<Diagnostic>,
+                    content: &CellContent,
+                    diagnostics: &mut Vec<Diagnostic>
                 ) -> Result<CellValue<$t>, Diagnostic> {
-                    match self {
+                    match content {
                         CellContent::Number(int) => Ok(CellValue::Number(int.eval()?)),
                         CellContent::Expression(expr) => self.analyze_expr(expr, diagnostics),
                         CellContent::Reference(reference) => self.analyze_reference(reference),
@@ -179,16 +149,34 @@ macro_rules! analysis_from_int {
     };
 }
 
-analysis_from_int!(u8, u16, u32, u64);
+analysis_from_int!(
+    analyze_u8 => u8,
+    analyze_u16 => u16,
+    analyze_u32 => u32,
+    analyze_u64 => u64
+);
 
 #[cfg(test)]
 mod tests {
-    use crate::dts::analysis::{ExpectedErrorAnalysis, NoErrorAnalysis};
+    use crate::dts::analysis::{
+        Analyzer, NoErrorAnalysis, PushIntoDiagnostics, WithDiagnosticAnalysis,
+    };
     use crate::dts::ast::cell::Cell;
     use crate::dts::diagnostics::Diagnostic;
     use crate::dts::model::{CellValue, CellValues};
     use crate::dts::ErrorCode;
     use rowan::{TextRange, TextSize};
+
+    impl WithDiagnosticAnalysis<CellValues> for Cell {
+        fn analyze_with_diagnostics(&self) -> (Option<CellValues>, Vec<Diagnostic>) {
+            let analyzer = Analyzer::new();
+            let mut diagnostics = Vec::new();
+            let value = analyzer
+                .analyze_cell(self, &mut diagnostics)
+                .or_push_into(&mut diagnostics);
+            (value, diagnostics)
+        }
+    }
 
     #[test]
     fn analyze_simple_cell() {
@@ -279,11 +267,11 @@ mod tests {
             .analyze_exp_error();
         assert_eq!(
             diag,
-            Diagnostic::new(
+            vec![Diagnostic::new(
                 TextRange::new(TextSize::new(7), TextSize::new(9)),
                 ErrorCode::IllegalBitWidth,
                 "Illegal bit width (must be 8, 16, 32 or 64)"
-            )
+            )]
         );
     }
 
@@ -295,11 +283,11 @@ mod tests {
             .analyze_exp_error();
         assert_eq!(
             diag,
-            Diagnostic::new(
+            vec![Diagnostic::new(
                 TextRange::new(TextSize::new(10), TextSize::new(16)),
                 ErrorCode::IntError,
                 "number too large to fit in target type"
-            )
+            )]
         );
 
         let diag = "/bits/ 16 <0xABCDEF>"
@@ -308,11 +296,11 @@ mod tests {
             .analyze_exp_error();
         assert_eq!(
             diag,
-            Diagnostic::new(
+            vec![Diagnostic::new(
                 TextRange::new(TextSize::new(11), TextSize::new(19)),
                 ErrorCode::IntError,
                 "number too large to fit in target type"
-            )
+            )]
         );
 
         let diag = "/bits/ 32 <0xABCDABCDE>"
@@ -321,11 +309,11 @@ mod tests {
             .analyze_exp_error();
         assert_eq!(
             diag,
-            Diagnostic::new(
+            vec![Diagnostic::new(
                 TextRange::new(TextSize::new(11), TextSize::new(22)),
                 ErrorCode::IntError,
                 "number too large to fit in target type"
-            )
+            )]
         );
 
         let diag = "/bits/ 64 <0xABCDABCDABCDABDCE>"
@@ -334,11 +322,11 @@ mod tests {
             .analyze_exp_error();
         assert_eq!(
             diag,
-            Diagnostic::new(
+            vec![Diagnostic::new(
                 TextRange::new(TextSize::new(11), TextSize::new(30)),
                 ErrorCode::IntError,
                 "number too large to fit in target type"
-            )
+            )]
         );
     }
 }
