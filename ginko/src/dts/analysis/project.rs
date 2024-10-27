@@ -2,14 +2,14 @@ use super::cyclic_dependency::CyclicDependencyEntry;
 use super::Analyzer;
 use crate::dts::analysis::file::LabelMap;
 use crate::dts::ast::{FileItemKind, Include};
+use crate::dts::ast2::Reference;
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::lex;
-use crate::dts::syntax::Parser;
-use crate::dts::{ast, model, ErrorCode, FileType};
+use crate::dts::syntax::{Parser, SyntaxNode};
+use crate::dts::{ast, model, ErrorCode, FileType, ItemAtCursor};
 use itertools::Itertools;
-use rowan::ast::AstNode;
-use rowan::TextRange;
-use std::cell::RefCell;
+use parking_lot::RwLock;
+use rowan::{GreenNode, TextRange, TextSize};
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
@@ -25,17 +25,16 @@ impl Project {
     pub fn add_file(&mut self, location: PathBuf, contents: &str) {
         let tokens = lex(contents);
         let parser = Parser::new(tokens.into_iter());
-        let (node, syntax_diagnostics) = parser.parse(Parser::parse_file);
+        let (green, syntax_diagnostics) = parser.parse_to_green(Parser::parse_file);
 
-        let node = ast::File::cast(node).unwrap();
         let file_type = FileType::from(location.as_path());
         self.state.insert(
             location.clone(),
             ProjectFile {
-                path: Some(location.clone()),
+                path: location.clone(),
                 source: contents.to_string(),
                 kind: file_type,
-                ast: node,
+                ast: green,
                 syntax_diagnostics,
                 model: None,
                 labels: HashMap::default(),
@@ -64,7 +63,7 @@ impl Project {
         let mut diagnostics = Vec::new();
         if let Some(cell) = self.state.files.get(path) {
             let children = cell
-                .borrow()
+                .read()
                 .ast()
                 .children()
                 .filter_map(|kind| match kind {
@@ -95,7 +94,7 @@ impl Project {
             }
         }
         if let Some(cell) = self.state.files.get(path) {
-            cell.borrow_mut().analysis_diagnostics.extend(diagnostics);
+            cell.write().analysis_diagnostics.extend(diagnostics);
         }
     }
 
@@ -103,25 +102,51 @@ impl Project {
         self.state.include_paths.extend(paths);
     }
 
-    pub fn project_files(&self) -> impl Iterator<Item = &RefCell<ProjectFile>> {
+    pub fn project_files(&self) -> impl Iterator<Item = &RwLock<ProjectFile>> {
         self.state.files.values()
     }
 
-    pub fn get_file(&self, path: &PathBuf) -> Option<&RefCell<ProjectFile>> {
+    pub fn get_file(&self, path: &PathBuf) -> Option<&RwLock<ProjectFile>> {
         self.state.get(path)
     }
 
-    pub fn get_file_mut(&mut self, path: &PathBuf) -> Option<&mut RefCell<ProjectFile>> {
+    pub fn get_file_mut(&mut self, path: &PathBuf) -> Option<&mut RwLock<ProjectFile>> {
         self.state.get_mut(path)
+    }
+
+    pub fn files(&self) -> impl Iterator<Item = &PathBuf> {
+        self.state.files.keys()
+    }
+
+    pub fn set_include_paths(&mut self, includes: impl Iterator<Item = PathBuf>) {
+        self.state.include_paths = includes.collect();
+    }
+
+    pub fn remove_file(&mut self, path: &PathBuf) {
+        // TODO
+    }
+
+    pub fn get_node_position(
+        &self,
+        path: &PathBuf,
+        reference: &Reference,
+    ) -> Option<(TextRange, PathBuf)> {
+        // TODO
+        None
+    }
+
+    pub fn document_reference(&self, path: &PathBuf, reference: &Reference) -> Option<String> {
+        // TODO
+        None
     }
 }
 
 #[derive(Debug)]
 pub struct ProjectFile {
-    path: Option<PathBuf>,
+    path: PathBuf,
     source: String,
     kind: FileType,
-    ast: ast::File,
+    ast: GreenNode,
     syntax_diagnostics: Vec<Diagnostic>,
     model: Option<model::File>,
     labels: LabelMap,
@@ -139,12 +164,12 @@ impl ProjectFile {
         self.source.as_str()
     }
 
-    pub fn path(&self) -> Option<&PathBuf> {
-        self.path.as_ref()
+    pub fn path(&self) -> &PathBuf {
+        &self.path
     }
 
-    pub fn ast(&self) -> &ast::File {
-        &self.ast
+    pub fn ast(&self) -> ast::File {
+        ast::File::cast_unchecked(SyntaxNode::new_root(self.ast.clone()))
     }
 
     pub fn set_analysis_result(
@@ -165,11 +190,16 @@ impl ProjectFile {
     pub fn add_analysis_diagnostic(&mut self, diag: Diagnostic) {
         self.analysis_diagnostics.push(diag)
     }
+
+    pub fn item_at_cursor<'a>(&self, cursor: TextSize) -> Option<ItemAtCursor<'a>> {
+        // TODO
+        None
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct ProjectState {
-    files: HashMap<PathBuf, RefCell<ProjectFile>>,
+    files: HashMap<PathBuf, RwLock<ProjectFile>>,
     include_paths: Vec<PathBuf>,
 }
 
@@ -178,19 +208,19 @@ impl ProjectState {
         ProjectState::default()
     }
 
-    pub fn get_or_insert(&mut self, path: PathBuf) -> Result<&RefCell<ProjectFile>, io::Error> {
+    pub fn get_or_insert(&mut self, path: PathBuf) -> Result<&RwLock<ProjectFile>, io::Error> {
         if !self.files.contains_key(&path) {
             let contents = std::fs::read_to_string(&path)?;
             let tokens = lex(&contents);
             let parser = Parser::new(tokens.into_iter());
-            let (node, diagnostics) = parser.parse(Parser::parse_file);
+            let (node, diagnostics) = parser.parse_to_green(Parser::parse_file);
             self.files.insert(
                 path.clone(),
-                RefCell::new(ProjectFile {
-                    path: Some(path.clone()),
+                RwLock::new(ProjectFile {
+                    path: path.clone(),
                     source: contents,
                     kind: FileType::from(path.as_path()),
-                    ast: ast::File::cast(node).unwrap(),
+                    ast: node,
                     syntax_diagnostics: diagnostics,
                     model: None,
                     labels: HashMap::default(),
@@ -205,18 +235,18 @@ impl ProjectState {
         if let Some(cell) = self.files.get(file) {
             let mut analysis_diagnostics = Vec::new();
             let analyzer = Analyzer::new();
-            let path = cell.borrow().path.clone().unwrap();
+            let path = cell.read().path().clone();
             let file_type = FileType::from(path.as_path());
             let cde = CyclicDependencyEntry::new(path.clone(), TextRange::default());
             let (file, labels, kind) = analyzer.analyze_file(
                 self,
                 path,
                 file_type,
-                cell.borrow().ast(),
+                cell.read().ast(),
                 vec![cde],
                 &mut analysis_diagnostics,
             );
-            let mut borrow = cell.borrow_mut();
+            let mut borrow = cell.write();
             borrow.set_analysis_result(file, labels, analysis_diagnostics);
             borrow.set_kind(kind);
         }
@@ -225,14 +255,14 @@ impl ProjectState {
 
 impl ProjectState {
     pub fn insert(&mut self, key: PathBuf, value: ProjectFile) {
-        self.files.insert(key, RefCell::new(value));
+        self.files.insert(key, RwLock::new(value));
     }
 
-    pub fn get(&self, path: &PathBuf) -> Option<&RefCell<ProjectFile>> {
+    pub fn get(&self, path: &PathBuf) -> Option<&RwLock<ProjectFile>> {
         self.files.get(path)
     }
 
-    pub fn get_mut(&mut self, path: &PathBuf) -> Option<&mut RefCell<ProjectFile>> {
+    pub fn get_mut(&mut self, path: &PathBuf) -> Option<&mut RwLock<ProjectFile>> {
         self.files.get_mut(path)
     }
 }
@@ -241,7 +271,7 @@ impl Include {
     pub fn resolve<'a>(
         &self,
         project: &'a mut ProjectState,
-    ) -> Option<Result<&'a RefCell<ProjectFile>, io::Error>> {
+    ) -> Option<Result<&'a RwLock<ProjectFile>, io::Error>> {
         let target: PathBuf = self.target()?.into();
         Some(project.get_or_insert(target))
     }
@@ -277,7 +307,7 @@ mod tests {
         let file = project
             .get_file(&PathBuf::from("file1.dts"))
             .unwrap()
-            .borrow();
+            .read();
         assert!(file.syntax_diagnostics.is_empty());
         assert!(file.analysis_diagnostics.is_empty());
         assert_eq!(file.kind, FileType::DtSource);
@@ -286,7 +316,7 @@ mod tests {
         let file = project
             .get_file(&PathBuf::from("file2.dts"))
             .unwrap()
-            .borrow();
+            .read();
         assert!(file.syntax_diagnostics.is_empty());
         assert!(file.analysis_diagnostics.is_empty());
         // even though file2 and file3 were declared as '.dts', their type should change to include
@@ -296,7 +326,7 @@ mod tests {
         let file = project
             .get_file(&PathBuf::from("file3.dts"))
             .unwrap()
-            .borrow();
+            .read();
         assert!(file.syntax_diagnostics.is_empty());
         assert!(file.analysis_diagnostics.is_empty());
         assert_eq!(file.kind, FileType::DtSourceInclude);
@@ -320,7 +350,7 @@ mod tests {
         let file = project
             .get_file(&PathBuf::from("file3.dts"))
             .unwrap()
-            .borrow();
+            .read();
         assert_eq!(
             file.analysis_diagnostics,
             vec![Diagnostic::new(

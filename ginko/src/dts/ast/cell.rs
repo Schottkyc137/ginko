@@ -5,7 +5,7 @@ use crate::dts::ast::{ast_node, impl_from_str};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Lang, Parser, SyntaxKind, SyntaxToken};
 use rowan::ast::AstNode;
-use rowan::Language;
+use rowan::{Language, TextRange};
 
 #[derive(Debug)]
 pub enum Reference {
@@ -38,6 +38,22 @@ impl AstNode for Reference {
         match self {
             Reference::Ref(reference) => reference.syntax(),
             Reference::RefPath(ref_path) => ref_path.syntax(),
+        }
+    }
+}
+
+impl Reference {
+    pub fn text(&self) -> String {
+        match self {
+            Reference::Ref(reference) => reference.0.text().to_string(),
+            Reference::RefPath(reference) => reference.0.text().to_string(),
+        }
+    }
+
+    pub fn range(&self) -> TextRange {
+        match self {
+            Reference::Ref(reference) => reference.range(),
+            Reference::RefPath(reference) => reference.range(),
         }
     }
 }
@@ -79,7 +95,7 @@ pub enum CellContent {
     Reference(Reference),
 }
 
-impl rowan::ast::AstNode for CellContent {
+impl AstNode for CellContent {
     type Language = Lang;
 
     fn can_cast(kind: <Self::Language as Language>::Kind) -> bool

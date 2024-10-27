@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut has_errors = false;
     let severities = SeverityMap::default();
     for file in project.project_files() {
-        let file = file.borrow();
+        let file = file.read();
         let diag = file.diagnostics().cloned().collect_vec();
         if diag.is_empty() {
             continue;
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         let mut files = SimpleFiles::new();
         let file_id = files.add(
-            file.path().unwrap().clone().to_str().unwrap().to_string(),
+            file.path().clone().to_str().unwrap().to_string(),
             file.source(),
         );
         let diagnostics = diag

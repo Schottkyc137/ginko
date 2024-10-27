@@ -122,6 +122,10 @@ impl Diagnostic {
             .push(RelatedDiagnostic::new(source, range, message));
         self
     }
+
+    pub fn severity(&self, map: &SeverityMap) -> Severity {
+        map[self.code]
+    }
 }
 
 impl Diagnostic {

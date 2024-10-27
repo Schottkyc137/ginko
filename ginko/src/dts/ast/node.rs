@@ -1,11 +1,11 @@
 use crate::dts::ast::label::Label;
 use crate::dts::ast::property::PropertyList;
-use crate::dts::ast::{ast_node, impl_from_str};
-use crate::dts::syntax::Parser;
+use crate::dts::ast::{ast_node, impl_from_str, Ref, RefPath, Reference};
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::{Lang, SyntaxToken};
+use crate::dts::syntax::{Parser, SyntaxKind, SyntaxNode};
 use rowan::ast::AstNode;
-use rowan::Language;
+use rowan::{Language, TextRange};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -14,6 +14,57 @@ ast_node! { struct Name(NAME); }
 impl Name {
     pub fn text(&self) -> String {
         self.0.text().to_string()
+    }
+}
+
+pub enum NameOrRef {
+    Name(Name),
+    Reference(Reference),
+}
+
+impl AstNode for NameOrRef {
+    type Language = Lang;
+
+    fn can_cast(kind: SyntaxKind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(kind, NAME | REF_PATH | REF)
+    }
+
+    fn cast(node: SyntaxNode) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(match node.kind() {
+            NAME => NameOrRef::Name(Name::cast_unchecked(node)),
+            REF_PATH => NameOrRef::Reference(Reference::RefPath(RefPath::cast_unchecked(node))),
+            REF => NameOrRef::Reference(Reference::Ref(Ref::cast_unchecked(node))),
+            _ => return None,
+        })
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            NameOrRef::Name(name) => name.syntax(),
+            NameOrRef::Reference(reference) => reference.syntax(),
+        }
+    }
+}
+
+impl NameOrRef {
+    pub fn text(&self) -> String {
+        match self {
+            NameOrRef::Name(name) => name.text(),
+            NameOrRef::Reference(reference) => reference.text(),
+        }
+    }
+
+    pub fn range(&self) -> TextRange {
+        match self {
+            NameOrRef::Name(name) => name.range(),
+            NameOrRef::Reference(reference) => reference.range(),
+        }
     }
 }
 
@@ -89,7 +140,7 @@ pub enum NodeOrProperty {
     DeleteSpec(DeleteSpec),
 }
 
-impl rowan::ast::AstNode for NodeOrProperty {
+impl AstNode for NodeOrProperty {
     type Language = Lang;
 
     fn can_cast(kind: <Self::Language as Language>::Kind) -> bool
@@ -136,9 +187,12 @@ impl Node {
         self.0.children().filter_map(Label::cast).next()
     }
 
-    // TODO: could also be referenced node
-    pub fn name(&self) -> Name {
-        self.0.children().filter_map(Name::cast).next().unwrap()
+    pub fn name(&self) -> NameOrRef {
+        self.0
+            .children()
+            .filter_map(NameOrRef::cast)
+            .next()
+            .unwrap()
     }
 
     pub fn body(&self) -> NodeBody {
@@ -202,12 +256,13 @@ mod tests {
     use crate::dts::ast::node::{Node, NodeOrProperty};
     use assert_matches::assert_matches;
     use itertools::Itertools;
+    use rowan::ast::AstNode;
 
     #[test]
     fn check_empty_node() {
         let node = "name {};".parse::<Node>().unwrap();
         assert!(node.decoration().is_none());
-        assert_eq!(node.name().node_name().unwrap(), "name");
+        assert_eq!(node.name().syntax().text(), "name");
         assert_eq!(node.body().children().count(), 0);
     }
 
@@ -222,13 +277,13 @@ mod tests {
         .parse::<Node>()
         .unwrap();
         assert!(node.decoration().is_none());
-        assert_eq!(node.name().node_name().unwrap(), "name");
+        assert_eq!(node.name().syntax().text(), "name");
         let children = node.body().children().collect_vec();
         assert_eq!(children.len(), 2);
         assert_matches!(&children[0], NodeOrProperty::Property(_));
         match &children[1] {
             NodeOrProperty::Node(node) => {
-                assert_eq!(node.name().node_name().unwrap(), "sub_node");
+                assert_eq!(node.name().syntax().text(), "sub_node");
                 assert_eq!(node.body().children().count(), 1);
             }
             _ => panic!("Expected sub node"),

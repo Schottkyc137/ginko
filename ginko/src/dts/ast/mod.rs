@@ -1,14 +1,26 @@
 pub mod cell;
 pub mod expression;
 pub mod file;
-pub use file::*;
-mod label;
+pub mod label;
 pub mod node;
 pub mod property;
 
+pub use cell::{Cell, CellContent, CellInner, Path, Ref, RefPath, Reference};
+pub use expression::{
+    BinaryExpression, BinaryOp, Constant, Expression, ExpressionKind, IntConstant, Op,
+    ParenExpression, Primary, UnaryExpression, UnaryOp,
+};
+pub use file::{File, FileItemKind, Header, HeaderKind, Include, ReserveMemory};
+pub use label::Label;
+pub use node::{Decoration, DeleteSpec, Name, NameOrRef, Node, NodeBody, NodeOrProperty, Property};
+pub use property::{
+    BitsSpec, ByteChunk, ByteString, PropertyList, PropertyValue, PropertyValueKind, StringProperty,
+};
+pub use rowan::ast::AstNode;
+
 macro_rules! ast_node {
     (struct $ast:ident($kind:pat);) => {
-        #[derive(PartialEq, Eq, Hash, Debug)]
+        #[derive(PartialEq, Eq, Hash, Debug, Clone)]
         #[repr(transparent)]
         pub struct $ast($crate::dts::syntax::SyntaxNode);
         impl $ast {

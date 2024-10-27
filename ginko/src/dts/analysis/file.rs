@@ -1,11 +1,11 @@
 use super::project::ProjectState;
 use crate::dts::analysis::{Analyzer, CyclicDependencyEntry, PushIntoDiagnostics};
-use crate::dts::ast::file as ast;
 use crate::dts::ast::file::{FileItemKind, HeaderKind};
 use crate::dts::ast::node::Node;
+use crate::dts::ast::{file as ast, NameOrRef};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
-use crate::dts::model::{NodeName, Path};
+use crate::dts::model::{NodeName, NodeNameOrReference, Path};
 use crate::dts::{model, ErrorCode, FileType};
 use itertools::Itertools;
 use rowan::ast::AstNode;
@@ -26,7 +26,7 @@ impl Analyzer {
         project: &ProjectState,
         path: PathBuf,
         file_type: FileType,
-        file: &ast::File,
+        file: ast::File,
         mut include_path: Vec<CyclicDependencyEntry>,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> (model::File, LabelMap, FileType) {
@@ -66,17 +66,17 @@ impl Analyzer {
                             if let Some(cell) = project.get(&path) {
                                 let mut analysis_diagnostics = Vec::new();
                                 let (file, labels, kind) = {
-                                    let path = cell.borrow().path().unwrap().clone();
+                                    let path = cell.read().path().clone();
                                     self.analyze_file(
                                         project,
                                         path,
                                         FileType::DtSourceInclude,
-                                        cell.borrow().ast(),
+                                        cell.read().ast(),
                                         include_path.clone(),
                                         &mut analysis_diagnostics,
                                     )
                                 };
-                                let mut borrow = cell.borrow_mut();
+                                let mut borrow = cell.write();
                                 borrow.set_analysis_result(file, labels, analysis_diagnostics);
                                 borrow.set_kind(kind);
                             }
@@ -96,14 +96,21 @@ impl Analyzer {
                     {
                         // TODO: referenced nodes
                         // TODO: duplicates
-                        if name.is_root() {
-                            root.merge(body)
-                        } else {
-                            diagnostics.push(Diagnostic::new(
-                                node.range(),
-                                ErrorCode::IllegalStart,
-                                "Non root-node in root position",
-                            ))
+                        match name {
+                            NodeNameOrReference::NodeName(name) => {
+                                if name.is_root() {
+                                    root.merge(body)
+                                } else {
+                                    diagnostics.push(Diagnostic::new(
+                                        node.range(),
+                                        ErrorCode::IllegalStart,
+                                        "Non root-node in root position",
+                                    ))
+                                }
+                            }
+                            NodeNameOrReference::Reference(_) => {
+                                //TODO: merge referenced node
+                            }
                         }
                     }
                 }
@@ -154,12 +161,15 @@ impl ast::File {
         }) {
             match event {
                 WalkEvent::Enter(node) => {
-                    match node.name().eval() {
-                        Ok(name) => path.push(name),
-                        Err(err) => {
-                            diagnostics.push(err.into());
-                            path.push(NodeName::simple(node.name().text()))
-                        }
+                    match node.name() {
+                        NameOrRef::Name(name) => match name.eval() {
+                            Ok(name) => path.push(name),
+                            Err(err) => {
+                                diagnostics.push(err.into());
+                                path.push(NodeName::simple(name.text()))
+                            }
+                        },
+                        NameOrRef::Reference(_) => {}
                     }
 
                     if let Some(label) = node.label() {
@@ -185,9 +195,10 @@ impl ast::File {
                         }
                     }
                 }
-                WalkEvent::Leave(_) => {
-                    path.pop();
-                }
+                WalkEvent::Leave(node) => match node.name() {
+                    NameOrRef::Name(_) => path.pop(),
+                    NameOrRef::Reference(_) => {}
+                },
             }
         }
     }
@@ -216,8 +227,8 @@ mod tests {
             let value = analyzer.analyze_file(
                 &project,
                 PathBuf::default(),
-                crate::dts::FileType::DtSource,
-                self,
+                FileType::DtSource,
+                self.clone(),
                 vec![],
                 &mut diagnostics,
             );

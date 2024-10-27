@@ -1,11 +1,14 @@
-use ginko::dts::{
-    AnyDirective, FileType, HasSpan, ItemAtCursor, Node, NodeItem, NodePayload, Primary, Project,
-    Severity, SeverityMap, Span,
-};
+use ginko::dts::analysis::project::Project;
+use ginko::dts::ast::AstNode;
+use ginko::dts::syntax::SyntaxKind;
+use ginko::dts::{ast, ItemAtCursor, Severity, SeverityMap, TextRange, TextSize, WalkEvent};
 use itertools::Itertools;
+use line_index::{LineCol, LineIndex};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::mem;
 use std::path::{Path, PathBuf};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -15,6 +18,7 @@ use url::Url;
 pub(crate) struct Backend {
     client: Client,
     project: RwLock<Project>,
+    line_index_cache: RwLock<HashMap<PathBuf, LineIndex>>,
     severities: SeverityMap,
 }
 
@@ -24,6 +28,7 @@ impl Backend {
             client,
             project: RwLock::new(Project::default()),
             severities: SeverityMap::default(),
+            line_index_cache: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -47,21 +52,45 @@ fn lsp_severity_from_severity(severity_level: Severity) -> DiagnosticSeverity {
     }
 }
 
-fn lsp_range_from_span(span: Span) -> Range {
-    Range::new(lsp_pos_from_pos(span.start()), lsp_pos_from_pos(span.end()))
+pub trait ToPos {
+    fn to_pos(self) -> Position;
 }
 
-fn lsp_pos_from_pos(pos: ginko::dts::Position) -> Position {
-    Position::new(pos.line(), pos.character())
+impl ToPos for LineCol {
+    fn to_pos(self) -> Position {
+        Position::new(self.line, self.col)
+    }
 }
 
 impl Backend {
-    fn lsp_diag_from_diag(&self, diagnostic: &ginko::dts::Diagnostic2) -> Diagnostic {
-        let span = diagnostic.span();
+    fn pos_to_text_size(&self, position: Position, line_index: &LineIndex) -> Option<TextSize> {
+        line_index.offset(LineCol {
+            line: position.line,
+            col: position.character,
+        })
+    }
+
+    fn range_to_text_range(&self, range: Range, line_index: &LineIndex) -> Option<TextRange> {
+        let start = self.pos_to_text_size(range.start, line_index)?;
+        let end = self.pos_to_text_size(range.end, line_index)?;
+        Some(TextRange::new(start, end))
+    }
+
+    fn text_range_to_range(&self, range: TextRange, line_index: &LineIndex) -> Range {
+        let start = line_index.line_col(range.start()).to_pos();
+        let end = line_index.line_col(range.end()).to_pos();
+        Range::new(start, end)
+    }
+
+    fn lsp_diag_from_diag(
+        &self,
+        diagnostic: &ginko::dts::Diagnostic,
+        line_index: &LineIndex,
+    ) -> Diagnostic {
         Diagnostic {
-            range: lsp_range_from_span(span),
+            range: self.text_range_to_range(diagnostic.range, line_index),
             message: diagnostic.message.clone(),
-            code: Some(NumberOrString::String(diagnostic.kind.as_ref().to_string())),
+            code: Some(NumberOrString::String(diagnostic.code.as_ref().to_string())),
             severity: Some(lsp_severity_from_severity(
                 diagnostic.severity(&self.severities),
             )),
@@ -93,12 +122,23 @@ impl Backend {
             .map(|file| file.to_owned())
             .collect_vec();
         for file in file_paths {
-            let diagnostics = self
-                .project
-                .read()
-                .get_diagnostics(&file)
-                .map(|diag| self.lsp_diag_from_diag(diag))
-                .collect_vec();
+            let diagnostics = {
+                let cache = self.line_index_cache.read();
+                let Some(line_index) = cache.get(&file) else {
+                    debug_assert!(false, "Line index should be present");
+                    continue;
+                };
+                self.project
+                    .read()
+                    .get_file(&file)
+                    .map(|file| {
+                        file.read()
+                            .diagnostics()
+                            .map(|diag| self.lsp_diag_from_diag(diag, &line_index))
+                            .collect_vec()
+                    })
+                    .unwrap_or_default()
+            };
             self.client
                 .publish_diagnostics(Url::from_file_path(&file).unwrap(), diagnostics, None)
                 .await
@@ -110,7 +150,9 @@ impl Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let config = ProjectConfig::from_value(params.initialization_options.unwrap_or_default());
-        self.project.write().set_include_paths(config.includes);
+        self.project
+            .write()
+            .set_include_paths(config.includes.into_iter().map(PathBuf::from));
 
         Ok(InitializeResult {
             server_info: None,
@@ -126,12 +168,6 @@ impl LanguageServer for Backend {
         })
     }
 
-    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-        let config = ProjectConfig::from_value(params.settings);
-        self.project.write().set_include_paths(config.includes);
-        self.publish_diagnostics().await
-    }
-
     async fn initialized(&self, _: InitializedParams) {}
 
     async fn shutdown(&self) -> Result<()> {
@@ -142,16 +178,12 @@ impl LanguageServer for Backend {
         let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
             return;
         };
-        let file_type = FileType::from(file_path.as_path());
-        if file_type == FileType::Unknown {
-            self.client.show_message(MessageType::WARNING, format!("File {} cannot be associated to a device-tree source. Make sure it has the ending 'dts', 'dtsi' or 'dtso'", file_path.to_string_lossy())).await;
-            return;
+        let text = params.text_document.text;
+        {
+            let mut cache = self.line_index_cache.write();
+            cache.insert(file_path.clone(), LineIndex::new(&text));
         }
-        self.project.write().add_file_with_text(
-            file_path.clone(),
-            params.text_document.text,
-            file_type,
-        );
+        self.project.write().add_file(file_path.clone(), &text);
         self.publish_diagnostics().await
     }
 
@@ -159,12 +191,12 @@ impl LanguageServer for Backend {
         let Some(file_path) = self.url_to_file_path(params.text_document.uri).await else {
             return;
         };
-        let file_type = FileType::from(file_path.as_path());
-        self.project.write().add_file_with_text(
-            file_path.clone(),
-            params.content_changes.into_iter().next().unwrap().text,
-            file_type,
-        );
+        let text = params.content_changes.into_iter().next().unwrap().text;
+        {
+            let mut cache = self.line_index_cache.write();
+            cache.insert(file_path.clone(), LineIndex::new(&text));
+        }
+        self.project.write().add_file(file_path.clone(), &text);
         self.publish_diagnostics().await
     }
 
@@ -187,9 +219,22 @@ impl LanguageServer for Backend {
         else {
             return Ok(None);
         };
-        let pos = position_to_ginko_position(params.text_document_position_params.position);
         let project = self.project.read();
-        let Some(item) = project.find_at_pos(&file_path, &pos) else {
+        let Some(file) = project.get_file(&file_path) else {
+            return Ok(None);
+        };
+        let cache = self.line_index_cache.read();
+        let Some(line_index) = cache.get(&file_path) else {
+            return Ok(None);
+        };
+        let Some(pos) =
+            self.pos_to_text_size(params.text_document_position_params.position, line_index)
+        else {
+            return Ok(None);
+        };
+
+        let file_inner = file.read();
+        let Some(item) = file_inner.item_at_cursor(pos) else {
             return Ok(None);
         };
         match item {
@@ -197,7 +242,7 @@ impl LanguageServer for Backend {
                 match project.get_node_position(&file_path, reference) {
                     Some((span, path)) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         Url::from_file_path(path).unwrap(),
-                        ginko_span_to_range(span),
+                        self.text_range_to_range(span, line_index),
                     )))),
                     None => Ok(None),
                 }
@@ -222,9 +267,22 @@ impl LanguageServer for Backend {
         else {
             return Ok(None);
         };
-        let pos = position_to_ginko_position(params.text_document_position_params.position);
         let project = self.project.read();
-        let Some(item) = project.find_at_pos(&file_path, &pos) else {
+        let Some(file) = project.get_file(&file_path) else {
+            return Ok(None);
+        };
+        let cache = self.line_index_cache.read();
+        let Some(line_index) = cache.get(&file_path) else {
+            return Ok(None);
+        };
+        let Some(pos) =
+            self.pos_to_text_size(params.text_document_position_params.position, line_index)
+        else {
+            return Ok(None);
+        };
+
+        let file_inner = file.read();
+        let Some(item) = file_inner.item_at_cursor(pos) else {
             return Ok(None);
         };
         let str = match item {
@@ -253,145 +311,76 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         let project = self.project.read();
-        let Some(root) = project.get_root(&file_path) else {
+        let Some(file) = project.get_file(&file_path) else {
             return Ok(None);
         };
-        #[allow(deprecated)]
-        fn node_payload_to_symbol(payload: &NodePayload) -> Vec<DocumentSymbol> {
-            let mut children: Vec<DocumentSymbol> = Vec::new();
-            for el in &payload.items {
-                let document_symbol = match el {
-                    NodeItem::Property(prop) => DocumentSymbol {
-                        name: prop.name.item().clone(),
-                        detail: None,
-                        kind: SymbolKind::PROPERTY,
-                        tags: None,
-                        deprecated: None,
-                        range: ginko_span_to_range(prop.span()),
-                        selection_range: ginko_span_to_range(prop.name.span()),
-                        children: None,
-                    },
-                    NodeItem::Node(node) => node_to_symbol(node),
-                    NodeItem::DeletedNode(start_tok, deleted_node) => DocumentSymbol {
-                        name: format!("{}", deleted_node.item()),
-                        detail: None,
-                        kind: SymbolKind::MODULE,
-                        tags: Some(vec![SymbolTag::DEPRECATED]),
-                        deprecated: None,
-                        range: ginko_span_to_range(Span::new(
-                            start_tok.start(),
-                            deleted_node.end(),
-                        )),
-                        selection_range: ginko_span_to_range(deleted_node.span()),
-                        children: None,
-                    },
-                    NodeItem::DeletedProperty(start_tok, deleted_property) => DocumentSymbol {
-                        name: deleted_property.item().to_string(),
-                        detail: None,
-                        kind: SymbolKind::PROPERTY,
-                        tags: Some(vec![SymbolTag::DEPRECATED]),
-                        deprecated: None,
-                        range: ginko_span_to_range(Span::new(
-                            start_tok.start(),
-                            deleted_property.end(),
-                        )),
-                        selection_range: ginko_span_to_range(deleted_property.span()),
-                        children: None,
-                    },
-                };
-                children.push(document_symbol);
-            }
-            children
-        }
-        #[allow(deprecated)]
-        fn node_to_symbol(node: &Node) -> DocumentSymbol {
-            DocumentSymbol {
-                name: node.name.name.clone(),
-                detail: None,
-                kind: SymbolKind::MODULE,
-                tags: None,
-                deprecated: None,
-                range: ginko_span_to_range(node.span()),
-                selection_range: ginko_span_to_range(node.name.span()),
-                children: Some(node_payload_to_symbol(&node.payload)),
-            }
-        }
-        #[allow(deprecated)]
-        let nodes = root
-            .elements
-            .iter()
-            .filter_map(|el| match el {
-                Primary::Root(node) => Some(node_to_symbol(node)),
-                Primary::ReferencedNode(ref_node) => Some(DocumentSymbol {
-                    name: format!("{}", ref_node.reference),
-                    detail: None,
-                    kind: SymbolKind::MODULE,
-                    tags: None,
-                    deprecated: None,
-                    range: ginko_span_to_range(ref_node.span()),
-                    selection_range: ginko_span_to_range(ref_node.reference.span()),
-                    children: Some(node_payload_to_symbol(&ref_node.payload)),
-                }),
-                Primary::Directive(AnyDirective::Include(include)) => Some(DocumentSymbol {
-                    name: format!("include {}", include.file_name.item()),
-                    detail: None,
-                    kind: SymbolKind::FILE,
-                    tags: None,
-                    deprecated: None,
-                    range: ginko_span_to_range(include.span()),
-                    selection_range: ginko_span_to_range(include.file_name.span()),
-                    children: None,
-                }),
-                Primary::Directive(AnyDirective::DeletedNode(token, ref_node)) => {
-                    Some(DocumentSymbol {
-                        name: format!("{}", ref_node),
-                        detail: None,
-                        kind: SymbolKind::MODULE,
-                        tags: Some(vec![SymbolTag::DEPRECATED]),
-                        deprecated: None,
-                        range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
-                        selection_range: ginko_span_to_range(ref_node.span()),
-                        children: None,
-                    })
-                }
-                Primary::Directive(AnyDirective::OmitIfNoRef(token, ref_node)) => {
-                    Some(DocumentSymbol {
-                        name: format!("{}", ref_node),
-                        detail: None,
-                        kind: SymbolKind::FIELD,
-                        tags: None,
-                        deprecated: None,
-                        range: ginko_span_to_range(Span::new(token.start(), ref_node.end())),
-                        selection_range: ginko_span_to_range(ref_node.span()),
-                        children: None,
-                    })
-                }
-                _ => None,
-            })
-            .collect_vec();
-        Ok(Some(DocumentSymbolResponse::Nested(nodes)))
+        let read_guard = file.read();
+        let ast = read_guard.ast();
+        let symbols = self.generate_nested_symbol_response(&file_path, &ast);
+        Ok(Some(DocumentSymbolResponse::Nested(symbols)))
     }
 }
 
-fn ginko_span_to_range(span: Span) -> Range {
-    Range::new(
-        ginko_position_to_position(span.start()),
-        ginko_position_to_position(span.end()),
-    )
-}
+impl Backend {
+    fn generate_nested_symbol_response(
+        &self,
+        path: &PathBuf,
+        ast: &ast::File,
+    ) -> Vec<DocumentSymbol> {
+        let cache = self.line_index_cache.read();
+        let Some(line_index) = cache.get(path) else {
+            return Vec::default();
+        };
+        let mut stack = Vec::new();
+        let mut current = Vec::new();
+        for item in ast.walk() {
+            match item {
+                WalkEvent::Enter(syntax_node) => match syntax_node.kind() {
+                    SyntaxKind::NODE => {
+                        let node = ast::Node::cast(syntax_node).unwrap();
+                        #[allow(deprecated)]
+                        let symbol = DocumentSymbol {
+                            name: node.name().text(),
+                            detail: None,
+                            kind: SymbolKind::MODULE,
+                            tags: None,
+                            deprecated: None,
+                            range: self.text_range_to_range(node.range(), line_index),
+                            selection_range: self
+                                .text_range_to_range(node.name().range(), line_index),
+                            children: Some(vec![]),
+                        };
+                        stack.push((symbol, mem::take(&mut current)));
+                    }
+                    SyntaxKind::PROPERTY => {
+                        let prop = ast::Property::cast(syntax_node).unwrap();
+                        #[allow(deprecated)]
+                        let symbol = DocumentSymbol {
+                            name: prop.name().text(),
+                            detail: None,
+                            kind: SymbolKind::PROPERTY,
+                            tags: None,
+                            deprecated: None,
+                            range: self.text_range_to_range(prop.range(), line_index),
+                            selection_range: self
+                                .text_range_to_range(prop.name().range(), line_index),
+                            children: None,
+                        };
+                        current.push(symbol);
+                    }
+                    _ => {}
+                },
+                WalkEvent::Leave(node) => {
+                    if node.kind() == SyntaxKind::NODE {
+                        let (mut symbol, new_current) =
+                            stack.pop().expect("Unbalanced push / pop from stack");
+                        symbol.children = Some(mem::replace(&mut current, new_current));
+                        current.push(symbol);
+                    }
+                }
+            }
+        }
 
-#[allow(unused)]
-fn range_to_ginko_span(range: Range) -> Span {
-    Span::new(
-        position_to_ginko_position(range.start),
-        position_to_ginko_position(range.end),
-    )
-}
-
-fn position_to_ginko_position(position: Position) -> ginko::dts::Position {
-    ginko::dts::Position::new(position.line, position.character)
-}
-
-fn ginko_position_to_position(position: ginko::dts::Position) -> Position {
-    Position::new(position.line(), position.character())
+        current
+    }
 }

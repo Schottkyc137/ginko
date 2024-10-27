@@ -2,7 +2,7 @@ mod display;
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Reference {
     Label(String),
     Path(Path),
@@ -102,7 +102,7 @@ impl From<&str> for Value {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct Node {
-    nodes: HashMap<NodeName, Node>,
+    nodes: HashMap<NodeNameOrReference, Node>,
     properties: HashMap<String, Vec<Value>>,
 }
 
@@ -123,7 +123,10 @@ impl Node {
 }
 
 impl Node {
-    pub fn new(nodes: HashMap<NodeName, Node>, properties: HashMap<String, Vec<Value>>) -> Node {
+    pub fn new(
+        nodes: HashMap<NodeNameOrReference, Node>,
+        properties: HashMap<String, Vec<Value>>,
+    ) -> Node {
         Node { nodes, properties }
     }
 }
@@ -159,7 +162,7 @@ impl File {
 
 #[derive(Default)]
 pub struct NodeBuilder {
-    nodes: HashMap<NodeName, Node>,
+    nodes: HashMap<NodeNameOrReference, Node>,
     properties: HashMap<String, Vec<Value>>,
 }
 
@@ -179,7 +182,8 @@ impl NodeBuilder {
     }
 
     pub fn node(mut self, name: impl Into<NodeName>, value: impl Into<Node>) -> Self {
-        self.nodes.insert(name.into(), value.into());
+        self.nodes
+            .insert(NodeNameOrReference::NodeName(name.into()), value.into());
         self
     }
 
@@ -198,6 +202,12 @@ impl From<NodeBuilder> for Node {
 pub struct NodeName {
     ident: String,
     address: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum NodeNameOrReference {
+    NodeName(NodeName),
+    Reference(Reference),
 }
 
 impl From<&str> for NodeName {
@@ -232,7 +242,7 @@ impl NodeName {
     }
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct Path {
     components: Vec<NodeName>,
 }
@@ -272,7 +282,7 @@ fn merge_nodes() {
     node_a.merge(node_b);
     assert!(node_a.properties.is_empty());
     assert_eq!(node_a.nodes.len(), 1);
-    let sub_node = &node_a.nodes[&NodeName::simple("some_node")];
+    let sub_node = &node_a.nodes[&NodeNameOrReference::NodeName(NodeName::simple("some_node"))];
     assert_eq!(sub_node.properties.len(), 2);
     assert!(sub_node.nodes.is_empty());
     assert_eq!(sub_node.properties["prop_1"], vec![17_u32.into()]);

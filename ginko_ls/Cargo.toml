@@ -21,3 +21,4 @@ url = "2.5.2"
 clap = { version = "4", features = ["derive"] }
 serde = "1"
 serde_json = "1"
+line-index = "0.1.2"

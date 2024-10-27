@@ -1,9 +1,9 @@
 use crate::dts::analysis::{Analyzer, PushIntoDiagnostics};
-use crate::dts::ast::node as ast;
 use crate::dts::ast::node::{Node, NodeBody, NodeOrProperty};
+use crate::dts::ast::{node as ast, NameOrRef, Reference};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::eval::Eval;
-use crate::dts::model::NodeName;
+use crate::dts::model::{NodeName, NodeNameOrReference};
 use crate::dts::{model, ErrorCode};
 use std::collections::HashMap;
 
@@ -43,8 +43,18 @@ impl Analyzer {
         &self,
         node: &Node,
         diagnostics: &mut Vec<Diagnostic>,
-    ) -> Result<(NodeName, model::Node), Diagnostic> {
-        let name = node.name().eval()?;
+    ) -> Result<(NodeNameOrReference, model::Node), Diagnostic> {
+        let name = match node.name() {
+            NameOrRef::Name(name) => NodeNameOrReference::NodeName(name.eval()?),
+            NameOrRef::Reference(reference) => match reference {
+                Reference::Ref(reference) => {
+                    NodeNameOrReference::Reference(model::Reference::Label(reference.target()))
+                }
+                Reference::RefPath(path) => {
+                    NodeNameOrReference::Reference(model::Reference::Path(path.target().eval()?))
+                }
+            },
+        };
         let body = self.analyze_node_body(&node.body(), diagnostics)?;
         Ok((name, body))
     }

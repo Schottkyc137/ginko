@@ -5,7 +5,7 @@ use crate::dts::syntax::SyntaxKind;
 use crate::dts::syntax::SyntaxKind::*;
 use crate::dts::syntax::SyntaxNode;
 use crate::dts::ErrorCode;
-use rowan::{Checkpoint, GreenNodeBuilder, TextLen, TextRange, TextSize};
+use rowan::{Checkpoint, GreenNode, GreenNodeBuilder, TextLen, TextRange, TextSize};
 use std::iter::zip;
 
 pub struct Parser<M> {
@@ -191,11 +191,18 @@ where
 }
 
 impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn parse(mut self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<Diagnostic>) {
+    pub fn parse(self, target: impl FnOnce(&mut Parser<I>)) -> (SyntaxNode, Vec<Diagnostic>) {
+        let (green, diagnostics) = self.parse_to_green(target);
+        (SyntaxNode::new_root(green), diagnostics)
+    }
+
+    pub fn parse_to_green(
+        mut self,
+        target: impl FnOnce(&mut Parser<I>),
+    ) -> (GreenNode, Vec<Diagnostic>) {
         target(&mut self);
         let node = self.builder.finish();
-        let root = SyntaxNode::new_root(node);
-        (root, self.errors)
+        (node, self.errors)
     }
 }
 
