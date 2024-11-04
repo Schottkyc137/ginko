@@ -1,15 +1,15 @@
 use super::cyclic_dependency::CyclicDependencyEntry;
 use super::Analyzer;
 use crate::dts::analysis::file::LabelMap;
-use crate::dts::ast::{FileItemKind, Include};
-use crate::dts::ast2::Reference;
+use crate::dts::ast::{FileItemKind, Include, Ref, RefPath, Reference};
 use crate::dts::diagnostics::Diagnostic;
 use crate::dts::lex::lex;
-use crate::dts::syntax::{Parser, SyntaxNode};
-use crate::dts::{ast, model, ErrorCode, FileType, ItemAtCursor};
+use crate::dts::syntax::{Parser, SyntaxKind, SyntaxNode};
+use crate::dts::{ast, model, ErrorCode, FileType};
 use itertools::Itertools;
 use parking_lot::RwLock;
-use rowan::{GreenNode, TextRange, TextSize};
+use rowan::ast::AstNode;
+use rowan::{GreenNode, SyntaxElement, TextRange, TextSize};
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
@@ -17,6 +17,12 @@ use std::path::PathBuf;
 #[derive(Default, Debug)]
 pub struct Project {
     state: ProjectState,
+}
+
+#[derive(Debug)]
+pub enum ItemAtCursor {
+    Reference(Reference),
+    Include(Include),
 }
 
 impl Project {
@@ -191,9 +197,37 @@ impl ProjectFile {
         self.analysis_diagnostics.push(diag)
     }
 
-    pub fn item_at_cursor<'a>(&self, cursor: TextSize) -> Option<ItemAtCursor<'a>> {
-        // TODO
-        None
+    pub fn item_at_cursor(&self, cursor: TextSize) -> Option<ItemAtCursor> {
+        use SyntaxKind::*;
+        let file = self.ast();
+        let found = file.syntax().covering_element(TextRange::empty(cursor));
+        let mut node = match found {
+            SyntaxElement::Node(node) => node,
+            SyntaxElement::Token(token) => token.parent()?,
+        };
+        loop {
+            match node.kind() {
+                NAME | PATH | AMP | L_BRACE | R_BRACE | INCLUDE | STRING => {
+                    node = node.parent()?;
+                }
+                INT | BINARY | UNARY | PAREN_EXPRESSION | OP => {
+                    // Maybe eval expressions at some point
+                    return None;
+                }
+                REF => {
+                    return Some(ItemAtCursor::Reference(Reference::Ref(
+                        Ref::cast_unchecked(node),
+                    )))
+                }
+                REF_PATH => {
+                    return Some(ItemAtCursor::Reference(Reference::RefPath(
+                        RefPath::cast_unchecked(node),
+                    )))
+                }
+                INCLUDE_FILE => return Some(ItemAtCursor::Include(Include::cast_unchecked(node))),
+                _ => return None,
+            }
+        }
     }
 }
 

@@ -1,7 +1,7 @@
-use ginko::dts::analysis::project::Project;
+use ginko::dts::analysis::project::{ItemAtCursor, Project};
 use ginko::dts::ast::AstNode;
 use ginko::dts::syntax::SyntaxKind;
-use ginko::dts::{ast, ItemAtCursor, Severity, SeverityMap, TextRange, TextSize, WalkEvent};
+use ginko::dts::{ast, Severity, SeverityMap, TextRange, TextSize, WalkEvent};
 use itertools::Itertools;
 use line_index::{LineCol, LineIndex};
 use parking_lot::RwLock;
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -38,8 +38,8 @@ struct ProjectConfig {
     pub includes: Vec<String>,
 }
 
-impl ProjectConfig {
-    pub fn from_value(value: Value) -> Self {
+impl From<Value> for ProjectConfig {
+    fn from(value: Value) -> Self {
         serde_json::from_value(value).unwrap_or_default()
     }
 }
@@ -149,7 +149,7 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        let config = ProjectConfig::from_value(params.initialization_options.unwrap_or_default());
+        let config = ProjectConfig::from(params.initialization_options.unwrap_or_default());
         self.project
             .write()
             .set_include_paths(config.includes.into_iter().map(PathBuf::from));
@@ -238,7 +238,7 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         match item {
-            ItemAtCursor::Reference(reference) => {
+            /* ItemAtCursor::Reference(reference) => {
                 match project.get_node_position(&file_path, reference) {
                     Some((span, path)) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         Url::from_file_path(path).unwrap(),
@@ -255,7 +255,7 @@ impl LanguageServer for Backend {
                     )))),
                     _ => Ok(None),
                 }
-            }
+            } */
             _ => Ok(None),
         }
     }
@@ -286,15 +286,8 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         let str = match item {
-            ItemAtCursor::Reference(reference) => {
-                match project.document_reference(&file_path, reference) {
-                    Some(str) => str,
-                    None => return Ok(None),
-                }
-            }
-            ItemAtCursor::Label(name) => name.item().clone(),
-            ItemAtCursor::Include(include) => include.file_name.item().clone(),
-            _ => return Ok(None),
+            ItemAtCursor::Reference(reference) => reference.text(),
+            ItemAtCursor::Include(include) => include.to_string(),
         };
 
         Ok(Some(Hover {
@@ -380,7 +373,6 @@ impl Backend {
                 }
             }
         }
-
         current
     }
 }

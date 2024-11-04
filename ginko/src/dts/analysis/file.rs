@@ -94,7 +94,6 @@ impl Analyzer {
                         .analyze_node(&node, diagnostics)
                         .or_push_into(diagnostics)
                     {
-                        // TODO: referenced nodes
                         // TODO: duplicates
                         match name {
                             NodeNameOrReference::NodeName(name) => {

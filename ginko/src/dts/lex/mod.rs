@@ -156,7 +156,6 @@ impl Iterator for Lexer<'_> {
             b' ' | b'\n' | b'\t' => {
                 let mut buf = String::new();
                 buf.push(ch as char);
-                // TODO: non-ascii whitespace allowed?
                 while self.peek().is_some_and(|ch| ch.is_ascii_whitespace()) {
                     buf.push(self.consume().unwrap() as char)
                 }
