@@ -269,12 +269,11 @@ impl Analysis {
                         self.unresolved_reference_error(ctx, span, source);
                     }
                 },
-                Reference::Path(path) => match ctx.flat_nodes.get(path) {
-                    None => {
+                Reference::Path(path) => {
+                    if !ctx.flat_nodes.contains_key(path) {
                         self.unresolved_reference_error(ctx, span, source);
                     }
-                    Some(_) => {}
-                },
+                }
             }
         }
     }
