@@ -240,12 +240,12 @@ impl Project {
     fn parse_file(&mut self, file_name: PathBuf, text: String, file_type: FileType) {
         let reader = ByteReader::from_string(text.clone());
         let lexer = Lexer::new(reader, file_name.clone().into());
-        let mut parser = Parser::new(
-            lexer,
-            ParserContext {
-                include_paths: self.include_paths.clone(),
-            },
-        );
+        // add the file's directory to the include paths to allow local includes
+        let mut include_paths = self.include_paths.clone();
+        if let Some(parent) = file_name.parent() {
+            include_paths.insert(0, parent.into());
+        }
+        let mut parser = Parser::new(lexer, ParserContext { include_paths });
         match parser.file() {
             Ok(file) => {
                 // insert dummy file to be defined so that no cyclic dependency can occur.

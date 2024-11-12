@@ -6,7 +6,7 @@ use itertools::Itertools;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -199,10 +199,14 @@ impl LanguageServer for Backend {
                 }
             }
             ItemAtCursor::Include(include) => {
-                match Url::from_file_path(Path::new(include.file_name.item())) {
-                    Ok(url) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                match include
+                    .path()
+                    .ok()
+                    .and_then(|path| Url::from_file_path(path).ok())
+                {
+                    Some(url) => Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         url,
-                        Range::default(),
+                        ginko_span_to_range(include.span()),
                     )))),
                     _ => Ok(None),
                 }
